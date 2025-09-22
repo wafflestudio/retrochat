@@ -1,0 +1,343 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Chat Analytics API",
+    "version": "1.0.0",
+    "description": "Internal API for generating usage analytics and insights"
+  },
+  "paths": {
+    "/api/analytics/usage": {
+      "get": {
+        "summary": "Get usage statistics",
+        "description": "Generate comprehensive usage statistics for specified time period",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "format": "date"},
+            "description": "Start date for analysis period"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "format": "date"},
+            "description": "End date for analysis period"
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["ClaudeCode", "Gemini"]
+            },
+            "description": "Filter by specific provider"
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by specific project"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["daily", "weekly", "monthly"],
+              "default": "daily"
+            },
+            "description": "Time granularity for breakdown"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage statistics generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start_date": {"type": "string", "format": "date"},
+                        "end_date": {"type": "string", "format": "date"},
+                        "total_days": {"type": "integer"}
+                      }
+                    },
+                    "overall_stats": {
+                      "type": "object",
+                      "properties": {
+                        "total_sessions": {"type": "integer"},
+                        "total_messages": {"type": "integer"},
+                        "total_tokens": {"type": "integer"},
+                        "average_session_length": {"type": "number"},
+                        "average_tokens_per_message": {"type": "number"},
+                        "most_active_day": {"type": "string", "format": "date"},
+                        "longest_session_duration": {"type": "integer"}
+                      }
+                    },
+                    "provider_breakdown": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {"type": "string"},
+                          "session_count": {"type": "integer"},
+                          "message_count": {"type": "integer"},
+                          "token_count": {"type": "integer"},
+                          "percentage_of_total": {"type": "number"}
+                        }
+                      }
+                    },
+                    "temporal_breakdown": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {"type": "string", "format": "date"},
+                          "session_count": {"type": "integer"},
+                          "message_count": {"type": "integer"},
+                          "token_count": {"type": "integer"}
+                        }
+                      }
+                    },
+                    "project_breakdown": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "project_name": {"type": "string"},
+                          "session_count": {"type": "integer"},
+                          "message_count": {"type": "integer"},
+                          "token_count": {"type": "integer"},
+                          "avg_session_length": {"type": "number"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/insights": {
+      "get": {
+        "summary": "Generate usage insights and recommendations",
+        "description": "Analyze usage patterns and provide actionable recommendations",
+        "parameters": [
+          {
+            "name": "analysis_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["efficiency", "quality", "patterns", "comprehensive"],
+              "default": "comprehensive"
+            },
+            "description": "Type of analysis to perform"
+          },
+          {
+            "name": "time_period",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["last_week", "last_month", "last_quarter", "all_time"],
+              "default": "last_month"
+            },
+            "description": "Time period for analysis"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Insights generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "analysis_metadata": {
+                      "type": "object",
+                      "properties": {
+                        "analysis_type": {"type": "string"},
+                        "time_period": {"type": "string"},
+                        "sessions_analyzed": {"type": "integer"},
+                        "generated_at": {"type": "string", "format": "date-time"}
+                      }
+                    },
+                    "purpose_analysis": {
+                      "type": "object",
+                      "properties": {
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "purpose": {"type": "string"},
+                              "session_count": {"type": "integer"},
+                              "percentage": {"type": "number"},
+                              "examples": {"type": "array", "items": {"type": "string"}}
+                            }
+                          }
+                        },
+                        "primary_use_case": {"type": "string"},
+                        "diversity_score": {"type": "number"}
+                      }
+                    },
+                    "quality_assessment": {
+                      "type": "object",
+                      "properties": {
+                        "provider_scores": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {"type": "string"},
+                              "effectiveness_score": {"type": "number"},
+                              "response_quality": {"type": "number"},
+                              "task_completion_rate": {"type": "number"},
+                              "strengths": {"type": "array", "items": {"type": "string"}},
+                              "weaknesses": {"type": "array", "items": {"type": "string"}}
+                            }
+                          }
+                        },
+                        "overall_satisfaction": {"type": "number"}
+                      }
+                    },
+                    "efficiency_metrics": {
+                      "type": "object",
+                      "properties": {
+                        "average_resolution_time": {"type": "number"},
+                        "tokens_per_successful_task": {"type": "number"},
+                        "session_success_rate": {"type": "number"},
+                        "most_efficient_provider": {"type": "string"},
+                        "efficiency_trends": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {"type": "string", "format": "date"},
+                              "efficiency_score": {"type": "number"}
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "recommendations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": ["efficiency", "cost_optimization", "workflow", "provider_choice"]
+                          },
+                          "title": {"type": "string"},
+                          "description": {"type": "string"},
+                          "priority": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"]
+                          },
+                          "potential_impact": {"type": "string"},
+                          "action_items": {"type": "array", "items": {"type": "string"}}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/export": {
+      "post": {
+        "summary": "Export analysis results",
+        "description": "Generate and export analysis reports in various formats",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "export_format": {
+                    "type": "string",
+                    "enum": ["json", "csv", "html", "markdown"],
+                    "description": "Output format for export"
+                  },
+                  "include_sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["usage_stats", "insights", "recommendations", "charts"]
+                    },
+                    "description": "Sections to include in export"
+                  },
+                  "time_period": {
+                    "type": "object",
+                    "properties": {
+                      "start_date": {"type": "string", "format": "date"},
+                      "end_date": {"type": "string", "format": "date"}
+                    }
+                  },
+                  "filters": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {"type": "string"},
+                      "project": {"type": "string"}
+                    }
+                  }
+                },
+                "required": ["export_format"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Export generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "export_id": {"type": "string"},
+                    "file_path": {"type": "string"},
+                    "file_size_bytes": {"type": "integer"},
+                    "generated_at": {"type": "string", "format": "date-time"},
+                    "export_metadata": {
+                      "type": "object",
+                      "properties": {
+                        "format": {"type": "string"},
+                        "sessions_included": {"type": "integer"},
+                        "time_range": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error_code": {"type": "string"},
+          "error_message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["error_code", "error_message"]
+      }
+    }
+  }
+}

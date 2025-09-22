@@ -1,0 +1,93 @@
+[package]
+name = "retrochat"
+version = "0.1.0"
+edition = "2021"
+authors = ["retrochat"]
+description = "LLM Agent Chat History Retrospect Application"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.24"
+crossterm = "0.27"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1.35", features = ["full"] }
+rusqlite = { version = "0.30", features = ["bundled", "backup"] }
+anyhow = "1.0"
+thiserror = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "std"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+futures = "0.3"
+async-trait = "0.1"
+flate2 = "1.0"
+reqwest = { version = "0.11", optional = true }
+atty = "0.2"
+
+[dev-dependencies]
+tempfile = "3.8"
+mockall = "0.12"
+criterion = "0.5"
+
+[[bin]]
+name = "retrochat"
+path = "src/main.rs"
+
+[[test]]
+name = "test_import_scan"
+path = "tests/contract/test_import_scan.rs"
+
+[[test]]
+name = "test_import_file"
+path = "tests/contract/test_import_file.rs"
+
+[[test]]
+name = "test_import_batch"
+path = "tests/contract/test_import_batch.rs"
+
+[[test]]
+name = "test_sessions_query"
+path = "tests/contract/test_sessions_query.rs"
+
+[[test]]
+name = "test_session_detail"
+path = "tests/contract/test_session_detail.rs"
+
+[[test]]
+name = "test_search"
+path = "tests/contract/test_search.rs"
+
+[[test]]
+name = "test_analytics_usage"
+path = "tests/contract/test_analytics_usage.rs"
+
+[[test]]
+name = "test_analytics_insights"
+path = "tests/contract/test_analytics_insights.rs"
+
+[[test]]
+name = "test_analytics_export"
+path = "tests/contract/test_analytics_export.rs"
+
+[[test]]
+name = "test_first_time_setup"
+path = "tests/integration/test_first_time_setup.rs"
+
+[[test]]
+name = "test_daily_analysis"
+path = "tests/integration/test_daily_analysis.rs"
+
+[[test]]
+name = "test_session_detail_integration"
+path = "tests/integration/test_session_detail.rs"
+
+[[test]]
+name = "test_export_reporting"
+path = "tests/integration/test_export_reporting.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

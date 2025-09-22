@@ -1,0 +1,268 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Chat History Import API",
+    "version": "1.0.0",
+    "description": "Internal API for importing chat history files from various LLM providers"
+  },
+  "paths": {
+    "/api/import/scan": {
+      "post": {
+        "summary": "Scan directory for chat history files",
+        "description": "Discovers chat history files in specified directory for supported providers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "directory_path": {
+                    "type": "string",
+                    "description": "Directory path to scan for chat files"
+                  },
+                  "providers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["ClaudeCode", "Gemini"]
+                    },
+                    "description": "LLM providers to scan for"
+                  },
+                  "recursive": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether to scan subdirectories"
+                  }
+                },
+                "required": ["directory_path"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "files_found": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatFile"
+                      }
+                    },
+                    "total_count": {
+                      "type": "integer"
+                    },
+                    "scan_duration_ms": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid directory path or parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/import/file": {
+      "post": {
+        "summary": "Import single chat history file",
+        "description": "Processes and imports a single chat history file into database",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file_path": {
+                    "type": "string",
+                    "description": "Path to chat history file"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "enum": ["ClaudeCode", "Gemini"],
+                    "description": "LLM provider type"
+                  },
+                  "project_name": {
+                    "type": "string",
+                    "description": "Optional project name for categorization"
+                  },
+                  "force_reimport": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether to reimport if file already exists"
+                  }
+                },
+                "required": ["file_path", "provider"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File imported successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "messages_imported": {
+                      "type": "integer"
+                    },
+                    "import_duration_ms": {
+                      "type": "integer"
+                    },
+                    "file_size_bytes": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "File already imported (duplicate detected)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "File format invalid or corrupted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/import/batch": {
+      "post": {
+        "summary": "Import multiple chat history files",
+        "description": "Batch import multiple files with progress tracking",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "file_path": {"type": "string"},
+                        "provider": {
+                          "type": "string",
+                          "enum": ["ClaudeCode", "Gemini"]
+                        },
+                        "project_name": {"type": "string"}
+                      },
+                      "required": ["file_path", "provider"]
+                    }
+                  },
+                  "max_concurrent": {
+                    "type": "integer",
+                    "default": 4,
+                    "minimum": 1,
+                    "maximum": 8,
+                    "description": "Maximum concurrent import operations"
+                  }
+                },
+                "required": ["files"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch import completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_files": {"type": "integer"},
+                    "successful_imports": {"type": "integer"},
+                    "failed_imports": {"type": "integer"},
+                    "duplicate_files": {"type": "integer"},
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "file_path": {"type": "string"},
+                          "status": {
+                            "type": "string",
+                            "enum": ["success", "failed", "duplicate"]
+                          },
+                          "session_id": {"type": "string"},
+                          "error_message": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatFile": {
+        "type": "object",
+        "properties": {
+          "file_path": {"type": "string"},
+          "provider": {
+            "type": "string",
+            "enum": ["ClaudeCode", "Gemini"]
+          },
+          "estimated_sessions": {"type": "integer"},
+          "file_size_bytes": {"type": "integer"},
+          "last_modified": {"type": "string", "format": "date-time"},
+          "already_imported": {"type": "boolean"}
+        },
+        "required": ["file_path", "provider", "file_size_bytes"]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error_code": {"type": "string"},
+          "error_message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["error_code", "error_message"]
+      }
+    }
+  }
+}
