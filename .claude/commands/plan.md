@@ -2,6 +2,12 @@
 description: Execute the implementation planning workflow using the plan template to generate design artifacts.
 ---
 
+The user input to you can be provided directly by the agent or as a command argument - you **MUST** consider it before proceeding with the prompt (if not empty).
+
+User input:
+
+$ARGUMENTS
+
 Given the implementation details provided as an argument, do this:
 
 1. Run `.specify/scripts/bash/setup-plan.sh --json` from the repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. All future file paths must be absolute.
