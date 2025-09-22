@@ -64,24 +64,6 @@ pub struct DurationStats {
     pub sessions_with_duration: u64,
 }
 
-// Legacy types for compatibility
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UsageAnalyticsRequest {
-    pub date_range: Option<DateRange>,
-    pub providers: Option<Vec<String>>,
-    pub projects: Option<Vec<String>>,
-    pub aggregation_level: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsightsRequest {
-    pub analysis_type: Option<String>,
-    pub date_range: Option<DateRange>,
-    pub include_trends: Option<bool>,
-    pub providers: Option<Vec<String>>,
-    pub insight_types: Option<Vec<String>>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportRequest {
     pub format: String,
@@ -109,79 +91,6 @@ pub struct ExportResponse {
     pub compression_used: bool,
 }
 
-// Legacy types for TUI compatibility
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UsageAnalyticsResponse {
-    pub total_sessions: i32,
-    pub total_messages: i32,
-    pub total_tokens: i32,
-    pub average_session_length: f64,
-    pub daily_breakdown: Vec<DailyUsage>,
-    pub provider_breakdown: Vec<ProviderUsage>,
-    pub project_breakdown: Vec<ProjectUsage>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DailyUsage {
-    pub date: String,
-    pub sessions: i32,
-    pub messages: i32,
-    pub tokens: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProviderUsage {
-    pub provider: String,
-    pub sessions: i32,
-    pub messages: i32,
-    pub tokens: i32,
-    pub percentage: f64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProjectUsage {
-    pub project: String,
-    pub sessions: i32,
-    pub messages: i32,
-    pub tokens: i32,
-    pub percentage: f64,
-}
-
-// Placeholder for TUI compatibility
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InsightsResponse {
-    pub insights: Vec<Insight>,
-    pub trends: Vec<Trend>,
-    pub recommendations: Vec<Recommendation>,
-    pub analysis_timestamp: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Insight {
-    pub title: String,
-    pub description: String,
-    pub confidence_score: f64,
-    pub insight_type: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Trend {
-    pub metric: String,
-    pub direction: String,
-    pub change_percentage: f64,
-    pub period: String,
-    pub significance: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Recommendation {
-    pub title: String,
-    pub description: String,
-    pub priority: String,
-    pub category: String,
-    pub actionable_steps: String,
-}
-
 pub struct AnalyticsService {
     db_manager: DatabaseManager,
 }
@@ -189,96 +98,6 @@ pub struct AnalyticsService {
 impl AnalyticsService {
     pub fn new(db_manager: DatabaseManager) -> Self {
         Self { db_manager }
-    }
-
-    // Legacy method for compatibility
-    pub async fn get_usage_analytics(
-        &self,
-        _request: UsageAnalyticsRequest,
-    ) -> Result<UsageAnalyticsResponse> {
-        let insights = self.generate_insights().await?;
-
-        // Convert UsageInsights to UsageAnalyticsResponse
-        Ok(UsageAnalyticsResponse {
-            total_sessions: insights.total_sessions as i32,
-            total_messages: insights.total_messages as i32,
-            total_tokens: insights.total_tokens as i32,
-            average_session_length: if insights.total_sessions > 0 {
-                insights.total_messages as f64 / insights.total_sessions as f64
-            } else {
-                0.0
-            },
-            daily_breakdown: insights
-                .daily_activity
-                .into_iter()
-                .map(|da| DailyUsage {
-                    date: da.date,
-                    sessions: da.sessions as i32,
-                    messages: da.messages as i32,
-                    tokens: da.tokens as i32,
-                })
-                .collect(),
-            provider_breakdown: insights
-                .provider_breakdown
-                .into_iter()
-                .map(|(provider, stats)| ProviderUsage {
-                    provider,
-                    sessions: stats.sessions as i32,
-                    messages: stats.messages as i32,
-                    tokens: stats.tokens as i32,
-                    percentage: stats.percentage_of_total,
-                })
-                .collect(),
-            project_breakdown: insights
-                .top_projects
-                .into_iter()
-                .map(|project| ProjectUsage {
-                    project: project.name,
-                    sessions: project.sessions as i32,
-                    messages: project.messages as i32,
-                    tokens: project.tokens as i32,
-                    percentage: 0.0, // Would need to calculate this
-                })
-                .collect(),
-        })
-    }
-
-    // Legacy method for compatibility
-    pub async fn get_insights(&self, _request: InsightsRequest) -> Result<InsightsResponse> {
-        // Return placeholder insights data
-        Ok(InsightsResponse {
-            insights: vec![
-                Insight {
-                    title: "Peak Usage Hours".to_string(),
-                    description: "Most activity occurs between 2-4 PM".to_string(),
-                    confidence_score: 0.85,
-                    insight_type: "usage_patterns".to_string(),
-                },
-                Insight {
-                    title: "Average Session Duration".to_string(),
-                    description: "Sessions typically last 15-20 minutes".to_string(),
-                    confidence_score: 0.9,
-                    insight_type: "productivity".to_string(),
-                },
-            ],
-            trends: vec![Trend {
-                metric: "daily_sessions".to_string(),
-                direction: "increasing".to_string(),
-                change_percentage: 15.0,
-                period: "last_7_days".to_string(),
-                significance: "moderate".to_string(),
-            }],
-            recommendations: vec![Recommendation {
-                title: "Optimize Peak Hours".to_string(),
-                description: "Consider scheduling important tasks during peak usage hours"
-                    .to_string(),
-                priority: "medium".to_string(),
-                category: "productivity".to_string(),
-                actionable_steps:
-                    "Schedule important tasks between 2-4 PM when activity is highest".to_string(),
-            }],
-            analysis_timestamp: "2024-01-01T12:00:00Z".to_string(),
-        })
     }
 
     pub async fn generate_insights(&self) -> Result<UsageInsights> {

@@ -13,10 +13,7 @@ use ratatui::{
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::services::{
-    AnalyticsService, DailyUsage, Insight, InsightsResponse, ProjectUsage, ProviderUsage,
-    Recommendation, Trend, UsageAnalyticsResponse,
-};
+use crate::services::AnalyticsService;
 
 #[derive(Debug, Clone)]
 pub enum AnalyticsView {
@@ -26,10 +23,91 @@ pub enum AnalyticsView {
     Trends,
 }
 
+// Local structs for TUI display
+#[derive(Debug, Clone)]
+struct TuiDailyUsage {
+    #[allow(dead_code)]
+    date: String,
+    #[allow(dead_code)]
+    sessions: i32,
+    messages: i32,
+    #[allow(dead_code)]
+    tokens: i32,
+}
+
+#[derive(Debug, Clone)]
+struct TuiProviderUsage {
+    provider: String,
+    sessions: i32,
+    messages: i32,
+    #[allow(dead_code)]
+    tokens: i32,
+    percentage: f64,
+}
+
+#[derive(Debug, Clone)]
+struct TuiProjectUsage {
+    project: String,
+    sessions: i32,
+    messages: i32,
+    #[allow(dead_code)]
+    tokens: i32,
+    percentage: f64,
+}
+
+#[derive(Debug, Clone)]
+struct TuiUsageData {
+    total_sessions: i32,
+    total_messages: i32,
+    total_tokens: i32,
+    average_session_length: f64,
+    daily_breakdown: Vec<TuiDailyUsage>,
+    provider_breakdown: Vec<TuiProviderUsage>,
+    project_breakdown: Vec<TuiProjectUsage>,
+}
+
+#[derive(Debug, Clone)]
+struct TuiInsight {
+    title: String,
+    description: String,
+    confidence_score: f64,
+    #[allow(dead_code)]
+    insight_type: String,
+}
+
+#[derive(Debug, Clone)]
+struct TuiTrend {
+    metric: String,
+    direction: String,
+    change_percentage: f64,
+    period: String,
+    significance: String,
+}
+
+#[derive(Debug, Clone)]
+struct TuiRecommendation {
+    title: String,
+    description: String,
+    priority: String,
+    #[allow(dead_code)]
+    category: String,
+    #[allow(dead_code)]
+    actionable_steps: String,
+}
+
+#[derive(Debug, Clone)]
+struct TuiInsightsData {
+    insights: Vec<TuiInsight>,
+    trends: Vec<TuiTrend>,
+    recommendations: Vec<TuiRecommendation>,
+    #[allow(dead_code)]
+    analysis_timestamp: String,
+}
+
 pub struct AnalyticsWidget {
     current_view: AnalyticsView,
-    usage_data: Option<UsageAnalyticsResponse>,
-    insights_data: Option<InsightsResponse>,
+    usage_data: Option<TuiUsageData>,
+    insights_data: Option<TuiInsightsData>,
     analytics_service: AnalyticsService,
     list_state: ListState,
     loading: bool,
@@ -59,7 +137,7 @@ impl AnalyticsWidget {
         match self.analytics_service.generate_insights().await {
             Ok(insights) => {
                 // Convert to the expected format for the TUI
-                self.usage_data = Some(UsageAnalyticsResponse {
+                self.usage_data = Some(TuiUsageData {
                     total_sessions: insights.total_sessions as i32,
                     total_messages: insights.total_messages as i32,
                     total_tokens: insights.total_tokens as i32,
@@ -71,7 +149,7 @@ impl AnalyticsWidget {
                     daily_breakdown: insights
                         .daily_activity
                         .into_iter()
-                        .map(|da| DailyUsage {
+                        .map(|da| TuiDailyUsage {
                             date: da.date,
                             sessions: da.sessions as i32,
                             messages: da.messages as i32,
@@ -81,7 +159,7 @@ impl AnalyticsWidget {
                     provider_breakdown: insights
                         .provider_breakdown
                         .into_iter()
-                        .map(|(provider, stats)| ProviderUsage {
+                        .map(|(provider, stats)| TuiProviderUsage {
                             provider,
                             sessions: stats.sessions as i32,
                             messages: stats.messages as i32,
@@ -92,7 +170,7 @@ impl AnalyticsWidget {
                     project_breakdown: insights
                         .top_projects
                         .into_iter()
-                        .map(|project| ProjectUsage {
+                        .map(|project| TuiProjectUsage {
                             project: project.name,
                             sessions: project.sessions as i32,
                             messages: project.messages as i32,
@@ -108,29 +186,29 @@ impl AnalyticsWidget {
         }
 
         // Set sample insights data for TUI display
-        self.insights_data = Some(InsightsResponse {
+        self.insights_data = Some(TuiInsightsData {
             insights: vec![
-                Insight {
+                TuiInsight {
                     title: "Peak Usage Hours".to_string(),
                     description: "Most activity occurs between 2-4 PM".to_string(),
                     confidence_score: 0.85,
                     insight_type: "usage_patterns".to_string(),
                 },
-                Insight {
+                TuiInsight {
                     title: "Average Session Duration".to_string(),
                     description: "Sessions typically last 15-20 minutes".to_string(),
                     confidence_score: 0.9,
                     insight_type: "productivity".to_string(),
                 },
             ],
-            trends: vec![Trend {
+            trends: vec![TuiTrend {
                 metric: "daily_sessions".to_string(),
                 direction: "increasing".to_string(),
                 change_percentage: 15.0,
                 period: "last_7_days".to_string(),
                 significance: "moderate".to_string(),
             }],
-            recommendations: vec![Recommendation {
+            recommendations: vec![TuiRecommendation {
                 title: "Optimize Peak Hours".to_string(),
                 description: "Consider scheduling important tasks during peak usage hours"
                     .to_string(),

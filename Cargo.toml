@@ -59,13 +59,6 @@ path = "tests/contract/test_session_detail.rs"
 name = "test_search"
 path = "tests/contract/test_search.rs"
 
-[[test]]
-name = "test_analytics_usage"
-path = "tests/contract/test_analytics_usage.rs"
-
-[[test]]
-name = "test_analytics_insights"
-path = "tests/contract/test_analytics_insights.rs"
 
 [[test]]
 name = "test_analytics_export"
@@ -75,9 +68,6 @@ path = "tests/contract/test_analytics_export.rs"
 name = "test_first_time_setup"
 path = "tests/integration/test_first_time_setup.rs"
 
-[[test]]
-name = "test_daily_analysis"
-path = "tests/integration/test_daily_analysis.rs"
 
 [[test]]
 name = "test_session_detail_integration"
