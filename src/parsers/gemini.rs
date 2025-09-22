@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::models::chat_session::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
+use crate::parsers::project_inference::ProjectInference;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeminiMessage {
@@ -186,7 +187,15 @@ impl GeminiParser {
         chat_session = chat_session.with_end_time(end_time);
 
         if let Some(project_hash) = &session.project_hash {
-            chat_session = chat_session.with_project(project_hash.clone());
+            // TODO: Map projectHash to a human-friendly project name; using first 8 chars for now
+            let short_hash: String = project_hash.chars().take(8).collect();
+            chat_session = chat_session.with_project(short_hash);
+        } else {
+            // Use project inference to determine project name from file path
+            let project_inference = ProjectInference::new(&self.file_path);
+            if let Some(project_name) = project_inference.infer_project_name() {
+                chat_session = chat_session.with_project(project_name);
+            }
         }
 
         let mut messages = Vec::new();
@@ -328,6 +337,12 @@ impl GeminiParser {
 
         if let Some(title) = &conversation.title {
             chat_session = chat_session.with_project(title.clone());
+        } else {
+            // Use project inference to determine project name from file path
+            let project_inference = ProjectInference::new(&self.file_path);
+            if let Some(project_name) = project_inference.infer_project_name() {
+                chat_session = chat_session.with_project(project_name);
+            }
         }
 
         let mut messages = Vec::new();

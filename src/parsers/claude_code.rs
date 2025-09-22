@@ -147,12 +147,7 @@ impl ClaudeCodeParser {
         let session_id = Uuid::parse_str(session_id_str)
             .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?;
 
-        // Find summary from summary entry
-        let summary = entries
-            .iter()
-            .find(|e| e.entry_type == "summary")
-            .and_then(|e| e.summary.as_ref())
-            .cloned();
+        // Summary entries are parsed elsewhere if needed; not used for project naming
 
         // Get the earliest timestamp for start time
         let start_time = entries
@@ -185,12 +180,11 @@ impl ClaudeCodeParser {
             }
         }
 
-        // Enhanced project name resolution with fallback
-        let project_name = summary  // First try summary from file
-            .or_else(|| {
-                let inference = ProjectInference::new(&self.file_path);
-                inference.infer_project_name()
-            });  // Then infer from path
+        // Determine project name strictly from path inference (do not use summary)
+        let project_name = {
+            let inference = ProjectInference::new(&self.file_path);
+            inference.infer_project_name()
+        };
 
         if let Some(name) = project_name {
             chat_session = chat_session.with_project(name);
