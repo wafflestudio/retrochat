@@ -46,6 +46,8 @@ node_modules/
 
 # SQLite databases (development)
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
