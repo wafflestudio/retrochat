@@ -1,5 +1,6 @@
 pub mod claude_code;
 pub mod gemini;
+pub mod project_inference;
 
 use anyhow::{anyhow, Result};
 use std::path::Path;

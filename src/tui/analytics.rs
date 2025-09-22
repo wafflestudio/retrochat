@@ -26,9 +26,12 @@ pub enum AnalyticsView {
 // Local structs for TUI display
 #[derive(Debug, Clone)]
 struct TuiDailyUsage {
+    #[allow(dead_code)]
     date: String,
+    #[allow(dead_code)]
     sessions: i32,
     messages: i32,
+    #[allow(dead_code)]
     tokens: i32,
 }
 
@@ -37,6 +40,7 @@ struct TuiProviderUsage {
     provider: String,
     sessions: i32,
     messages: i32,
+    #[allow(dead_code)]
     tokens: i32,
     percentage: f64,
 }
@@ -46,6 +50,7 @@ struct TuiProjectUsage {
     project: String,
     sessions: i32,
     messages: i32,
+    #[allow(dead_code)]
     tokens: i32,
     percentage: f64,
 }
@@ -66,6 +71,7 @@ struct TuiInsight {
     title: String,
     description: String,
     confidence_score: f64,
+    #[allow(dead_code)]
     insight_type: String,
 }
 
@@ -83,7 +89,9 @@ struct TuiRecommendation {
     title: String,
     description: String,
     priority: String,
+    #[allow(dead_code)]
     category: String,
+    #[allow(dead_code)]
     actionable_steps: String,
 }
 
@@ -92,6 +100,7 @@ struct TuiInsightsData {
     insights: Vec<TuiInsight>,
     trends: Vec<TuiTrend>,
     recommendations: Vec<TuiRecommendation>,
+    #[allow(dead_code)]
     analysis_timestamp: String,
 }
 
