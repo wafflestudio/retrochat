@@ -70,7 +70,16 @@ impl ProjectInference {
         let mut project_start_idx = start_idx;
 
         for (i, part) in parts.iter().enumerate().skip(start_idx) {
-            if matches!(part.to_lowercase().as_str(), "project" | "projects" | "workspace" | "workspaces" | "code" | "development" | "dev") {
+            if matches!(
+                part.to_lowercase().as_str(),
+                "project"
+                    | "projects"
+                    | "workspace"
+                    | "workspaces"
+                    | "code"
+                    | "development"
+                    | "dev"
+            ) {
                 project_start_idx = i + 1;
                 found_pattern = true;
                 break;
@@ -102,7 +111,19 @@ impl ProjectInference {
                     // If the second-to-last part looks like it could be part of a project name
                     // (not a system directory like "src", "lib", "bin", etc.)
                     let second_to_last = last_two[0];
-                    if !matches!(second_to_last.to_lowercase().as_str(), "src" | "lib" | "bin" | "target" | "node_modules" | "dist" | "build" | "out" | "tmp" | "temp") {
+                    if !matches!(
+                        second_to_last.to_lowercase().as_str(),
+                        "src"
+                            | "lib"
+                            | "bin"
+                            | "target"
+                            | "node_modules"
+                            | "dist"
+                            | "build"
+                            | "out"
+                            | "tmp"
+                            | "temp"
+                    ) {
                         return Some(last_two.join("-"));
                     }
                 }
@@ -136,8 +157,7 @@ impl ProjectInference {
         Self::generate_path_combinations(&parts, 0, Vec::new(), base_dir, &mut valid_paths);
 
         // Return the longest valid path
-        valid_paths.into_iter()
-            .max_by_key(|path| path.len())
+        valid_paths.into_iter().max_by_key(|path| path.len())
     }
 
     /// Recursively generate all possible path combinations
@@ -146,7 +166,7 @@ impl ProjectInference {
         current_index: usize,
         current_path_parts: Vec<String>,
         base_dir: &Path,
-        valid_paths: &mut Vec<String>
+        valid_paths: &mut Vec<String>,
     ) {
         if current_index >= remaining_parts.len() {
             // We've processed all parts, test this path combination
@@ -172,14 +192,29 @@ impl ProjectInference {
         // Option 1: Add current part as a separate path component
         let mut new_path_parts = current_path_parts.clone();
         new_path_parts.push(remaining_parts[current_index].to_string());
-        Self::generate_path_combinations(remaining_parts, current_index + 1, new_path_parts, base_dir, valid_paths);
+        Self::generate_path_combinations(
+            remaining_parts,
+            current_index + 1,
+            new_path_parts,
+            base_dir,
+            valid_paths,
+        );
 
         // Option 2: If we have a previous component, try joining with hyphen
         if !current_path_parts.is_empty() {
             let mut hyphen_path_parts = current_path_parts;
             let last_idx = hyphen_path_parts.len() - 1;
-            hyphen_path_parts[last_idx] = format!("{}-{}", hyphen_path_parts[last_idx], remaining_parts[current_index]);
-            Self::generate_path_combinations(remaining_parts, current_index + 1, hyphen_path_parts, base_dir, valid_paths);
+            hyphen_path_parts[last_idx] = format!(
+                "{}-{}",
+                hyphen_path_parts[last_idx], remaining_parts[current_index]
+            );
+            Self::generate_path_combinations(
+                remaining_parts,
+                current_index + 1,
+                hyphen_path_parts,
+                base_dir,
+                valid_paths,
+            );
         }
     }
 }
@@ -196,7 +231,11 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create the actual project directory structure
-        let project_path = base_path.join("Users").join("testuser").join("Project").join("retrochat");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("Project")
+            .join("retrochat");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
@@ -219,7 +258,11 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create the actual project directory with hyphens
-        let project_path = base_path.join("Users").join("testuser").join("my-project").join("sub-folder");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("my-project")
+            .join("sub-folder");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
@@ -242,7 +285,12 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create a complex path with multiple hyphens
-        let project_path = base_path.join("Users").join("testuser").join("claude-squad").join("worktrees").join("test-project");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("claude-squad")
+            .join("worktrees")
+            .join("test-project");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
@@ -281,11 +329,13 @@ mod tests {
         let inference = ProjectInference::new("/dummy/path");
 
         // Test basic pattern with "Project" keyword
-        let result = inference.extract_project_name_from_encoded("-Users-testuser-Project-myproject");
+        let result =
+            inference.extract_project_name_from_encoded("-Users-testuser-Project-myproject");
         assert_eq!(result, Some("myproject".to_string()));
 
         // Test complex pattern with multiple hyphens
-        let result = inference.extract_project_name_from_encoded("-Users-testuser-my-project-sub-folder");
+        let result =
+            inference.extract_project_name_from_encoded("-Users-testuser-my-project-sub-folder");
         assert_eq!(result, Some("sub-folder".to_string()));
 
         // Test pattern without clear keywords

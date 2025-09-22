@@ -3,8 +3,8 @@ pub mod import_service;
 pub mod query_service;
 
 pub use analytics_service::{
-    AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest,
-    ExportResponse, MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
+    AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest, ExportResponse,
+    MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
 };
 pub use import_service::{
     BatchImportRequest, BatchImportResponse, ChatFile, ImportFileRequest, ImportFileResponse,

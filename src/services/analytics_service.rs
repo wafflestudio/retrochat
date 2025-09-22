@@ -64,7 +64,6 @@ pub struct DurationStats {
     pub sessions_with_duration: u64,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportRequest {
     pub format: String,
@@ -92,7 +91,6 @@ pub struct ExportResponse {
     pub compression_used: bool,
 }
 
-
 pub struct AnalyticsService {
     db_manager: DatabaseManager,
 }
@@ -101,7 +99,6 @@ impl AnalyticsService {
     pub fn new(db_manager: DatabaseManager) -> Self {
         Self { db_manager }
     }
-
 
     pub async fn generate_insights(&self) -> Result<UsageInsights> {
         let analytics_repo = AnalyticsRepository::new(self.db_manager.clone());

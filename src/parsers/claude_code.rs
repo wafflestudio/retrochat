@@ -327,11 +327,13 @@ impl ClaudeCodeParser {
         }
 
         // Enhanced project name resolution with fallback
-        let project_name = claude_session.name.clone()  // First try name from session
+        let project_name = claude_session
+            .name
+            .clone() // First try name from session
             .or_else(|| {
                 let inference = ProjectInference::new(&self.file_path);
                 inference.infer_project_name()
-            });  // Then infer from path
+            }); // Then infer from path
 
         if let Some(name) = project_name {
             chat_session = chat_session.with_project(name);
@@ -467,8 +469,6 @@ impl ClaudeCodeParser {
         Ok(format!("{:x}", hasher.finish()))
     }
 
-
-
     pub fn is_valid_file(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
 
@@ -591,7 +591,11 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create the actual project directory structure
-        let project_path = base_path.join("Users").join("testuser").join("Project").join("retrochat");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("Project")
+            .join("retrochat");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
@@ -618,7 +622,11 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create the actual project directory with hyphens
-        let project_path = base_path.join("Users").join("testuser").join("my-project").join("sub-folder");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("my-project")
+            .join("sub-folder");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory (all hyphens become dashes)
@@ -644,7 +652,12 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create a complex path with multiple hyphens
-        let project_path = base_path.join("Users").join("testuser").join("claude-squad").join("worktrees").join("test-project");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("claude-squad")
+            .join("worktrees")
+            .join("test-project");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
@@ -695,7 +708,6 @@ mod tests {
         assert!(project_name.is_some() || project_name.is_none()); // Accept either result for temp files
     }
 
-
     #[tokio::test]
     async fn test_parse_with_project_inference() {
         use std::fs;
@@ -705,7 +717,11 @@ mod tests {
         let base_path = temp_dir.path();
 
         // Create the actual project directory structure
-        let project_path = base_path.join("Users").join("testuser").join("Project").join("testproject");
+        let project_path = base_path
+            .join("Users")
+            .join("testuser")
+            .join("Project")
+            .join("testproject");
         fs::create_dir_all(&project_path).unwrap();
 
         // Create Claude's encoded directory
