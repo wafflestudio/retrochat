@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
+use std::env;
 use std::path::Path;
 use std::sync::Arc;
-use std::env;
 
 use crate::database::connection::DatabaseManager;
 use crate::services::ImportService;
@@ -245,8 +245,8 @@ pub async fn scan_claude_directories() -> Result<()> {
     }
 
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let claude_dirs = env::var("RETROCHAT_CLAUDE_DIRS")
-        .unwrap_or_else(|_| format!("{}/.claude/projects", home));
+    let claude_dirs =
+        env::var("RETROCHAT_CLAUDE_DIRS").unwrap_or_else(|_| format!("{home}/.claude/projects"));
 
     println!("Scanning Claude directories:");
     for dir_str in claude_dirs.split(':') {
@@ -283,11 +283,12 @@ pub async fn scan_gemini_directories() -> Result<()> {
         return Ok(());
     }
 
-    let gemini_dirs = env::var("RETROCHAT_GEMINI_DIRS")
-        .unwrap_or_else(|_| "".to_string());
+    let gemini_dirs = env::var("RETROCHAT_GEMINI_DIRS").unwrap_or_else(|_| "".to_string());
 
     if gemini_dirs.trim().is_empty() {
-        println!("No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable.");
+        println!(
+            "No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable."
+        );
         return Ok(());
     }
 
@@ -296,7 +297,6 @@ pub async fn scan_gemini_directories() -> Result<()> {
         if dir_str.is_empty() {
             continue;
         }
-
 
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let dir_path = if dir_str.starts_with('~') {
@@ -328,8 +328,7 @@ pub async fn scan_codex_directories() -> Result<()> {
         return Ok(());
     }
 
-    let codex_dirs = env::var("RETROCHAT_CODEX_DIRS")
-        .unwrap_or_else(|_| "".to_string());
+    let codex_dirs = env::var("RETROCHAT_CODEX_DIRS").unwrap_or_else(|_| "".to_string());
 
     if codex_dirs.trim().is_empty() {
         println!("No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable.");
@@ -341,7 +340,6 @@ pub async fn scan_codex_directories() -> Result<()> {
         if dir_str.is_empty() {
             continue;
         }
-
 
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let dir_path = if dir_str.starts_with('~') {

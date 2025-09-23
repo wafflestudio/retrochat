@@ -3,8 +3,8 @@ pub mod gemini;
 pub mod project_inference;
 
 use anyhow::{anyhow, Result};
-use std::path::Path;
 use std::env;
+use std::path::Path;
 
 use crate::models::chat_session::LlmProvider;
 use crate::models::{ChatSession, Message};
@@ -88,16 +88,18 @@ impl ParserRegistry {
             return Some(LlmProvider::ClaudeCode);
         }
 
-        if gemini_enabled && (file_name.contains("gemini")
-            || file_name.contains("bard")
-            || file_name.contains("google"))
+        if gemini_enabled
+            && (file_name.contains("gemini")
+                || file_name.contains("bard")
+                || file_name.contains("google"))
         {
             return Some(LlmProvider::Gemini);
         }
 
-        if codex_enabled && (file_name.contains("codex")
-            || file_name.contains("github")
-            || file_name.contains("copilot"))
+        if codex_enabled
+            && (file_name.contains("codex")
+                || file_name.contains("github")
+                || file_name.contains("copilot"))
         {
             return Some(LlmProvider::Other("codex".to_string()));
         }
@@ -106,7 +108,7 @@ impl ParserRegistry {
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             match extension.to_lowercase().as_str() {
                 "jsonl" if claude_enabled => Some(LlmProvider::ClaudeCode), // Default JSONL to Claude
-                "json" if gemini_enabled => Some(LlmProvider::Gemini),      // Default JSON to Gemini
+                "json" if gemini_enabled => Some(LlmProvider::Gemini), // Default JSON to Gemini
                 _ => None,
             }
         } else {
