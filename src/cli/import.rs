@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
+use std::env;
 
 use crate::database::connection::DatabaseManager;
 use crate::services::ImportService;
@@ -50,6 +51,11 @@ pub async fn scan_directory(directory: Option<String>) -> Result<()> {
     println!("\nCommon chat directories:");
     println!("  - ~/.claude/projects (Claude Code)");
     println!("  - ~/.gemini/tmp (Gemini)");
+
+    println!("\nProvider-specific commands:");
+    println!("  retrochat import scan-claude  - Scan Claude directories");
+    println!("  retrochat import scan-gemini  - Scan Gemini directories");
+    println!("  retrochat import scan-codex   - Scan Codex directories");
 
     println!("\nUse 'retrochat import file <path>' to import a specific file");
     println!("Use 'retrochat import batch <directory>' to import all files in a directory");
@@ -167,7 +173,56 @@ pub async fn import_batch(directory: String) -> Result<()> {
 }
 
 pub async fn handle_scan_command(directory: Option<String>) -> Result<()> {
-    scan_directory(directory).await
+    match directory {
+        Some(dir) => scan_directory(Some(dir)).await,
+        None => scan_enabled_providers().await,
+    }
+}
+
+async fn scan_enabled_providers() -> Result<()> {
+    println!("Scanning enabled AI service directories...\n");
+
+    let claude_enabled = env::var("RETROCHAT_ENABLE_CLAUDE")
+        .unwrap_or_else(|_| "true".to_string())
+        .parse::<bool>()
+        .unwrap_or(true);
+
+    let gemini_enabled = env::var("RETROCHAT_ENABLE_GEMINI")
+        .unwrap_or_else(|_| "true".to_string())
+        .parse::<bool>()
+        .unwrap_or(true);
+
+    let codex_enabled = env::var("RETROCHAT_ENABLE_CODEX")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    let mut scanned_any = false;
+
+    if claude_enabled {
+        scan_claude_directories().await?;
+        scanned_any = true;
+    }
+
+    if gemini_enabled {
+        scan_gemini_directories().await?;
+        scanned_any = true;
+    }
+
+    if codex_enabled {
+        scan_codex_directories().await?;
+        scanned_any = true;
+    }
+
+    if !scanned_any {
+        println!("No AI services are enabled. Check your .env configuration:");
+        println!("  RETROCHAT_ENABLE_CLAUDE=true");
+        println!("  RETROCHAT_ENABLE_GEMINI=true");
+        println!("  RETROCHAT_ENABLE_CODEX=true");
+        println!("\nOr scan a specific directory with: retrochat import scan <directory>");
+    }
+
+    Ok(())
 }
 
 pub async fn handle_import_file_command(file_path: String) -> Result<()> {
@@ -176,6 +231,135 @@ pub async fn handle_import_file_command(file_path: String) -> Result<()> {
 
 pub async fn handle_import_batch_command(directory: String) -> Result<()> {
     import_batch(directory).await
+}
+
+pub async fn scan_claude_directories() -> Result<()> {
+    let claude_enabled = env::var("RETROCHAT_ENABLE_CLAUDE")
+        .unwrap_or_else(|_| "true".to_string())
+        .parse::<bool>()
+        .unwrap_or(true);
+
+    if !claude_enabled {
+        println!("Claude scanning is disabled. Set RETROCHAT_ENABLE_CLAUDE=true to enable.");
+        return Ok(());
+    }
+
+    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let claude_dirs = env::var("RETROCHAT_CLAUDE_DIRS")
+        .unwrap_or_else(|_| format!("{}/.claude/projects", home));
+
+    println!("Scanning Claude directories:");
+    for dir_str in claude_dirs.split(':') {
+        if dir_str.is_empty() {
+            continue;
+        }
+
+        let dir_path = if dir_str.starts_with('~') {
+            dir_str.replacen('~', &home, 1)
+        } else {
+            dir_str.to_string()
+        };
+
+        let path = Path::new(&dir_path);
+        if path.exists() {
+            println!("  Scanning: {}", path.display());
+            scan_directory(Some(dir_path)).await?;
+        } else {
+            println!("  Directory not found: {}", path.display());
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn scan_gemini_directories() -> Result<()> {
+    let gemini_enabled = env::var("RETROCHAT_ENABLE_GEMINI")
+        .unwrap_or_else(|_| "true".to_string())
+        .parse::<bool>()
+        .unwrap_or(true);
+
+    if !gemini_enabled {
+        println!("Gemini scanning is disabled. Set RETROCHAT_ENABLE_GEMINI=true to enable.");
+        return Ok(());
+    }
+
+    let gemini_dirs = env::var("RETROCHAT_GEMINI_DIRS")
+        .unwrap_or_else(|_| "".to_string());
+
+    if gemini_dirs.trim().is_empty() {
+        println!("No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable.");
+        return Ok(());
+    }
+
+    println!("Scanning Gemini directories:");
+    for dir_str in gemini_dirs.split(':') {
+        if dir_str.is_empty() {
+            continue;
+        }
+
+
+        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let dir_path = if dir_str.starts_with('~') {
+            dir_str.replacen('~', &home, 1)
+        } else {
+            dir_str.to_string()
+        };
+
+        let path = Path::new(&dir_path);
+        if path.exists() {
+            println!("  Scanning: {}", path.display());
+            scan_directory(Some(dir_path)).await?;
+        } else {
+            println!("  Directory not found: {}", path.display());
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn scan_codex_directories() -> Result<()> {
+    let codex_enabled = env::var("RETROCHAT_ENABLE_CODEX")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if !codex_enabled {
+        println!("Codex scanning is disabled. Set RETROCHAT_ENABLE_CODEX=true to enable.");
+        return Ok(());
+    }
+
+    let codex_dirs = env::var("RETROCHAT_CODEX_DIRS")
+        .unwrap_or_else(|_| "".to_string());
+
+    if codex_dirs.trim().is_empty() {
+        println!("No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable.");
+        return Ok(());
+    }
+
+    println!("Scanning Codex directories:");
+    for dir_str in codex_dirs.split(':') {
+        if dir_str.is_empty() {
+            continue;
+        }
+
+
+        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let dir_path = if dir_str.starts_with('~') {
+            dir_str.replacen('~', &home, 1)
+        } else {
+            dir_str.to_string()
+        };
+
+        let path = Path::new(&dir_path);
+        if path.exists() {
+            println!("  Scanning: {}", path.display());
+            scan_directory(Some(dir_path)).await?;
+        } else {
+            println!("  Directory not found: {}", path.display());
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

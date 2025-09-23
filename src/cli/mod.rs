@@ -46,6 +46,12 @@ pub enum ImportCommands {
         /// Directory to scan (defaults to current directory)
         directory: Option<String>,
     },
+    /// Scan Claude Code directories
+    ScanClaude,
+    /// Scan Gemini directories
+    ScanGemini,
+    /// Scan Codex directories
+    ScanCodex,
     /// Import specific file
     File {
         /// Path to the chat file to import
@@ -115,6 +121,15 @@ impl Cli {
                 Commands::Import { command } => match command {
                     ImportCommands::Scan { directory } => {
                         import::handle_scan_command(directory).await
+                    }
+                    ImportCommands::ScanClaude => {
+                        import::scan_claude_directories().await
+                    }
+                    ImportCommands::ScanGemini => {
+                        import::scan_gemini_directories().await
+                    }
+                    ImportCommands::ScanCodex => {
+                        import::scan_codex_directories().await
                     }
                     ImportCommands::File { path } => import::handle_import_file_command(path).await,
                     ImportCommands::Batch { directory } => {
