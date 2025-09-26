@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::database::connection::DatabaseManager;
+use crate::database::DatabaseManager;
 use crate::tui::app::App;
 
 pub struct TuiLauncher {
@@ -19,9 +19,6 @@ impl TuiLauncher {
         // Ensure database is initialized
         self.initialize_database().await?;
 
-        // Check if there's any data
-        self.check_initial_data().await?;
-
         // Launch actual TUI application
         println!("Launching TUI interface...");
         self.launch_tui().await?;
@@ -33,31 +30,6 @@ impl TuiLauncher {
         // Database should already be initialized by DatabaseManager
         // This is just a verification step
         println!("✓ Database initialized");
-        Ok(())
-    }
-
-    async fn check_initial_data(&self) -> Result<()> {
-        use crate::database::chat_session_repo::ChatSessionRepository;
-        use crate::database::message_repo::MessageRepository;
-
-        let session_repo = ChatSessionRepository::new(self.db_manager.clone());
-        let _message_repo = MessageRepository::new(self.db_manager.clone());
-
-        let session_count = session_repo.get_all().map(|s| s.len()).unwrap_or(0);
-        let message_count = 0; // Would need message repo enhancement for accurate count
-
-        if session_count == 0 {
-            println!("⚠ No chat sessions found in database");
-            println!("  Use 'retrochat import scan' to find chat files");
-            println!("  Use 'retrochat import file <path>' to import a specific file");
-            println!(
-                "  Use 'retrochat import batch <directory>' to import all files in a directory"
-            );
-            println!();
-        } else {
-            println!("✓ Found {session_count} sessions with {message_count} messages");
-        }
-
         Ok(())
     }
 
@@ -171,8 +143,9 @@ pub async fn handle_tui_command() -> Result<()> {
     }
 
     // Initialize database manager
-    let db_manager =
-        DatabaseManager::new("retrochat.db").with_context(|| "Failed to initialize database")?;
+    let db_manager = DatabaseManager::new("retrochat.db")
+        .await
+        .with_context(|| "Failed to initialize database")?;
 
     // Create and launch TUI
     let launcher = TuiLauncher::new(db_manager);
@@ -211,6 +184,7 @@ pub async fn initialize_database_if_needed(database_path: &str) -> Result<Databa
     let is_new_database = !db_path.exists();
 
     let db_manager = DatabaseManager::new(database_path)
+        .await
         .with_context(|| format!("Failed to initialize database: {database_path}"))?;
 
     if is_new_database {
@@ -238,7 +212,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tui_launcher_creation() {
-        let db_manager = DatabaseManager::new(":memory:").unwrap();
+        let db_manager = DatabaseManager::new(":memory:").await.unwrap();
         let _launcher = TuiLauncher::new(db_manager);
         // Just test that we can create the launcher
     }

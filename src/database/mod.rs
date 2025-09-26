@@ -6,41 +6,62 @@ pub mod migrations;
 pub mod project_repo;
 pub mod schema;
 
+// Main repositories (now using SQLx)
 pub use analytics_repo::{
     AnalyticsRepository, DailyPoint, DailyUsageStats, HourlyActivity, ProviderTrend,
     SessionLengthDistribution,
 };
 pub use chat_session_repo::ChatSessionRepository;
-pub use connection::{DatabaseManager, TableInfo};
+pub use connection::DatabaseManager;
 pub use message_repo::MessageRepository;
-pub use migrations::{Migration, MigrationManager, MigrationStatus};
+pub use migrations::{MigrationManager, MigrationStatus};
 pub use project_repo::ProjectRepository;
 pub use schema::{create_schema, SCHEMA_VERSION};
 
-// Main database structure for integration tests
+// Main database structure (now using SQLx by default)
 pub struct Database {
     pub manager: DatabaseManager,
 }
 
 impl Database {
-    pub fn new(db_path: &str) -> anyhow::Result<Self> {
-        let manager = DatabaseManager::new(db_path)?;
+    pub async fn new(db_path: &str) -> anyhow::Result<Self> {
+        let manager = DatabaseManager::new(db_path).await?;
         Ok(Self { manager })
     }
 
-    pub fn new_in_memory() -> anyhow::Result<Self> {
-        let manager = DatabaseManager::new(":memory:")?;
+    pub async fn new_in_memory() -> anyhow::Result<Self> {
+        let manager = DatabaseManager::open_in_memory().await?;
         Ok(Self { manager })
     }
 
     pub async fn setup(&self) -> anyhow::Result<()> {
-        // Initialize schema and migrations
-        self.manager.with_connection(create_schema)?;
+        // Migrations are automatically run during initialization
         Ok(())
     }
 
-    pub fn initialize(&self) -> anyhow::Result<()> {
-        self.manager.with_connection(create_schema)?;
+    pub async fn initialize(&self) -> anyhow::Result<()> {
+        // Migrations are automatically run during initialization
         Ok(())
+    }
+
+    // Repository getters
+    pub fn message_repo(&self) -> MessageRepository {
+        MessageRepository::new(&self.manager)
+    }
+
+    pub fn project_repo(&self) -> ProjectRepository {
+        ProjectRepository::new(&self.manager)
+    }
+
+    pub fn chat_session_repo(&self) -> ChatSessionRepository {
+        ChatSessionRepository::new(&self.manager)
+    }
+
+    pub fn analytics_repo(&self) -> AnalyticsRepository {
+        AnalyticsRepository::new(&self.manager)
+    }
+
+    pub fn migration_manager(&self) -> MigrationManager {
+        MigrationManager::new(self.manager.pool().clone())
     }
 }
