@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::database::connection::DatabaseManager;
+use crate::database::DatabaseManager;
 
 pub async fn handle_init_command() -> Result<()> {
     println!("Initializing RetroChat database...");
@@ -16,8 +16,9 @@ pub async fn handle_init_command() -> Result<()> {
     }
 
     // Initialize database
-    let _db_manager =
-        DatabaseManager::new(db_path).with_context(|| "Failed to create database manager")?;
+    let _db_manager = DatabaseManager::new(db_path)
+        .await
+        .with_context(|| "Failed to create database manager")?;
 
     println!("✓ Database initialized successfully at: {db_path}");
     println!();

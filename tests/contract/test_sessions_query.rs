@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_list_sessions_default() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionsQueryRequest {
         page: None,
         page_size: None,
@@ -25,7 +25,7 @@ async fn test_list_sessions_default() {
 
 #[tokio::test]
 async fn test_list_sessions_filter_by_provider() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionsQueryRequest {
         page: None,
         page_size: None,
@@ -49,7 +49,7 @@ async fn test_list_sessions_filter_by_provider() {
 
 #[tokio::test]
 async fn test_list_sessions_filter_by_project() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionsQueryRequest {
         page: None,
         page_size: None,
@@ -77,7 +77,7 @@ async fn test_list_sessions_filter_by_project() {
 #[tokio::test]
 async fn test_list_sessions_date_range() {
     // Use a test database instead of the main database
-    let db_manager = Arc::new(DatabaseManager::open_in_memory().unwrap());
+    let db_manager = Arc::new(DatabaseManager::open_in_memory().await.unwrap());
     let service = QueryService::with_database(db_manager);
 
     let request = SessionsQueryRequest {
@@ -108,7 +108,7 @@ async fn test_list_sessions_date_range() {
 
 #[tokio::test]
 async fn test_list_sessions_pagination() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
 
     let first_page = SessionsQueryRequest {
         page: Some(1),
@@ -142,7 +142,7 @@ async fn test_list_sessions_pagination() {
 
 #[tokio::test]
 async fn test_list_sessions_sorting() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
 
     let request_asc = SessionsQueryRequest {
         page: None,
@@ -172,7 +172,7 @@ async fn test_list_sessions_sorting() {
 
 #[tokio::test]
 async fn test_sessions_response_schema() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionsQueryRequest {
         page: None,
         page_size: Some(5),

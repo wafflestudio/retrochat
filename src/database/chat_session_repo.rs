@@ -1,6 +1,6 @@
-use anyhow::Result as AnyhowResult;
+use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use rusqlite::{params, Result};
+use sqlx::{sqlite::SqliteRow, Pool, Row, Sqlite};
 use uuid::Uuid;
 
 use super::connection::DatabaseManager;
@@ -27,174 +27,272 @@ fn parse_datetime(datetime_str: &str) -> Result<DateTime<Utc>, chrono::ParseErro
 }
 
 pub struct ChatSessionRepository {
-    db: DatabaseManager,
+    pool: Pool<Sqlite>,
 }
 
 impl ChatSessionRepository {
-    pub fn new(db: DatabaseManager) -> Self {
-        Self { db }
+    pub fn new(db: &DatabaseManager) -> Self {
+        Self {
+            pool: db.pool().clone(),
+        }
     }
 
-    pub fn create(&self, session: &ChatSession) -> AnyhowResult<()> {
-        self.db.with_transaction(|conn| {
-            conn.execute(
-                "INSERT INTO chat_sessions (
-                    id, provider, project_name, start_time, end_time,
-                    message_count, token_count, file_path, file_hash,
-                    created_at, updated_at, state
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                params![
-                    session.id.to_string(),
-                    session.provider.to_string(),
-                    session.project_name,
-                    session.start_time.to_rfc3339(),
-                    session.end_time.map(|t| t.to_rfc3339()),
-                    session.message_count,
-                    session.token_count,
-                    session.file_path,
-                    session.file_hash,
-                    session.created_at.to_rfc3339(),
-                    session.updated_at.to_rfc3339(),
-                    session.state.to_string()
-                ],
-            )?;
-            Ok(())
-        })
+    pub async fn create(&self, session: &ChatSession) -> AnyhowResult<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO chat_sessions (
+                id, provider, project_name, start_time, end_time,
+                message_count, token_count, file_path, file_hash,
+                created_at, updated_at, state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(session.id.to_string())
+        .bind(session.provider.to_string())
+        .bind(session.project_name.as_ref())
+        .bind(session.start_time.to_rfc3339())
+        .bind(session.end_time.map(|t| t.to_rfc3339()))
+        .bind(session.message_count)
+        .bind(session.token_count)
+        .bind(&session.file_path)
+        .bind(&session.file_hash)
+        .bind(session.created_at.to_rfc3339())
+        .bind(session.updated_at.to_rfc3339())
+        .bind(session.state.to_string())
+        .execute(&self.pool)
+        .await
+        .context("Failed to create chat session")?;
+
+        Ok(())
     }
 
-    pub fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<ChatSession>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, provider, project_name, start_time, end_time,
-                        message_count, token_count, file_path, file_hash,
-                        created_at, updated_at, state
-                 FROM chat_sessions WHERE id = ?1",
-            )?;
+    pub async fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<ChatSession>> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions WHERE id = ?
+            "#,
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch chat session by ID")?;
 
-            let mut rows = stmt.query_map([id.to_string()], |row| self.row_to_session(row))?;
-
-            match rows.next() {
-                Some(session) => Ok(Some(session?)),
-                None => Ok(None),
+        match row {
+            Some(row) => {
+                let session = self.row_to_session(&row)?;
+                Ok(Some(session))
             }
-        })
+            None => Ok(None),
+        }
     }
 
-    pub fn get_all(&self) -> AnyhowResult<Vec<ChatSession>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, provider, project_name, start_time, end_time,
-                        message_count, token_count, file_path, file_hash,
-                        created_at, updated_at, state
-                 FROM chat_sessions ORDER BY updated_at DESC",
-            )?;
+    pub async fn get_all(&self) -> AnyhowResult<Vec<ChatSession>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions ORDER BY updated_at DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch all chat sessions")?;
 
-            let session_iter = stmt.query_map([], |row| self.row_to_session(row))?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            let session = self.row_to_session(&row)?;
+            sessions.push(session);
+        }
 
-            let mut sessions = Vec::new();
-            for session in session_iter {
-                sessions.push(session?);
+        Ok(sessions)
+    }
+
+    pub async fn update(&self, session: &ChatSession) -> AnyhowResult<()> {
+        let result = sqlx::query(
+            r#"
+            UPDATE chat_sessions SET
+                provider = ?, project_name = ?, start_time = ?, end_time = ?,
+                message_count = ?, token_count = ?, file_path = ?, file_hash = ?,
+                updated_at = ?, state = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(session.provider.to_string())
+        .bind(session.project_name.as_ref())
+        .bind(session.start_time.to_rfc3339())
+        .bind(session.end_time.map(|t| t.to_rfc3339()))
+        .bind(session.message_count)
+        .bind(session.token_count)
+        .bind(&session.file_path)
+        .bind(&session.file_hash)
+        .bind(session.updated_at.to_rfc3339())
+        .bind(session.state.to_string())
+        .bind(session.id.to_string())
+        .execute(&self.pool)
+        .await
+        .context("Failed to update chat session")?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Chat session not found"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete(&self, id: &Uuid) -> AnyhowResult<bool> {
+        let result = sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete chat session")?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn get_by_provider(&self, provider: &LlmProvider) -> AnyhowResult<Vec<ChatSession>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions WHERE provider = ? ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(provider.to_string())
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch chat sessions by provider")?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            let session = self.row_to_session(&row)?;
+            sessions.push(session);
+        }
+
+        Ok(sessions)
+    }
+
+    pub async fn get_by_project_name(&self, project_name: &str) -> AnyhowResult<Vec<ChatSession>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions WHERE project_name = ? ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(project_name)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch chat sessions by project name")?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            let session = self.row_to_session(&row)?;
+            sessions.push(session);
+        }
+
+        Ok(sessions)
+    }
+
+    pub async fn get_by_file_hash(&self, file_hash: &str) -> AnyhowResult<Option<ChatSession>> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions WHERE file_hash = ?
+            "#,
+        )
+        .bind(file_hash)
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch chat session by file hash")?;
+
+        match row {
+            Some(row) => {
+                let session = self.row_to_session(&row)?;
+                Ok(Some(session))
             }
-            Ok(sessions)
-        })
+            None => Ok(None),
+        }
     }
 
-    pub fn update(&self, session: &ChatSession) -> AnyhowResult<()> {
-        self.db.with_transaction(|conn| {
-            let rows_affected = conn.execute(
-                "UPDATE chat_sessions SET
-                    provider = ?2, project_name = ?3, start_time = ?4, end_time = ?5,
-                    message_count = ?6, token_count = ?7, file_path = ?8, file_hash = ?9,
-                    updated_at = ?10, state = ?11
-                 WHERE id = ?1",
-                params![
-                    session.id.to_string(),
-                    session.provider.to_string(),
-                    session.project_name,
-                    session.start_time.to_rfc3339(),
-                    session.end_time.map(|t| t.to_rfc3339()),
-                    session.message_count,
-                    session.token_count,
-                    session.file_path,
-                    session.file_hash,
-                    session.updated_at.to_rfc3339(),
-                    session.state.to_string()
-                ],
-            )?;
+    pub async fn count(&self) -> AnyhowResult<i64> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions")
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to count chat sessions")?;
 
-            if rows_affected == 0 {
-                return Err(rusqlite::Error::QueryReturnedNoRows);
-            }
-            Ok(())
-        })
+        Ok(count)
     }
 
-    pub fn delete(&self, id: &Uuid) -> AnyhowResult<bool> {
-        self.db.with_transaction(|conn| {
-            let rows_affected =
-                conn.execute("DELETE FROM chat_sessions WHERE id = ?1", [id.to_string()])?;
-            Ok(rows_affected > 0)
-        })
+    pub async fn count_by_provider(&self, provider: &LlmProvider) -> AnyhowResult<i64> {
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions WHERE provider = ?")
+                .bind(provider.to_string())
+                .fetch_one(&self.pool)
+                .await
+                .context("Failed to count chat sessions by provider")?;
+
+        Ok(count)
     }
 
-    pub fn get_by_provider(&self, provider: &LlmProvider) -> AnyhowResult<Vec<ChatSession>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, provider, project_name, start_time, end_time,
-                        message_count, token_count, file_path, file_hash,
-                        created_at, updated_at, state
-                 FROM chat_sessions WHERE provider = ?1 ORDER BY updated_at DESC",
-            )?;
+    pub async fn get_recent_sessions(&self, limit: i64) -> AnyhowResult<Vec<ChatSession>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, provider, project_name, start_time, end_time,
+                   message_count, token_count, file_path, file_hash,
+                   created_at, updated_at, state
+            FROM chat_sessions ORDER BY updated_at DESC LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch recent chat sessions")?;
 
-            let session_iter =
-                stmt.query_map([provider.to_string()], |row| self.row_to_session(row))?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            let session = self.row_to_session(&row)?;
+            sessions.push(session);
+        }
 
-            let mut sessions = Vec::new();
-            for session in session_iter {
-                sessions.push(session?);
-            }
-            Ok(sessions)
-        })
+        Ok(sessions)
     }
 
-    fn row_to_session(&self, row: &rusqlite::Row) -> Result<ChatSession> {
-        let id_str: String = row.get(0)?;
-        let provider_str: String = row.get(1)?;
-        let project_name: Option<String> = row.get(2)?;
-        let start_time_str: String = row.get(3)?;
-        let end_time_str: Option<String> = row.get(4)?;
-        let message_count: u32 = row.get(5)?;
-        let token_count: Option<u32> = row.get(6)?;
-        let file_path: String = row.get(7)?;
-        let file_hash: String = row.get(8)?;
-        let created_at_str: String = row.get(9)?;
-        let updated_at_str: String = row.get(10)?;
-        let state_str: String = row.get(11)?;
+    fn row_to_session(&self, row: &SqliteRow) -> AnyhowResult<ChatSession> {
+        let id_str: String = row.try_get("id")?;
+        let provider_str: String = row.try_get("provider")?;
+        let project_name: Option<String> = row.try_get("project_name")?;
+        let start_time_str: String = row.try_get("start_time")?;
+        let end_time_str: Option<String> = row.try_get("end_time")?;
+        let message_count: i64 = row.try_get("message_count")?;
+        let token_count: Option<i64> = row.try_get("token_count")?;
+        let file_path: String = row.try_get("file_path")?;
+        let file_hash: String = row.try_get("file_hash")?;
+        let created_at_str: String = row.try_get("created_at")?;
+        let updated_at_str: String = row.try_get("updated_at")?;
+        let state_str: String = row.try_get("state")?;
 
-        let id = Uuid::parse_str(&id_str).map_err(|_| {
-            rusqlite::Error::InvalidColumnType(0, id_str, rusqlite::types::Type::Text)
-        })?;
+        let id = Uuid::parse_str(&id_str).context("Invalid session ID format")?;
 
-        let provider = provider_str.parse::<LlmProvider>().map_err(|_| {
-            rusqlite::Error::InvalidColumnType(1, provider_str, rusqlite::types::Type::Text)
-        })?;
+        let provider = provider_str
+            .parse::<LlmProvider>()
+            .map_err(|e| anyhow::anyhow!("Invalid provider: {e}"))?;
 
         let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-            .map_err(|_| {
-                rusqlite::Error::InvalidColumnType(3, start_time_str, rusqlite::types::Type::Text)
-            })?
+            .context("Invalid start_time timestamp format")?
             .with_timezone(&Utc);
 
         let end_time = if let Some(end_time_str) = end_time_str {
             Some(
                 DateTime::parse_from_rfc3339(&end_time_str)
-                    .map_err(|_| {
-                        rusqlite::Error::InvalidColumnType(
-                            4,
-                            end_time_str,
-                            rusqlite::types::Type::Text,
-                        )
-                    })?
+                    .context("Invalid end_time timestamp format")?
                     .with_timezone(&Utc),
             )
         } else {
@@ -202,20 +300,16 @@ impl ChatSessionRepository {
         };
 
         let created_at = parse_datetime(&created_at_str)
-            .map_err(|_| {
-                rusqlite::Error::InvalidColumnType(9, created_at_str, rusqlite::types::Type::Text)
-            })?
+            .context("Invalid created_at timestamp format")?
             .with_timezone(&Utc);
 
         let updated_at = parse_datetime(&updated_at_str)
-            .map_err(|_| {
-                rusqlite::Error::InvalidColumnType(10, updated_at_str, rusqlite::types::Type::Text)
-            })?
+            .context("Invalid updated_at timestamp format")?
             .with_timezone(&Utc);
 
-        let state = state_str.parse::<SessionState>().map_err(|_| {
-            rusqlite::Error::InvalidColumnType(11, state_str, rusqlite::types::Type::Text)
-        })?;
+        let state = state_str
+            .parse::<SessionState>()
+            .map_err(|e| anyhow::anyhow!("Invalid session state: {e}"))?;
 
         Ok(ChatSession {
             id,
@@ -223,66 +317,13 @@ impl ChatSessionRepository {
             project_name,
             start_time,
             end_time,
-            message_count,
-            token_count,
+            message_count: message_count as u32,
+            token_count: token_count.map(|tc| tc as u32),
             file_path,
             file_hash,
             created_at,
             updated_at,
             state,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::Utc;
-
-    #[test]
-    fn test_create_and_get_session() {
-        let db = DatabaseManager::open_in_memory().unwrap();
-        let repo = ChatSessionRepository::new(db);
-
-        let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
-            "test.jsonl".to_string(),
-            "hash123".to_string(),
-            Utc::now(),
-        );
-
-        repo.create(&session).unwrap();
-
-        let retrieved = repo.get_by_id(&session.id).unwrap().unwrap();
-        assert_eq!(retrieved.id, session.id);
-        assert_eq!(retrieved.file_path, session.file_path);
-        assert_eq!(retrieved.provider, session.provider);
-    }
-
-    #[test]
-    fn test_get_by_provider() {
-        let db = DatabaseManager::open_in_memory().unwrap();
-        let repo = ChatSessionRepository::new(db);
-
-        let session1 = ChatSession::new(
-            LlmProvider::ClaudeCode,
-            "test1.jsonl".to_string(),
-            "hash1".to_string(),
-            Utc::now(),
-        );
-
-        let session2 = ChatSession::new(
-            LlmProvider::Gemini,
-            "test2.json".to_string(),
-            "hash2".to_string(),
-            Utc::now(),
-        );
-
-        repo.create(&session1).unwrap();
-        repo.create(&session2).unwrap();
-
-        let claude_sessions = repo.get_by_provider(&LlmProvider::ClaudeCode).unwrap();
-        assert_eq!(claude_sessions.len(), 1);
-        assert_eq!(claude_sessions[0].provider, LlmProvider::ClaudeCode);
     }
 }

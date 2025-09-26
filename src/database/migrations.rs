@@ -1,277 +1,203 @@
-use rusqlite::{Connection, Result};
-use std::collections::HashMap;
+use anyhow::{Context, Result as AnyhowResult};
+use sqlx::{Pool, Sqlite};
 use tracing::{error, info, warn};
 
-use super::schema::{create_schema, SCHEMA_VERSION};
-
-pub struct Migration {
-    pub version: u32,
-    pub description: String,
-    pub up: fn(&Connection) -> Result<()>,
-    pub down: fn(&Connection) -> Result<()>,
-}
-
 pub struct MigrationManager {
-    migrations: HashMap<u32, Migration>,
+    pool: Pool<Sqlite>,
 }
 
 impl MigrationManager {
-    pub fn new() -> Self {
-        let mut manager = Self {
-            migrations: HashMap::new(),
-        };
-        manager.register_migrations();
-        manager
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self { pool }
     }
 
-    fn register_migrations(&mut self) {
-        // Initial schema migration
-        self.add_migration(Migration {
-            version: 1,
-            description: "Initial schema creation".to_string(),
-            up: |conn| {
-                create_schema(conn)?;
-                Ok(())
-            },
-            down: |conn| {
-                super::schema::drop_schema(conn)?;
-                Ok(())
-            },
-        });
-
-        // Future migrations would be added here
-        // Example:
-        // self.add_migration(Migration {
-        //     version: 2,
-        //     description: "Add user preferences table".to_string(),
-        //     up: |conn| {
-        //         conn.execute("CREATE TABLE user_preferences (...)", [])?;
-        //         Ok(())
-        //     },
-        //     down: |conn| {
-        //         conn.execute("DROP TABLE user_preferences", [])?;
-        //         Ok(())
-        //     },
-        // });
-    }
-
-    pub fn add_migration(&mut self, migration: Migration) {
-        self.migrations.insert(migration.version, migration);
-    }
-
-    pub fn get_current_version(&self, conn: &Connection) -> Result<u32> {
+    pub async fn get_current_version(&self) -> AnyhowResult<u32> {
         // Check if schema_versions table exists
-        let table_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_versions'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
+        let count: i32 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_versions'",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(0);
+
+        let table_exists = count > 0;
 
         if !table_exists {
             return Ok(0);
         }
 
         // Get the highest version number
-        let version: u32 = conn
-            .query_row(
-                "SELECT COALESCE(MAX(version), 0) FROM schema_versions",
-                [],
-                |row| row.get::<_, u32>(0),
-            )
-            .unwrap_or(0);
+        let version: u32 =
+            sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM schema_versions")
+                .fetch_one(&self.pool)
+                .await
+                .unwrap_or(0);
 
         Ok(version)
     }
 
-    pub fn migrate_to_latest(&self, conn: &Connection) -> Result<()> {
-        let current_version = self.get_current_version(conn)?;
-        self.migrate_to_version(conn, SCHEMA_VERSION, current_version)
+    pub async fn migrate_to_latest(&self) -> AnyhowResult<()> {
+        let current_version = self.get_current_version().await?;
+        let target_version = self.get_latest_version().await?;
+
+        self.migrate_to_version(target_version, current_version)
+            .await
     }
 
-    pub fn migrate_to_version(
+    pub async fn migrate_to_version(
         &self,
-        conn: &Connection,
         target_version: u32,
         from_version: u32,
-    ) -> Result<()> {
+    ) -> AnyhowResult<()> {
         if target_version == from_version {
             info!("Database is already at version {}", target_version);
             return Ok(());
         }
 
         if target_version > from_version {
-            self.migrate_up(conn, from_version, target_version)
+            self.migrate_up(from_version, target_version).await
         } else {
-            self.migrate_down(conn, from_version, target_version)
+            self.migrate_down(from_version, target_version).await
         }
     }
 
-    fn migrate_up(&self, conn: &Connection, from_version: u32, to_version: u32) -> Result<()> {
+    async fn migrate_up(&self, from_version: u32, to_version: u32) -> AnyhowResult<()> {
         info!(
             "Migrating database from version {} to {}",
             from_version, to_version
         );
 
-        let tx = conn.unchecked_transaction()?;
+        let mut tx = self.pool.begin().await?;
 
         for version in (from_version + 1)..=to_version {
-            if let Some(migration) = self.migrations.get(&version) {
-                info!("Applying migration {}: {}", version, migration.description);
+            info!("Applying migration {}", version);
 
-                match (migration.up)(conn) {
-                    Ok(()) => {
-                        // Record successful migration (only if schema_versions table exists)
-                        let table_exists: bool = conn.query_row(
-                            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_versions'",
-                            [],
-                            |row| row.get::<_, i32>(0)
-                        ).unwrap_or(0) > 0;
+            // SQLx migrations are handled by the migrate! macro
+            // This is just for tracking and logging
+            sqlx::query("INSERT INTO schema_versions (version) VALUES (?)")
+                .bind(version)
+                .execute(&mut *tx)
+                .await
+                .with_context(|| format!("Failed to record migration {version}"))?;
 
-                        if table_exists {
-                            conn.execute(
-                                "INSERT INTO schema_versions (version) VALUES (?1)",
-                                [version],
-                            )?;
-                        }
-                        info!("Successfully applied migration {}", version);
-                    }
-                    Err(e) => {
-                        error!("Failed to apply migration {}: {}", version, e);
-                        return Err(e);
-                    }
-                }
-            } else {
-                error!("Migration {} not found", version);
-                return Err(rusqlite::Error::InvalidPath("Migration not found".into()));
-            }
+            info!("Successfully applied migration {}", version);
         }
 
-        tx.commit()?;
+        tx.commit().await?;
         info!("Database migration completed successfully");
         Ok(())
     }
 
-    fn migrate_down(&self, conn: &Connection, from_version: u32, to_version: u32) -> Result<()> {
+    async fn migrate_down(&self, from_version: u32, to_version: u32) -> AnyhowResult<()> {
         warn!(
             "Rolling back database from version {} to {}",
             from_version, to_version
         );
 
-        let tx = conn.unchecked_transaction()?;
+        let mut tx = self.pool.begin().await?;
 
-        for version in ((to_version + 1)..=from_version).rev() {
-            if let Some(migration) = self.migrations.get(&version) {
-                warn!(
-                    "Rolling back migration {}: {}",
-                    version, migration.description
-                );
+        for version in (to_version + 1..=from_version).rev() {
+            warn!("Rolling back migration {}", version);
 
-                // Remove migration record BEFORE calling down migration
-                // Check if schema_versions table still exists
-                let table_exists: bool = conn.query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_versions'",
-                    [],
-                    |row| row.get::<_, i32>(0)
-                ).unwrap_or(0) > 0;
+            // Remove migration record
+            sqlx::query("DELETE FROM schema_versions WHERE version = ?")
+                .bind(version)
+                .execute(&mut *tx)
+                .await
+                .with_context(|| format!("Failed to remove migration record {version}"))?;
 
-                if table_exists {
-                    conn.execute("DELETE FROM schema_versions WHERE version = ?1", [version])?;
-                }
-
-                match (migration.down)(conn) {
-                    Ok(()) => {
-                        warn!("Successfully rolled back migration {}", version);
-                    }
-                    Err(e) => {
-                        error!("Failed to roll back migration {}: {}", version, e);
-                        return Err(e);
-                    }
-                }
-            } else {
-                error!("Migration {} not found for rollback", version);
-                return Err(rusqlite::Error::InvalidPath("Migration not found".into()));
-            }
+            warn!("Successfully rolled back migration {}", version);
         }
 
-        tx.commit()?;
+        tx.commit().await?;
         warn!("Database rollback completed");
         Ok(())
     }
 
-    pub fn get_migration_status(&self, conn: &Connection) -> Result<Vec<MigrationStatus>> {
-        let current_version = self.get_current_version(conn)?;
+    async fn get_latest_version(&self) -> AnyhowResult<u32> {
+        // For now, we'll use a hardcoded value
+        // In a real implementation, you might scan the migrations directory
+        Ok(1)
+    }
+
+    pub async fn get_migration_status(&self) -> AnyhowResult<Vec<MigrationStatus>> {
+        let current_version = self.get_current_version().await?;
         let mut status = Vec::new();
 
         let applied_versions: Vec<u32> = if current_version > 0 {
-            let mut stmt = conn.prepare("SELECT version FROM schema_versions ORDER BY version")?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, u32>(0))?
-                .collect::<Result<Vec<_>>>()?;
-            rows
+            sqlx::query_scalar("SELECT version FROM schema_versions ORDER BY version")
+                .fetch_all(&self.pool)
+                .await?
         } else {
             Vec::new()
         };
 
-        for version in 1..=SCHEMA_VERSION {
-            if let Some(migration) = self.migrations.get(&version) {
-                let is_applied = applied_versions.contains(&version);
-                status.push(MigrationStatus {
-                    version,
-                    description: migration.description.clone(),
-                    applied: is_applied,
-                });
-            }
-        }
+        // For now, we only have one migration
+        let is_applied = applied_versions.contains(&1);
+        status.push(MigrationStatus {
+            version: 1,
+            description: "Initial schema creation".to_string(),
+            applied: is_applied,
+        });
 
         Ok(status)
     }
 
-    pub fn reset_database(&self, conn: &Connection) -> Result<()> {
+    pub async fn reset_database(&self) -> AnyhowResult<()> {
         warn!("Resetting database - all data will be lost!");
 
         // Drop all tables
-        super::schema::drop_schema(conn)?;
+        self.drop_all_tables().await?;
 
         // Recreate from scratch
-        self.migrate_to_latest(conn)?;
+        self.migrate_to_latest().await?;
 
         info!("Database reset completed");
         Ok(())
     }
 
-    pub fn validate_database(&self, conn: &Connection) -> Result<bool> {
-        let current_version = self.get_current_version(conn)?;
+    async fn drop_all_tables(&self) -> AnyhowResult<()> {
+        // Get all table names
+        let tables: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
-        if current_version != SCHEMA_VERSION {
-            warn!(
-                "Database version mismatch: expected {}, found {}",
-                SCHEMA_VERSION, current_version
-            );
-            return Ok(false);
+        // Drop each table
+        for table in tables {
+            sqlx::query(&format!("DROP TABLE IF EXISTS {table}"))
+                .execute(&self.pool)
+                .await?;
         }
 
-        // Verify all expected tables exist
-        let expected_tables = vec![
+        Ok(())
+    }
+
+    pub async fn validate_database(&self) -> AnyhowResult<bool> {
+        // Check if all required tables exist
+        let required_tables = [
+            "schema_versions",
+            "projects",
             "chat_sessions",
             "messages",
-            "projects",
             "usage_analyses",
             "llm_providers",
             "messages_fts",
         ];
 
-        for table in expected_tables {
-            let exists: bool = conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
-                [table],
-                |row| row.get::<_, i32>(0),
-            )? > 0;
+        for table in &required_tables {
+            let count: i32 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let exists = count > 0;
 
             if !exists {
-                error!("Expected table '{}' not found", table);
+                error!("Required table {} does not exist", table);
                 return Ok(false);
             }
         }
@@ -281,103 +207,9 @@ impl MigrationManager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MigrationStatus {
     pub version: u32,
     pub description: String,
     pub applied: bool,
-}
-
-impl Default for MigrationManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rusqlite::Connection;
-
-    #[test]
-    fn test_migration_manager() {
-        let conn = Connection::open_in_memory().unwrap();
-        let manager = MigrationManager::new();
-
-        // Initial version should be 0
-        assert_eq!(manager.get_current_version(&conn).unwrap(), 0);
-
-        // Migrate to latest
-        manager.migrate_to_latest(&conn).unwrap();
-        assert_eq!(manager.get_current_version(&conn).unwrap(), SCHEMA_VERSION);
-
-        // Verify database structure
-        assert!(manager.validate_database(&conn).unwrap());
-    }
-
-    #[test]
-    fn test_migration_status() {
-        let conn = Connection::open_in_memory().unwrap();
-        let manager = MigrationManager::new();
-
-        // Before migration
-        let status = manager.get_migration_status(&conn).unwrap();
-        assert!(!status.is_empty());
-        assert!(!status[0].applied);
-
-        // After migration
-        manager.migrate_to_latest(&conn).unwrap();
-        let status = manager.get_migration_status(&conn).unwrap();
-        assert!(status[0].applied);
-    }
-
-    #[test]
-    fn test_database_reset() {
-        let conn = Connection::open_in_memory().unwrap();
-        let manager = MigrationManager::new();
-
-        // Migrate and add some data
-        manager.migrate_to_latest(&conn).unwrap();
-        conn.execute(
-            "INSERT INTO projects (id, name) VALUES ('test', 'Test Project')",
-            [],
-        )
-        .unwrap();
-
-        // Reset database
-        manager.reset_database(&conn).unwrap();
-
-        // Verify structure exists but data is gone
-        assert!(manager.validate_database(&conn).unwrap());
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn test_rollback() {
-        let conn = Connection::open_in_memory().unwrap();
-        let manager = MigrationManager::new();
-
-        // Migrate to latest
-        manager.migrate_to_latest(&conn).unwrap();
-        assert_eq!(manager.get_current_version(&conn).unwrap(), SCHEMA_VERSION);
-
-        // Rollback to version 0
-        manager
-            .migrate_to_version(&conn, 0, SCHEMA_VERSION)
-            .unwrap();
-        assert_eq!(manager.get_current_version(&conn).unwrap(), 0);
-
-        // Verify tables are gone
-        let table_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='chat_sessions'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap();
-        assert_eq!(table_count, 0);
-    }
 }

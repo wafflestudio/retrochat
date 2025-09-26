@@ -2,7 +2,7 @@ use retrochat::services::query_service::{QueryService, SessionDetailRequest};
 
 #[tokio::test]
 async fn test_get_session_detail_success() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
         include_content: Some(true),
@@ -27,7 +27,7 @@ async fn test_get_session_detail_success() {
 
 #[tokio::test]
 async fn test_get_session_detail_without_content() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
         include_content: Some(false),
@@ -49,7 +49,7 @@ async fn test_get_session_detail_without_content() {
 
 #[tokio::test]
 async fn test_get_session_detail_with_pagination() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
         include_content: Some(true),
@@ -71,7 +71,7 @@ async fn test_get_session_detail_with_pagination() {
 
 #[tokio::test]
 async fn test_session_detail_message_ordering() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440002".to_string(),
         include_content: Some(true),
@@ -106,7 +106,7 @@ async fn test_session_detail_message_ordering() {
 
 #[tokio::test]
 async fn test_session_detail_schema_validation() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440004".to_string(),
         include_content: Some(true),
@@ -157,7 +157,7 @@ async fn test_session_detail_schema_validation() {
 
 #[tokio::test]
 async fn test_session_detail_performance() {
-    let service = QueryService::new();
+    let service = QueryService::new().await;
     let request = SessionDetailRequest {
         session_id: "550e8400-e29b-41d4-a716-446655440005".to_string(),
         include_content: Some(true),

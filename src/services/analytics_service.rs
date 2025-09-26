@@ -5,10 +5,9 @@ use std::collections::HashMap;
 use std::fs;
 
 use super::query_service::DateRange;
-use crate::database::analytics_repo::AnalyticsRepository;
-use crate::database::chat_session_repo::ChatSessionRepository;
-use crate::database::connection::DatabaseManager;
-use crate::database::message_repo::MessageRepository;
+use crate::database::{
+    AnalyticsRepository, ChatSessionRepository, DatabaseManager, MessageRepository,
+};
 use crate::models::ChatSession;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,16 +100,16 @@ impl AnalyticsService {
     }
 
     pub async fn generate_insights(&self) -> Result<UsageInsights> {
-        let analytics_repo = AnalyticsRepository::new(self.db_manager.clone());
-        let session_repo = ChatSessionRepository::new(self.db_manager.clone());
-        let message_repo = MessageRepository::new(self.db_manager.clone());
+        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
+        let session_repo = ChatSessionRepository::new(&self.db_manager);
+        let message_repo = MessageRepository::new(&self.db_manager);
 
         println!("Generating usage insights...");
 
         // Basic counts
-        let sessions = session_repo.get_all()?;
+        let sessions = session_repo.get_all().await?;
         let total_sessions = sessions.len() as u64;
-        let total_messages = message_repo.count_all()?;
+        let total_messages = message_repo.count_all().await?;
         let total_tokens = sessions
             .iter()
             .map(|s| s.token_count.unwrap_or(0) as u64)
@@ -169,7 +168,7 @@ impl AnalyticsService {
 
         Ok(UsageInsights {
             total_sessions,
-            total_messages,
+            total_messages: total_messages as u64,
             total_tokens,
             date_range,
             span_days,
@@ -586,7 +585,11 @@ impl AnalyticsService {
 
 impl Default for AnalyticsService {
     fn default() -> Self {
-        Self::new(DatabaseManager::new("retrochat.db").unwrap())
+        // Use a blocking approach for Default implementation
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async { Self::new(DatabaseManager::new("retrochat.db").await.unwrap()) })
+        })
     }
 }
 
@@ -596,14 +599,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_analytics_service_creation() {
-        let db_manager = DatabaseManager::new(":memory:").unwrap();
+        let db_manager = DatabaseManager::new(":memory:").await.unwrap();
         let _service = AnalyticsService::new(db_manager);
         // Just test that we can create the service
     }
 
     #[tokio::test]
     async fn test_generate_insights_empty_database() {
-        let db_manager = DatabaseManager::new(":memory:").unwrap();
+        let db_manager = DatabaseManager::new(":memory:").await.unwrap();
         let service = AnalyticsService::new(db_manager);
 
         let result = service.generate_insights().await;

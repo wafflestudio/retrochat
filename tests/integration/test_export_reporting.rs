@@ -7,9 +7,10 @@ async fn test_export_reporting_workflow() {
     let _temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     // Setup database
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
 
     // Test analytics service export functionality
@@ -86,9 +87,10 @@ async fn test_export_reporting_workflow() {
 
 #[tokio::test]
 async fn test_export_different_formats() {
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let analytics_service = AnalyticsService::new(database.manager.clone());
 
@@ -129,9 +131,10 @@ async fn test_export_different_formats() {
 
 #[tokio::test]
 async fn test_export_with_comprehensive_filters() {
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let analytics_service = AnalyticsService::new(database.manager.clone());
 
@@ -178,9 +181,10 @@ async fn test_export_with_comprehensive_filters() {
 
 #[tokio::test]
 async fn test_export_performance() {
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let analytics_service = AnalyticsService::new(database.manager.clone());
 
@@ -220,9 +224,10 @@ async fn test_export_performance() {
 
 #[tokio::test]
 async fn test_export_edge_cases() {
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let analytics_service = AnalyticsService::new(database.manager.clone());
 
@@ -282,9 +287,10 @@ async fn test_export_edge_cases() {
 
 #[tokio::test]
 async fn test_export_file_validation() {
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let analytics_service = AnalyticsService::new(database.manager.clone());
 

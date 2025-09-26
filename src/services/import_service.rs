@@ -9,10 +9,9 @@ use tokio::sync::{mpsc, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::database::chat_session_repo::ChatSessionRepository;
-use crate::database::message_repo::MessageRepository;
-use crate::database::project_repo::ProjectRepository;
-use crate::database::DatabaseManager;
+use crate::database::{
+    ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
+};
 use crate::parsers::ParserRegistry;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -224,26 +223,26 @@ impl ImportService {
         }
 
         // Import into database
-        let session_repo = ChatSessionRepository::new((*self.db_manager).clone());
-        let message_repo = MessageRepository::new((*self.db_manager).clone());
-        let project_repo = ProjectRepository::new((*self.db_manager).clone());
+        let session_repo = ChatSessionRepository::new(&self.db_manager);
+        let message_repo = MessageRepository::new(&self.db_manager);
+        let project_repo = ProjectRepository::new(&self.db_manager);
 
         for (session, messages) in sessions {
             // Check if session already exists
-            if let Ok(Some(_)) = session_repo.get_by_id(&session.id) {
+            if let Ok(Some(_)) = session_repo.get_by_id(&session.id).await {
                 warnings.push(format!("Session {} already exists, skipping", session.id));
                 continue;
             }
 
             // Create project if it doesn't exist
             if let Some(ref project_name) = session.project_name {
-                if let Err(e) = project_repo.create_if_not_exists(project_name, None) {
+                if let Err(e) = project_repo.create_if_not_exists(project_name, None).await {
                     warnings.push(format!("Failed to create project {project_name}: {e}"));
                 }
             }
 
             // Insert session
-            if let Err(e) = session_repo.create(&session) {
+            if let Err(e) = session_repo.create(&session).await {
                 warnings.push(format!("Failed to insert session {}: {}", session.id, e));
                 continue;
             }
@@ -252,7 +251,7 @@ impl ImportService {
 
             // Insert messages
             for message in messages {
-                if let Err(e) = message_repo.create(&message) {
+                if let Err(e) = message_repo.create(&message).await {
                     warnings.push(format!("Failed to insert message {}: {}", message.id, e));
                     continue;
                 }

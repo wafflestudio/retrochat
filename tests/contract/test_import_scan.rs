@@ -6,8 +6,8 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn test_scan_directory_basic() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
 
     // Create some test files
@@ -40,8 +40,8 @@ async fn test_scan_directory_basic() {
 #[tokio::test]
 async fn test_scan_directory_with_providers() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
 
     let request = ScanRequest {

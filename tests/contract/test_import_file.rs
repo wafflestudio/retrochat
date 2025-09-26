@@ -30,8 +30,8 @@ async fn test_import_claude_code_file_success() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 
@@ -81,8 +81,8 @@ async fn test_import_gemini_file_success() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 
@@ -104,8 +104,8 @@ async fn test_import_file_not_found() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 
@@ -128,8 +128,8 @@ async fn test_import_file_invalid_format() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 
@@ -154,8 +154,8 @@ async fn test_import_file_duplicate_detection() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
 
     let first_import = service
@@ -197,8 +197,8 @@ async fn test_import_file_overwrite_existing() {
         overwrite_existing: Some(true),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
 
     let first_import = service.import_file(initial_request).await;
@@ -222,8 +222,8 @@ async fn test_import_file_invalid_provider() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 
@@ -250,8 +250,8 @@ async fn test_import_response_schema_validation() {
         overwrite_existing: Some(false),
     };
 
-    let database = Database::new_in_memory().unwrap();
-    database.initialize().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
+    database.initialize().await.unwrap();
     let service = ImportService::new(Arc::new(database.manager));
     let result = service.import_file(request).await;
 

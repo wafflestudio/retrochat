@@ -3,7 +3,7 @@ use std::env;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::database::connection::DatabaseManager;
+use crate::database::DatabaseManager;
 use crate::services::ImportService;
 
 pub async fn scan_directory(directory: Option<String>) -> Result<()> {
@@ -16,7 +16,7 @@ pub async fn scan_directory(directory: Option<String>) -> Result<()> {
 
     println!("Scanning directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db")?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let scan_request = crate::services::ScanRequest {
@@ -72,7 +72,7 @@ pub async fn import_file(file_path: String) -> Result<()> {
 
     println!("Importing file: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db")?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     // Detect provider
@@ -122,7 +122,7 @@ pub async fn import_batch(directory: String) -> Result<()> {
 
     println!("Batch importing from directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db")?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let batch_request = crate::services::BatchImportRequest {

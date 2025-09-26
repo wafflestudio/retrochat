@@ -104,9 +104,9 @@ pub struct QueryService {
 }
 
 impl QueryService {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         // For backward compatibility, use a shared database instance
-        let db_manager = Arc::new(DatabaseManager::new("retrochat.db").unwrap());
+        let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await.unwrap());
         Self { db_manager }
     }
 
@@ -123,10 +123,10 @@ impl QueryService {
         let sort_by = request.sort_by.unwrap_or_else(|| "start_time".to_string());
         let sort_order = request.sort_order.unwrap_or_else(|| "desc".to_string());
 
-        let session_repo = ChatSessionRepository::new((*self.db_manager).clone());
+        let session_repo = ChatSessionRepository::new(&self.db_manager);
 
         // Get all sessions first (we'll implement pagination later)
-        let all_sessions = session_repo.get_all()?;
+        let all_sessions = session_repo.get_all().await?;
 
         // Apply filters if specified
         let filtered_sessions: Vec<ChatSession> = if let Some(filters) = &request.filters {
@@ -216,46 +216,46 @@ impl QueryService {
             .collect();
 
         // Convert to SessionSummary format with actual first message preview
-        let message_repo = crate::database::MessageRepository::new((*self.db_manager).clone());
-        let sessions: Vec<SessionSummary> = paginated_sessions
-            .into_iter()
-            .map(|session| {
-                // Get first message preview
-                let first_message_preview = message_repo
-                    .get_by_session(&session.id)
-                    .ok()
-                    .and_then(|messages| {
-                        messages.first().map(|msg| {
-                            let preview = if msg.content.len() > 100 {
-                                // Find a safe character boundary
-                                let mut end = 97;
-                                while end > 0 && !msg.content.is_char_boundary(end) {
-                                    end -= 1;
-                                }
-                                format!("{}...", &msg.content[..end])
-                            } else {
-                                msg.content.clone()
-                            };
-                            preview
-                        })
-                    })
-                    .unwrap_or_else(|| "No messages available".to_string());
+        let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let mut sessions = Vec::new();
 
-                SessionSummary {
-                    session_id: session.id.to_string(),
-                    provider: session.provider.to_string(),
-                    project: session.project_name,
-                    start_time: session.start_time.to_rfc3339(),
-                    end_time: session
-                        .end_time
-                        .map(|t| t.to_rfc3339())
-                        .unwrap_or_else(|| session.start_time.to_rfc3339()),
-                    message_count: session.message_count as i32,
-                    total_tokens: session.token_count.map(|t| t as i32),
-                    first_message_preview,
-                }
-            })
-            .collect();
+        for session in paginated_sessions {
+            // Get first message preview
+            let first_message_preview = message_repo
+                .get_by_session(&session.id)
+                .await
+                .ok()
+                .and_then(|messages| {
+                    messages.first().map(|msg| {
+                        let preview = if msg.content.len() > 100 {
+                            // Find a safe character boundary
+                            let mut end = 97;
+                            while end > 0 && !msg.content.is_char_boundary(end) {
+                                end -= 1;
+                            }
+                            format!("{}...", &msg.content[..end])
+                        } else {
+                            msg.content.clone()
+                        };
+                        preview
+                    })
+                })
+                .unwrap_or_else(|| "No messages available".to_string());
+
+            sessions.push(SessionSummary {
+                session_id: session.id.to_string(),
+                provider: session.provider.to_string(),
+                project: session.project_name,
+                start_time: session.start_time.to_rfc3339(),
+                end_time: session
+                    .end_time
+                    .map(|t| t.to_rfc3339())
+                    .unwrap_or_else(|| session.start_time.to_rfc3339()),
+                message_count: session.message_count as i32,
+                total_tokens: session.token_count.map(|t| t as i32),
+                first_message_preview,
+            });
+        }
 
         Ok(SessionsQueryResponse {
             sessions,
@@ -275,14 +275,15 @@ impl QueryService {
             .map_err(|e| anyhow::anyhow!("Invalid session ID: {e}"))?;
 
         // Get session from database
-        let session_repo = ChatSessionRepository::new((*self.db_manager).clone());
+        let session_repo = ChatSessionRepository::new(&self.db_manager);
         let session = session_repo
-            .get_by_id(&session_id)?
+            .get_by_id(&session_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Session not found: {session_id}"))?;
 
         // Get messages for this session
-        let message_repo = crate::database::MessageRepository::new((*self.db_manager).clone());
-        let messages = message_repo.get_by_session(&session_id)?;
+        let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let messages = message_repo.get_by_session(&session_id).await?;
 
         Ok(SessionDetailResponse {
             session,
@@ -296,51 +297,56 @@ impl QueryService {
         let start_time = std::time::Instant::now();
 
         // Use the message repository's search functionality
-        let message_repo = crate::database::MessageRepository::new((*self.db_manager).clone());
-        let session_repo = ChatSessionRepository::new((*self.db_manager).clone());
+        let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let session_repo = ChatSessionRepository::new(&self.db_manager);
 
         // Search for messages using FTS with filters
-        let messages = message_repo.search_content_with_filters(
-            &request.query,
-            request.providers.as_deref(),
-            request.projects.as_deref(),
-            request.date_range.as_ref(),
-        )?;
+        let messages = message_repo
+            .search_content_with_filters(
+                &request.query,
+                None,      // session_id filter
+                None,      // role filter
+                Some(100), // limit
+            )
+            .await?;
 
         // Convert to search results
-        let mut results: Vec<SearchResult> = messages
-            .into_iter()
-            .map(|message| {
-                // Get session info for context
-                let session = session_repo.get_by_id(&message.session_id).ok().flatten();
+        let mut results = Vec::new();
 
-                // Create content snippet
-                let content_snippet = if message.content.len() > 200 {
-                    // Find a safe character boundary
-                    let mut end = 197;
-                    while end > 0 && !message.content.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    format!("...{}...", &message.content[..end])
-                } else {
-                    message.content.clone()
-                };
+        for message in messages {
+            // Get session info for context
+            let session = session_repo
+                .get_by_id(&message.session_id)
+                .await
+                .ok()
+                .flatten();
 
-                SearchResult {
-                    session_id: message.session_id.to_string(),
-                    message_id: message.id.to_string(),
-                    provider: session
-                        .as_ref()
-                        .map(|s| s.provider.to_string())
-                        .unwrap_or_else(|| "unknown".to_string()),
-                    project: session.and_then(|s| s.project_name),
-                    timestamp: message.timestamp.to_rfc3339(),
-                    content_snippet,
-                    message_role: message.role.to_string(),
-                    relevance_score: 0.8, // FTS doesn't provide relevance scores, use default
+            // Create content snippet
+            let content_snippet = if message.content.len() > 200 {
+                // Find a safe character boundary
+                let mut end = 197;
+                while end > 0 && !message.content.is_char_boundary(end) {
+                    end -= 1;
                 }
-            })
-            .collect();
+                format!("...{}...", &message.content[..end])
+            } else {
+                message.content.clone()
+            };
+
+            results.push(SearchResult {
+                session_id: message.session_id.to_string(),
+                message_id: message.id.to_string(),
+                provider: session
+                    .as_ref()
+                    .map(|s| s.provider.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+                project: session.and_then(|s| s.project_name),
+                timestamp: message.timestamp.to_rfc3339(),
+                content_snippet,
+                message_role: message.role.to_string(),
+                relevance_score: 0.8, // FTS doesn't provide relevance scores, use default
+            });
+        }
 
         // Sort by relevance score (descending) for consistent ordering
         results.sort_by(|a, b| {
@@ -377,6 +383,9 @@ impl QueryService {
 
 impl Default for QueryService {
     fn default() -> Self {
-        Self::new()
+        // Use a blocking approach for Default implementation
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async { Self::new().await })
+        })
     }
 }

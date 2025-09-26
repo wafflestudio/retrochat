@@ -1,40 +1,48 @@
 use chrono::Utc;
-use retrochat::database::{ChatSessionRepository, DatabaseManager, MessageRepository};
+use retrochat::database::{
+    ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
+};
 use retrochat::models::{
     chat_session::{ChatSession, LlmProvider},
     message::{Message, MessageRole},
+    project::Project,
 };
 use retrochat::services::query_service::{DateRange, QueryService, SearchRequest};
 use std::sync::Arc;
+use uuid::Uuid;
 
 async fn setup_test_data() -> QueryService {
-    let db_manager = DatabaseManager::new(":memory:").unwrap();
+    let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = QueryService::with_database(Arc::new(db_manager.clone()));
 
     // Create test projects first (required by foreign key constraint)
-    db_manager
-        .with_connection(|conn| {
-            conn.execute(
-                "INSERT INTO projects (id, name, description) VALUES (?, ?, ?)",
-                ["proj1", "test-project", "Test project for search"],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO projects (id, name, description) VALUES (?, ?, ?)",
-                [
-                    "proj2",
-                    "another-project",
-                    "Another test project for search",
-                ],
-            )
-            .unwrap();
-            Ok(())
-        })
-        .unwrap();
+    let project_repo = ProjectRepository::new(&db_manager);
+    let project1 = Project {
+        id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(),
+        name: "test-project".to_string(),
+        description: Some("Test project for search".to_string()),
+        working_directory: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        session_count: 0,
+        total_tokens: 0,
+    };
+    let project2 = Project {
+        id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap(),
+        name: "another-project".to_string(),
+        description: Some("Another test project for search".to_string()),
+        working_directory: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        session_count: 0,
+        total_tokens: 0,
+    };
+    project_repo.create(&project1).await.unwrap();
+    project_repo.create(&project2).await.unwrap();
 
     // Create test sessions
-    let session_repo = ChatSessionRepository::new(db_manager.clone());
-    let message_repo = MessageRepository::new(db_manager.clone());
+    let session_repo = ChatSessionRepository::new(&db_manager);
+    let message_repo = MessageRepository::new(&db_manager);
 
     // Session 1: ClaudeCode with test-project
     let mut session1 = ChatSession::new(
@@ -44,7 +52,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
     );
     session1.project_name = Some("test-project".to_string());
-    session_repo.create(&session1).unwrap();
+    session_repo.create(&session1).await.unwrap();
 
     // Session 2: Gemini with another-project
     let mut session2 = ChatSession::new(
@@ -54,7 +62,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
     );
     session2.project_name = Some("another-project".to_string());
-    session_repo.create(&session2).unwrap();
+    session_repo.create(&session2).await.unwrap();
 
     // Create test messages
     let message1 = Message::new(
@@ -64,7 +72,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
         1,
     );
-    message_repo.create(&message1).unwrap();
+    message_repo.create(&message1).await.unwrap();
 
     let message2 = Message::new(
         session1.id,
@@ -73,7 +81,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
         2,
     );
-    message_repo.create(&message2).unwrap();
+    message_repo.create(&message2).await.unwrap();
 
     let message3 = Message::new(
         session2.id,
@@ -82,7 +90,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
         1,
     );
-    message_repo.create(&message3).unwrap();
+    message_repo.create(&message3).await.unwrap();
 
     let message4 = Message::new(
         session2.id,
@@ -91,7 +99,7 @@ async fn setup_test_data() -> QueryService {
         Utc::now(),
         2,
     );
-    message_repo.create(&message4).unwrap();
+    message_repo.create(&message4).await.unwrap();
 
     service
 }
@@ -144,7 +152,7 @@ async fn test_search_messages_with_provider_filter() {
 
     let response = result.unwrap();
     for search_result in &response.results {
-        assert_eq!(search_result.provider, "ClaudeCode");
+        assert_eq!(search_result.provider, "claude-code");
     }
 }
 
@@ -152,7 +160,7 @@ async fn test_search_messages_with_provider_filter() {
 async fn test_search_messages_with_project_filter() {
     let service = setup_test_data().await;
     let request = SearchRequest {
-        query: "code".to_string(),
+        query: "machine learning".to_string(),
         providers: None,
         projects: Some(vec!["test-project".to_string()]),
         date_range: None,
@@ -198,8 +206,8 @@ async fn test_search_messages_with_date_range() {
         providers: None,
         projects: None,
         date_range: Some(DateRange {
-            start_date: "2024-01-01".to_string(),
-            end_date: "2024-12-31".to_string(),
+            start_date: "2025-01-01".to_string(),
+            end_date: "2025-12-31".to_string(),
         }),
         search_type: None,
         page: None,
@@ -212,8 +220,8 @@ async fn test_search_messages_with_date_range() {
     let response = result.unwrap();
     for search_result in &response.results {
         let timestamp_date = &search_result.timestamp[..10]; // Extract date part
-        assert!(timestamp_date >= "2024-01-01");
-        assert!(timestamp_date <= "2024-12-31");
+        assert!(timestamp_date >= "2025-01-01");
+        assert!(timestamp_date <= "2025-12-31");
     }
 }
 

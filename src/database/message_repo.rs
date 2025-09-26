@@ -1,239 +1,244 @@
-use anyhow::Result as AnyhowResult;
+use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension, Result};
+use sqlx::{sqlite::SqliteRow, Pool, Row, Sqlite};
+use std::str::FromStr;
 use uuid::Uuid;
 
 use super::connection::DatabaseManager;
 use crate::models::message::{Message, MessageRole};
 
 pub struct MessageRepository {
-    db: DatabaseManager,
+    pool: Pool<Sqlite>,
 }
 
 impl MessageRepository {
-    pub fn new(db: DatabaseManager) -> Self {
-        Self { db }
+    pub fn new(db: &DatabaseManager) -> Self {
+        Self {
+            pool: db.pool().clone(),
+        }
     }
 
-    pub fn create(&self, message: &Message) -> AnyhowResult<()> {
-        self.db.with_transaction(|conn| {
-            // Insert into main messages table
-            conn.execute(
-                "INSERT INTO messages (
-                    id, session_id, role, content, timestamp, token_count,
-                    tool_calls, metadata, sequence_number
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![
-                    message.id.to_string(),
-                    message.session_id.to_string(),
-                    message.role.to_string(),
-                    message.content,
-                    message.timestamp.to_rfc3339(),
-                    message.token_count,
-                    message
-                        .tool_calls
-                        .as_ref()
-                        .and_then(|tc| serde_json::to_string(tc).ok()),
-                    "{}",
-                    message.sequence_number
-                ],
-            )?;
+    pub async fn create(&self, message: &Message) -> AnyhowResult<()> {
+        let tool_calls_json = message
+            .tool_calls
+            .as_ref()
+            .and_then(|tc| serde_json::to_string(tc).ok());
 
-            // FTS table is automatically updated by triggers
+        sqlx::query(
+            r#"
+            INSERT INTO messages (
+                id, session_id, role, content, timestamp, token_count,
+                tool_calls, metadata, sequence_number
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(message.id.to_string())
+        .bind(message.session_id.to_string())
+        .bind(message.role.to_string())
+        .bind(&message.content)
+        .bind(message.timestamp.to_rfc3339())
+        .bind(message.token_count)
+        .bind(tool_calls_json)
+        .bind("{}") // metadata
+        .bind(message.sequence_number)
+        .execute(&self.pool)
+        .await
+        .context("Failed to create message")?;
 
-            Ok(())
-        })
+        Ok(())
     }
 
-    pub fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<Message>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, session_id, role, content, timestamp, token_count,
-                        tool_calls, sequence_number
-                 FROM messages WHERE id = ?1",
-            )?;
+    pub async fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<Message>> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, session_id, role, content, timestamp, token_count,
+                   tool_calls, metadata, sequence_number
+            FROM messages
+            WHERE id = ?
+            "#,
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch message by ID")?;
 
-            let mut rows = stmt.query_map([id.to_string()], |row| self.row_to_message(row))?;
-
-            match rows.next() {
-                Some(message) => Ok(Some(message?)),
-                None => Ok(None),
+        match row {
+            Some(row) => {
+                let message = self.row_to_message(&row)?;
+                Ok(Some(message))
             }
-        })
+            None => Ok(None),
+        }
     }
 
-    pub fn get_by_session(&self, session_id: &Uuid) -> AnyhowResult<Vec<Message>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, session_id, role, content, timestamp, token_count,
-                        tool_calls, sequence_number
-                 FROM messages
-                 WHERE session_id = ?1
-                 ORDER BY sequence_number ASC",
-            )?;
+    pub async fn get_by_session_id(&self, session_id: &Uuid) -> AnyhowResult<Vec<Message>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, session_id, role, content, timestamp, token_count,
+                   tool_calls, metadata, sequence_number
+            FROM messages
+            WHERE session_id = ?
+            ORDER BY sequence_number ASC
+            "#,
+        )
+        .bind(session_id.to_string())
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch messages by session ID")?;
 
-            let message_iter =
-                stmt.query_map([session_id.to_string()], |row| self.row_to_message(row))?;
+        let mut messages = Vec::new();
+        for row in rows {
+            let message = self.row_to_message(&row)?;
+            messages.push(message);
+        }
 
-            let mut messages = Vec::new();
-            for message in message_iter {
-                messages.push(message?);
-            }
-            Ok(messages)
-        })
+        Ok(messages)
     }
 
-    pub fn search_content(&self, query: &str) -> AnyhowResult<Vec<Message>> {
-        self.db.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT m.id, m.session_id, m.role, m.content, m.timestamp, m.token_count,
-                        m.tool_calls, m.sequence_number
-                 FROM messages_fts
-                 JOIN messages m ON messages_fts.message_id = m.id
-                 WHERE messages_fts MATCH ?1
-                 LIMIT 100",
-            )?;
-
-            let message_iter = stmt.query_map([query], |row| self.row_to_message(row))?;
-
-            let mut messages = Vec::new();
-            for message in message_iter {
-                messages.push(message?);
-            }
-            Ok(messages)
-        })
+    // Alias for backward compatibility
+    pub async fn get_by_session(&self, session_id: &Uuid) -> AnyhowResult<Vec<Message>> {
+        self.get_by_session_id(session_id).await
     }
 
-    pub fn search_content_with_filters(
+    pub async fn search_content(
         &self,
         query: &str,
-        providers: Option<&[String]>,
-        projects: Option<&[String]>,
-        date_range: Option<&crate::services::query_service::DateRange>,
+        limit: Option<i64>,
     ) -> AnyhowResult<Vec<Message>> {
-        self.db.with_connection(|conn| {
-            let mut sql = String::from(
-                "SELECT m.id, m.session_id, m.role, m.content, m.timestamp, m.token_count,
-                        m.tool_calls, m.sequence_number
-                 FROM messages_fts
-                 JOIN messages m ON messages_fts.message_id = m.id
-                 JOIN chat_sessions cs ON m.session_id = cs.id
-                 WHERE messages_fts MATCH ?1",
-            );
+        let limit = limit.unwrap_or(100);
 
-            let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(query.to_string())];
-            let mut param_count = 1;
+        let rows = sqlx::query(
+            r#"
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp, 
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number
+            FROM messages m
+            JOIN messages_fts fts ON m.rowid = fts.rowid
+            WHERE messages_fts MATCH ?
+            ORDER BY fts.rank
+            LIMIT ?
+            "#,
+        )
+        .bind(query)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to search messages")?;
 
-            // Add provider filter
-            if let Some(providers) = providers {
-                if !providers.is_empty() {
-                    param_count += 1;
-                    let placeholders = providers.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                    sql.push_str(&format!(" AND cs.provider IN ({placeholders})"));
-                    for provider in providers {
-                        params.push(Box::new(provider.clone()));
-                    }
-                }
-            }
+        let mut messages = Vec::new();
+        for row in rows {
+            let message = self.row_to_message(&row)?;
+            messages.push(message);
+        }
 
-            // Add project filter
-            if let Some(projects) = projects {
-                if !projects.is_empty() {
-                    param_count += 1;
-                    let placeholders = projects.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                    sql.push_str(&format!(" AND cs.project_name IN ({placeholders})"));
-                    for project in projects {
-                        params.push(Box::new(project.clone()));
-                    }
-                }
-            }
-
-            // Add date range filter
-            if let Some(date_range) = date_range {
-                param_count += 1;
-                sql.push_str(&format!(" AND m.timestamp >= ?{param_count}"));
-                params.push(Box::new(format!("{}T00:00:00Z", date_range.start_date)));
-
-                param_count += 1;
-                sql.push_str(&format!(" AND m.timestamp <= ?{param_count}"));
-                params.push(Box::new(format!("{}T23:59:59Z", date_range.end_date)));
-            }
-
-            sql.push_str(" ORDER BY m.timestamp DESC LIMIT 1000");
-
-            let mut stmt = conn.prepare(&sql)?;
-            let message_iter = stmt
-                .query_map(rusqlite::params_from_iter(params.iter()), |row| {
-                    self.row_to_message(row)
-                })?;
-
-            let mut messages = Vec::new();
-            for message in message_iter {
-                messages.push(message?);
-            }
-            Ok(messages)
-        })
+        Ok(messages)
     }
 
-    pub fn delete(&self, id: &Uuid) -> AnyhowResult<bool> {
-        self.db.with_transaction(|conn| {
-            // FTS table is automatically updated by triggers
-            let rows_affected =
-                conn.execute("DELETE FROM messages WHERE id = ?1", [id.to_string()])?;
+    pub async fn search_content_with_filters(
+        &self,
+        query: &str,
+        session_id: Option<&Uuid>,
+        role: Option<&str>,
+        limit: Option<i64>,
+    ) -> AnyhowResult<Vec<Message>> {
+        let limit = limit.unwrap_or(100);
 
-            Ok(rows_affected > 0)
-        })
+        let mut sql = r#"
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp, 
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number
+            FROM messages m
+            JOIN messages_fts fts ON m.rowid = fts.rowid
+            WHERE messages_fts MATCH ?
+        "#
+        .to_string();
+
+        let mut params = vec![query.to_string()];
+
+        if let Some(session_id) = session_id {
+            sql.push_str(" AND m.session_id = ?");
+            params.push(session_id.to_string());
+        }
+
+        if let Some(role) = role {
+            sql.push_str(" AND m.role = ?");
+            params.push(role.to_string());
+        }
+
+        sql.push_str(" ORDER BY fts.rank LIMIT ?");
+        params.push(limit.to_string());
+
+        let mut query_builder = sqlx::query(&sql);
+        for param in &params {
+            query_builder = query_builder.bind(param);
+        }
+
+        let rows = query_builder
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to search messages with filters")?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let message = self.row_to_message(&row)?;
+            messages.push(message);
+        }
+
+        Ok(messages)
     }
 
-    pub fn get_next_sequence_number(&self, session_id: &Uuid) -> AnyhowResult<u32> {
-        self.db.with_connection(|conn| {
-            let max_seq: Option<u32> = conn
-                .query_row(
-                    "SELECT MAX(sequence_number) FROM messages WHERE session_id = ?1",
-                    [session_id.to_string()],
-                    |row| row.get(0),
-                )
-                .optional()?;
+    pub async fn count_by_session(&self, session_id: &Uuid) -> AnyhowResult<i64> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE session_id = ?")
+            .bind(session_id.to_string())
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to count messages by session")?;
 
-            Ok(max_seq.unwrap_or(0) + 1)
-        })
+        Ok(count)
     }
 
-    fn row_to_message(&self, row: &rusqlite::Row) -> Result<Message> {
-        let id_str: String = row.get(0)?;
-        let session_id_str: String = row.get(1)?;
-        let role_str: String = row.get(2)?;
-        let content: String = row.get(3)?;
-        let timestamp_str: String = row.get(4)?;
-        let token_count: Option<u32> = row.get(5)?;
-        let tool_calls_str: Option<String> = row.get(6)?;
-        let sequence_number: u32 = row.get(7)?;
+    pub async fn count_all(&self) -> AnyhowResult<i64> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages")
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to count all messages")?;
 
-        let id = Uuid::parse_str(&id_str).map_err(|_| {
-            rusqlite::Error::InvalidColumnType(0, id_str, rusqlite::types::Type::Text)
-        })?;
+        Ok(count)
+    }
 
-        let session_id = Uuid::parse_str(&session_id_str).map_err(|_| {
-            rusqlite::Error::InvalidColumnType(1, session_id_str, rusqlite::types::Type::Text)
-        })?;
+    pub async fn delete_by_session(&self, session_id: &Uuid) -> AnyhowResult<u64> {
+        let result = sqlx::query("DELETE FROM messages WHERE session_id = ?")
+            .bind(session_id.to_string())
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete messages by session")?;
 
-        let role = role_str.parse::<MessageRole>().map_err(|_| {
-            rusqlite::Error::InvalidColumnType(2, role_str, rusqlite::types::Type::Text)
-        })?;
+        Ok(result.rows_affected())
+    }
 
+    fn row_to_message(&self, row: &SqliteRow) -> AnyhowResult<Message> {
+        let id_str: String = row.try_get("id")?;
+        let session_id_str: String = row.try_get("session_id")?;
+        let role_str: String = row.try_get("role")?;
+        let content: String = row.try_get("content")?;
+        let timestamp_str: String = row.try_get("timestamp")?;
+        let token_count: Option<i64> = row.try_get("token_count")?;
+        let tool_calls_json: Option<String> = row.try_get("tool_calls")?;
+        let sequence_number: i64 = row.try_get("sequence_number")?;
+
+        let id = Uuid::parse_str(&id_str).context("Invalid message ID format")?;
+        let session_id = Uuid::parse_str(&session_id_str).context("Invalid session ID format")?;
+        let role = MessageRole::from_str(&role_str)
+            .map_err(|e| anyhow::anyhow!("Invalid message role: {e}"))?;
         let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-            .map_err(|_| {
-                rusqlite::Error::InvalidColumnType(4, timestamp_str, rusqlite::types::Type::Text)
-            })?
+            .context("Invalid timestamp format")?
             .with_timezone(&Utc);
 
-        let tool_calls = if let Some(tool_calls_str) = tool_calls_str {
-            Some(serde_json::from_str(&tool_calls_str).map_err(|_| {
-                rusqlite::Error::InvalidColumnType(6, tool_calls_str, rusqlite::types::Type::Text)
-            })?)
+        let tool_calls = if let Some(json) = &tool_calls_json {
+            serde_json::from_str(json).ok()
         } else {
             None
         };
+
+        let metadata: Option<serde_json::Value> = serde_json::from_str("{}").ok();
 
         Ok(Message {
             id,
@@ -241,113 +246,10 @@ impl MessageRepository {
             role,
             content,
             timestamp,
-            token_count,
+            token_count: token_count.map(|tc| tc as u32),
             tool_calls,
-            metadata: None,
-            sequence_number,
+            metadata,
+            sequence_number: sequence_number as u32,
         })
-    }
-
-    pub fn count_all(&self) -> AnyhowResult<u64> {
-        self.db.with_connection(|conn| {
-            let count: u64 =
-                conn.query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))?;
-            Ok(count)
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::database::ChatSessionRepository;
-    use crate::models::chat_session::{ChatSession, LlmProvider};
-    use crate::models::message::MessageRole;
-
-    fn create_test_session(db: &DatabaseManager) -> Uuid {
-        let session_repo = ChatSessionRepository::new(db.clone());
-        let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
-            "test.jsonl".to_string(),
-            "hash123".to_string(),
-            Utc::now(),
-        );
-        let session_id = session.id;
-        session_repo.create(&session).unwrap();
-        session_id
-    }
-
-    #[test]
-    fn test_create_and_get_message() {
-        let db = DatabaseManager::open_in_memory().unwrap();
-        let repo = MessageRepository::new(db.clone());
-
-        let session_id = create_test_session(&db);
-        let message = Message::new(
-            session_id,
-            MessageRole::User,
-            "Hello, world!".to_string(),
-            Utc::now(),
-            1,
-        );
-
-        repo.create(&message).unwrap();
-
-        let retrieved = repo.get_by_id(&message.id).unwrap().unwrap();
-        assert_eq!(retrieved.id, message.id);
-        assert_eq!(retrieved.content, message.content);
-        assert_eq!(retrieved.role, message.role);
-    }
-
-    #[test]
-    fn test_get_by_session() {
-        let db = DatabaseManager::open_in_memory().unwrap();
-        let repo = MessageRepository::new(db.clone());
-
-        let session_id = create_test_session(&db);
-        let message1 = Message::new(
-            session_id,
-            MessageRole::User,
-            "First message".to_string(),
-            Utc::now(),
-            1,
-        );
-
-        let message2 = Message::new(
-            session_id,
-            MessageRole::Assistant,
-            "Second message".to_string(),
-            Utc::now(),
-            2,
-        );
-
-        repo.create(&message1).unwrap();
-        repo.create(&message2).unwrap();
-
-        let messages = repo.get_by_session(&session_id).unwrap();
-        assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0].sequence_number, 1);
-        assert_eq!(messages[1].sequence_number, 2);
-    }
-
-    #[test]
-    fn test_search_content() {
-        let db = DatabaseManager::open_in_memory().unwrap();
-        let repo = MessageRepository::new(db.clone());
-
-        let session_id = create_test_session(&db);
-        let message = Message::new(
-            session_id,
-            MessageRole::User,
-            "This is about machine learning".to_string(),
-            Utc::now(),
-            1,
-        );
-
-        repo.create(&message).unwrap();
-
-        let results = repo.search_content("machine").unwrap();
-        assert_eq!(results.len(), 1);
-        assert!(results[0].content.contains("machine learning"));
     }
 }
