@@ -5,9 +5,9 @@ pub mod defaults;
 pub mod directories;
 pub mod prompt_config;
 
-pub use defaults::get_default_templates;
+pub use defaults::get_default_analysis_focus;
 pub use directories::AppDirectories;
-pub use prompt_config::{ConfigStatistics, PromptConfig, TemplateConfig, VariableConfig};
+pub use prompt_config::PromptConfig;
 
 /// Validates required environment variables for retrospection features
 pub fn validate_environment() -> Result<()> {
@@ -38,41 +38,7 @@ pub fn initialize_app_config() -> Result<AppDirectories> {
     app_dirs.ensure_directories()?;
     app_dirs.ensure_additional_directories()?;
 
-    // Initialize default templates if they don't exist
-    let default_templates_path = app_dirs.default_templates_path();
-    if !default_templates_path.exists() {
-        let default_templates = get_default_templates();
-        let config = PromptConfig::from_templates(
-            default_templates,
-            "Default RetroChat prompt templates for retrospection analysis",
-        );
-        config.save_to_file(&default_templates_path)?;
-    }
-
     Ok(app_dirs)
-}
-
-/// Load all available prompt templates from configuration
-pub fn load_all_templates(
-    app_dirs: &AppDirectories,
-) -> Result<Vec<crate::models::prompt_template::PromptTemplate>> {
-    let mut all_templates = Vec::new();
-
-    // Load default templates
-    let default_templates_path = app_dirs.default_templates_path();
-    if default_templates_path.exists() {
-        let default_config = PromptConfig::load_from_file(&default_templates_path)?;
-        all_templates.extend(default_config.to_templates());
-    }
-
-    // Load custom templates if they exist
-    let custom_templates_path = app_dirs.custom_templates_path();
-    if custom_templates_path.exists() {
-        let custom_config = PromptConfig::load_from_file(&custom_templates_path)?;
-        all_templates.extend(custom_config.to_templates());
-    }
-
-    Ok(all_templates)
 }
 
 #[cfg(test)]

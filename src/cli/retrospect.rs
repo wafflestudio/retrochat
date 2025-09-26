@@ -1,14 +1,12 @@
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Write};
 use uuid::Uuid;
 
 use crate::config;
 use crate::database::{connection::DatabaseManager, RetrospectionAnalysisRepository};
 use crate::models::analysis_request::{AnalysisRequest, RequestStatus};
-use crate::services::{PromptService, RetrospectionService};
+use crate::services::RetrospectionService;
 
 /// Handle retrospect analyze command
 pub async fn handle_analyze_command(
@@ -29,7 +27,7 @@ pub async fn handle_analyze_command(
         stmt.exists([session_uuid.to_string()])
     })?;
     if !session_exists {
-        return Err(anyhow!("Session {} not found", session_id));
+        return Err(anyhow!("Session {session_id} not found"));
     }
 
     // Use default template if not specified
@@ -45,8 +43,7 @@ pub async fn handle_analyze_command(
         })?;
         if analysis_exists {
             println!(
-                "Analysis already exists for session {} with template {}.",
-                session_id, template_id
+                "Analysis already exists for session {session_id} with template {template_id}."
             );
             println!(
                 "Use --force to re-analyze or use 'retrospect show' to view existing analysis."
@@ -77,10 +74,7 @@ pub async fn handle_analyze_command(
         completed_at: None,
     };
 
-    println!(
-        "Starting analysis for session {} using template '{}'...",
-        session_id, template_id
-    );
+    println!("Starting analysis for session {session_id} using template '{template_id}'...");
 
     // Process the analysis request
     match retrospection_service
@@ -114,7 +108,7 @@ pub async fn handle_analyze_command(
             );
         }
         Err(e) => {
-            eprintln!("✗ Analysis failed: {}", e);
+            eprintln!("✗ Analysis failed: {e}");
             return Err(e);
         }
     }
@@ -133,7 +127,7 @@ pub async fn handle_list_command(
     let retrospection_service = RetrospectionService::new(db_manager.clone())?;
 
     let page = page.unwrap_or(1).max(1);
-    let page_size = page_size.unwrap_or(20).max(1).min(100);
+    let page_size = page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
     // Parse session ID if provided
@@ -172,7 +166,7 @@ pub async fn handle_list_command(
         return Ok(());
     }
 
-    println!("Retrospection Analyses (page {}):", page);
+    println!("Retrospection Analyses (page {page}):");
     println!("{:-<120}", "");
     println!(
         "{:<36} {:<36} {:<20} {:<12} {:<20}",
@@ -211,7 +205,7 @@ pub async fn handle_show_command(analysis_id: String) -> Result<()> {
     let analysis = retrospection_service
         .get_analysis(analysis_uuid)
         .await?
-        .ok_or_else(|| anyhow!("Analysis {} not found", analysis_id))?;
+        .ok_or_else(|| anyhow!("Analysis {analysis_id} not found"))?;
 
     // Display analysis details
     println!("Retrospection Analysis Details");
@@ -244,7 +238,7 @@ pub async fn handle_show_command(analysis_id: String) -> Result<()> {
     );
 
     if let Some(api_metadata) = &analysis.metadata.api_response_metadata {
-        println!("  API Response Metadata: {}", api_metadata);
+        println!("  API Response Metadata: {api_metadata}");
     }
 
     println!("\nAnalysis Content:");
@@ -257,229 +251,61 @@ pub async fn handle_show_command(analysis_id: String) -> Result<()> {
 
 /// Handle template list command
 pub async fn handle_template_list_command() -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db")?;
-    let prompt_service = PromptService::new(db_manager);
-
-    let templates = prompt_service.list_templates(true)?;
-
-    if templates.is_empty() {
-        println!("No prompt templates found.");
-        println!("Use 'retrospect template create' to add a new template.");
-        return Ok(());
-    }
-
-    println!("Available Prompt Templates:");
-    println!("{:-<100}", "");
-    println!("{:<20} {:<30} {:<50}", "ID", "Name", "Description");
-    println!("{:-<100}", "");
-
-    for template in templates {
-        println!(
-            "{:<20} {:<30} {:<50}",
-            template.id,
-            truncate_string(&template.name, 30),
-            truncate_string(&template.description, 50)
-        );
-    }
-
-    println!("{:-<100}", "");
-    println!("Use 'retrospect template show <template_id>' to view template details.");
-
+    println!("Template management has been simplified in this version.");
+    println!("The application now uses a single hardcoded prompt for all analyses.");
     Ok(())
 }
 
 /// Handle template show command
-pub async fn handle_template_show_command(template_id: String) -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db")?;
-    let prompt_service = PromptService::new(db_manager);
-
-    let template = prompt_service
-        .get_template(&template_id)?
-        .ok_or_else(|| anyhow!("Template '{}' not found", template_id))?;
-
-    println!("Prompt Template Details");
-    println!("{:=<80}", "");
-    println!("ID: {}", template.id);
-    println!("Name: {}", template.name);
-    println!("Description: {}", template.description);
-    println!("Category: {}", template.category);
-    println!("Default: {}", template.is_default);
+pub async fn handle_template_show_command(_template_id: String) -> Result<()> {
+    println!("Template management has been simplified.");
     println!(
-        "Created: {}",
-        template.created_at.format("%Y-%m-%d %H:%M:%S")
+        "This version uses a hardcoded prompt. Use 'retrospect analyze <session-id>' instead."
     );
-
-    if !template.variables.is_empty() {
-        println!("\nVariables:");
-        for variable in &template.variables {
-            println!(
-                "  - {}: {} ({})",
-                variable.name,
-                variable.description,
-                if variable.required {
-                    "required"
-                } else {
-                    "optional"
-                }
-            );
-            if let Some(default) = &variable.default_value {
-                println!("    Default: {}", default);
-            }
-        }
-    }
-
-    println!("\nTemplate Content:");
-    println!("{:-<80}", "");
-    println!("{}", template.template);
-    println!("{:-<80}", "");
-
     Ok(())
 }
 
 /// Handle template create command
 pub async fn handle_template_create_command(
-    id: String,
-    name: String,
-    description: String,
-    content: String,
+    _id: String,
+    _name: String,
+    _description: String,
+    _content: String,
 ) -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db")?;
-    let prompt_service = PromptService::new(db_manager);
-
-    // Handle file content if content starts with @
-    let template_content = if content.starts_with('@') {
-        let file_path = &content[1..];
-        fs::read_to_string(file_path)
-            .map_err(|e| anyhow!("Failed to read template file '{}': {}", file_path, e))?
-    } else {
-        content
-    };
-
-    match prompt_service.create_template(
-        &id,
-        &name,
-        &description,
-        &template_content,
-        Vec::new(), // Variables will be extracted during creation
-        "custom",
-    ) {
-        Ok(_) => {
-            println!("✓ Template '{}' created successfully!", id);
-        }
-        Err(e) => {
-            eprintln!("✗ Failed to create template: {}", e);
-            return Err(e);
-        }
-    }
-
+    println!("Template creation is not available in the simplified version.");
+    println!("The application uses a hardcoded prompt for all analyses.");
     Ok(())
 }
 
 /// Handle template update command
 pub async fn handle_template_update_command(
-    id: String,
-    name: Option<String>,
-    description: Option<String>,
-    content: Option<String>,
+    _id: String,
+    _name: Option<String>,
+    _description: Option<String>,
+    _content: Option<String>,
 ) -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db")?;
-    let prompt_service = PromptService::new(db_manager);
-
-    // Get existing template
-    let _template = prompt_service
-        .get_template(&id)?
-        .ok_or_else(|| anyhow!("Template '{}' not found", id))?;
-
-    // Prepare update content if provided
-    let update_content = if let Some(new_content) = content {
-        // Handle file content if content starts with @
-        Some(if new_content.starts_with('@') {
-            let file_path = &new_content[1..];
-            fs::read_to_string(file_path)
-                .map_err(|e| anyhow!("Failed to read template file '{}': {}", file_path, e))?
-        } else {
-            new_content
-        })
-    } else {
-        None
-    };
-
-    match prompt_service.update_template(
-        &id,
-        name,
-        description,
-        update_content,
-        None, // Variables update not implemented in CLI
-        None, // Category update not implemented in CLI
-    ) {
-        Ok(_) => {
-            println!("✓ Template '{}' updated successfully!", id);
-        }
-        Err(e) => {
-            eprintln!("✗ Failed to update template: {}", e);
-            return Err(e);
-        }
-    }
-
+    println!("Template management is not available in the simplified version.");
     Ok(())
 }
 
 /// Handle template delete command
-pub async fn handle_template_delete_command(id: String, force: bool) -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db")?;
-    let prompt_service = PromptService::new(db_manager);
-
-    // Check if template exists
-    let _template = prompt_service
-        .get_template(&id)?
-        .ok_or_else(|| anyhow!("Template '{}' not found", id))?;
-
-    // Confirm deletion unless force is used
-    if !force {
-        print!("Are you sure you want to delete template '{}'? [y/N]: ", id);
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-
-        if input != "y" && input != "yes" {
-            println!("Template deletion cancelled.");
-            return Ok(());
-        }
-    }
-
-    match prompt_service.delete_template(&id) {
-        Ok(_) => {
-            println!("✓ Template '{}' deleted successfully!", id);
-        }
-        Err(e) => {
-            eprintln!("✗ Failed to delete template: {}", e);
-            return Err(e);
-        }
-    }
-
+pub async fn handle_template_delete_command(_id: String, _force: bool) -> Result<()> {
+    println!("Template management is not available in the simplified version.");
     Ok(())
 }
 
 /// Handle template import command
-pub async fn handle_template_import_command(file: String, _overwrite: bool) -> Result<()> {
-    println!(
-        "Template import from '{}' is not yet implemented. Coming in future versions.",
-        file
-    );
+pub async fn handle_template_import_command(_file: String, _overwrite: bool) -> Result<()> {
+    println!("Template management is not available in the simplified version.");
     Ok(())
 }
 
 /// Handle template export command
 pub async fn handle_template_export_command(
-    file: String,
+    _file: String,
     _templates: Option<Vec<String>>,
 ) -> Result<()> {
-    println!(
-        "Template export to '{}' is not yet implemented. Coming in future versions.",
-        file
-    );
+    println!("Template management is not available in the simplified version.");
     Ok(())
 }
 
@@ -502,13 +328,13 @@ pub async fn handle_process_command(_limit: Option<i32>, _force: bool) -> Result
                 println!("✓ {}", result.get_summary());
                 if result.has_failures() {
                     for error in &result.errors {
-                        eprintln!("  Error: {}", error);
+                        eprintln!("  Error: {error}");
                     }
                 }
             }
         }
         Err(e) => {
-            eprintln!("✗ Failed to process requests: {}", e);
+            eprintln!("✗ Failed to process requests: {e}");
             return Err(e);
         }
     }
@@ -530,13 +356,13 @@ async fn get_session_content(db_manager: &DatabaseManager, session_id: Uuid) -> 
         let mut content = String::new();
         for message_result in message_rows {
             let (role, message_content) = message_result?;
-            content.push_str(&format!("{}: {}\n\n", role, message_content));
+            content.push_str(&format!("{role}: {message_content}\n\n"));
         }
 
         if content.is_empty() {
             return Err(rusqlite::Error::InvalidColumnType(
                 0,
-                format!("No messages found for session {}", session_id),
+                format!("No messages found for session {session_id}"),
                 rusqlite::types::Type::Text,
             ));
         }

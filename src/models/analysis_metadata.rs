@@ -143,10 +143,10 @@ impl AnalysisMetadata {
         if seconds < 1.0 {
             format!("{}ms", self.execution_time_ms)
         } else if seconds < 60.0 {
-            format!("{:.1}s", seconds)
+            format!("{seconds:.1}s")
         } else {
             let minutes = seconds / 60.0;
-            format!("{:.1}m", minutes)
+            format!("{minutes:.1}m")
         }
     }
 
@@ -188,7 +188,7 @@ impl AnalysisMetadata {
     pub fn is_token_usage_balanced(&self) -> bool {
         let ratio = self.get_token_ratio();
         // Balanced if output is 10%-500% of input
-        ratio >= 0.1 && ratio <= 5.0
+        (0.1..=5.0).contains(&ratio)
     }
 
     /// Validate metadata consistency

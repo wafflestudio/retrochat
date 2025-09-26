@@ -113,7 +113,7 @@ impl RetrospectionAnalysis {
     /// Mark analysis as failed with error message
     pub fn fail(&mut self, error_message: &str) {
         self.status = AnalysisStatus::Failed;
-        self.analysis_content = format!("Analysis failed: {}", error_message);
+        self.analysis_content = format!("Analysis failed: {error_message}");
         self.updated_at = Utc::now();
     }
 

@@ -18,7 +18,7 @@ impl<'a> AnalysisRequestRepository<'a> {
 
     pub fn create(&self, request: &AnalysisRequest) -> Result<()> {
         let template_variables_json = serde_json::to_string(&request.template_variables)
-            .map_err(|e| anyhow!("Failed to serialize template variables: {}", e))?;
+            .map_err(|e| anyhow!("Failed to serialize template variables: {e}"))?;
 
         self.conn.execute(
             r#"
@@ -166,7 +166,7 @@ impl<'a> AnalysisRequestRepository<'a> {
 
     pub fn update(&self, request: &AnalysisRequest) -> Result<()> {
         let template_variables_json = serde_json::to_string(&request.template_variables)
-            .map_err(|e| anyhow!("Failed to serialize template variables: {}", e))?;
+            .map_err(|e| anyhow!("Failed to serialize template variables: {e}"))?;
 
         let rows_affected = self.conn.execute(
             r#"

@@ -14,7 +14,7 @@ pub use import_service::{
     BatchImportRequest, BatchImportResponse, ChatFile, ImportFileRequest, ImportFileResponse,
     ImportService, ScanRequest, ScanResponse,
 };
-pub use prompt_service::{PromptService, TemplateStatistics, ValidationResult};
+pub use prompt_service::PromptService;
 pub use query_service::{
     DateRange, QueryService, SearchRequest, SearchResponse, SearchResult, SessionDetailRequest,
     SessionDetailResponse, SessionFilters, SessionSummary, SessionsQueryRequest,

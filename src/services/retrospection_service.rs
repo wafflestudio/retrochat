@@ -3,9 +3,10 @@ use crate::database::{
     RetrospectionAnalysisRepository,
 };
 use crate::models::message::MessageRole;
-use crate::models::{
-    AnalysisMetadata, AnalysisRequest, AnalysisStatus, RequestStatus, RetrospectionAnalysis,
-};
+use crate::models::{AnalysisRequest, RetrospectionAnalysis};
+
+#[cfg(test)]
+use crate::models::{AnalysisMetadata, AnalysisStatus, RequestStatus};
 use crate::services::{GeminiClient, PromptService};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -28,7 +29,7 @@ impl RetrospectionService {
     /// Create a new retrospection service
     pub fn new(db_manager: DatabaseManager) -> Result<Self> {
         let gemini_client = Arc::new(GeminiClient::new()?);
-        let prompt_service = PromptService::new(db_manager.clone());
+        let prompt_service = PromptService::new();
 
         Ok(Self {
             db_manager,
@@ -46,7 +47,7 @@ impl RetrospectionService {
         max_concurrent: usize,
         max_processing_time: Duration,
     ) -> Self {
-        let prompt_service = PromptService::new(db_manager.clone());
+        let prompt_service = PromptService::new();
 
         Self {
             db_manager,
@@ -61,28 +62,12 @@ impl RetrospectionService {
     pub async fn submit_analysis_request(
         &self,
         session_id: Uuid,
-        template_id: String,
-        variables: HashMap<String, String>,
+        _template_id: String,
+        _variables: HashMap<String, String>,
     ) -> Result<AnalysisRequest> {
-        // Validate template exists
-        let template = self
-            .prompt_service
-            .get_template(&template_id)?
-            .ok_or_else(|| anyhow!("Template '{}' not found", template_id))?;
-
-        // Validate variables
-        let validation = self
-            .prompt_service
-            .validate_template_variables(&template_id, &variables)?;
-        if validation.has_errors() {
-            return Err(anyhow!(
-                "Template variable validation failed: {}",
-                validation.get_error_summary()
-            ));
-        }
-
-        // Create analysis request
-        let request = AnalysisRequest::new(session_id, template_id, variables);
+        // In simplified version, we ignore template_id and variables
+        // and just create a basic request
+        let request = AnalysisRequest::new(session_id, "default".to_string(), HashMap::new());
 
         // Store request in database
         self.db_manager.with_connection_anyhow(|conn| {
@@ -91,8 +76,8 @@ impl RetrospectionService {
         })?;
 
         info!(
-            "Submitted analysis request {} for session {} using template '{}'",
-            request.id, session_id, template.name
+            "Submitted analysis request {} for session {} using default template",
+            request.id, session_id
         );
 
         Ok(request)
@@ -200,7 +185,7 @@ impl RetrospectionService {
                 },
                 Err(e) => {
                     result.failed += 1;
-                    result.errors.push(format!("Task join error: {}", e));
+                    result.errors.push(format!("Task join error: {e}"));
                 }
             }
         }
@@ -289,8 +274,7 @@ impl RetrospectionService {
                 Ok(())
             } else {
                 Err(anyhow!(
-                    "Request {} not found or not in failed state",
-                    request_id
+                    "Request {request_id} not found or not in failed state"
                 ))
             }
         })
@@ -321,11 +305,9 @@ impl RetrospectionService {
 
         // Get and render template
         let mut variables = request.template_variables.clone();
-        variables.insert("chat_content".to_string(), chat_content);
+        variables.insert("chat_content".to_string(), chat_content.clone());
 
-        let rendered_prompt = self
-            .prompt_service
-            .render_template(&request.prompt_template_id, &variables)?;
+        let rendered_prompt = self.prompt_service.render_prompt(&chat_content)?;
 
         debug!("Generated prompt: {} characters", rendered_prompt.len());
 
@@ -336,8 +318,7 @@ impl RetrospectionService {
             .await?;
 
         // Create analysis record
-        let mut analysis =
-            RetrospectionAnalysis::new(request.session_id, request.prompt_template_id);
+        let mut analysis = RetrospectionAnalysis::new(request.session_id, "default".to_string());
         analysis.complete(analysis_content, metadata);
 
         // Store the analysis
@@ -361,27 +342,27 @@ impl RetrospectionService {
         // Get session info
         let session = session_repo
             .get_by_id(&session_id)?
-            .ok_or_else(|| anyhow!("Session {} not found", session_id))?;
+            .ok_or_else(|| anyhow!("Session {session_id} not found"))?;
 
         // Get all messages for the session
         let messages = message_repo.get_by_session(&session_id)?;
 
         if messages.is_empty() {
-            return Err(anyhow!("No messages found for session {}", session_id));
+            return Err(anyhow!("No messages found for session {session_id}"));
         }
 
         // Format messages into a readable conversation
         let mut content = Vec::new();
-        content.push(format!("# Chat Session Analysis"));
+        content.push("# Chat Session Analysis".to_string());
         content.push(format!("**Session ID:** {}", session.id));
         content.push(format!("**Provider:** {}", session.provider));
         if let Some(project) = &session.project_name {
-            content.push(format!("**Project:** {}", project));
+            content.push(format!("**Project:** {project}"));
         }
         content.push(format!("**Start Time:** {}", session.start_time));
         content.push(format!("**Message Count:** {}", messages.len()));
         content.push(String::new());
-        content.push(format!("## Conversation"));
+        content.push("## Conversation".to_string());
         content.push(String::new());
 
         for (i, message) in messages.iter().enumerate() {
@@ -402,15 +383,15 @@ impl RetrospectionService {
                 if !tool_calls.is_empty() {
                     content.push("**Tool Calls:**".to_string());
                     if let Ok(json_str) = serde_json::to_string_pretty(tool_calls) {
-                        content.push(format!("```json\n{}\n```", json_str));
+                        content.push(format!("```json\n{json_str}\n```"));
                     }
                     content.push(String::new());
                 }
             }
         }
 
-        content.push(format!("---"));
-        content.push(format!("*End of session content*"));
+        content.push("---".to_string());
+        content.push("*End of session content*".to_string());
 
         Ok(content.join("\n"))
     }
@@ -694,7 +675,7 @@ mod tests {
                 assert!(!analysis.analysis_content.is_empty());
             }
             Err(e) => {
-                println!("Analysis failed: {}", e);
+                println!("Analysis failed: {e}");
                 // Don't fail the test for API issues
             }
         }

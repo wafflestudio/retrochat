@@ -17,7 +17,7 @@ impl<'a> RetrospectionAnalysisRepository<'a> {
 
     pub fn create(&self, analysis: &RetrospectionAnalysis) -> Result<()> {
         let metadata_json = serde_json::to_string(&analysis.metadata)
-            .map_err(|e| anyhow!("Failed to serialize metadata: {}", e))?;
+            .map_err(|e| anyhow!("Failed to serialize metadata: {e}"))?;
 
         self.conn.execute(
             r#"
@@ -131,8 +131,8 @@ impl<'a> RetrospectionAnalysisRepository<'a> {
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<Vec<RetrospectionAnalysis>> {
-        let limit_clause = limit.map(|l| format!("LIMIT {}", l)).unwrap_or_default();
-        let offset_clause = offset.map(|o| format!("OFFSET {}", o)).unwrap_or_default();
+        let limit_clause = limit.map(|l| format!("LIMIT {l}")).unwrap_or_default();
+        let offset_clause = offset.map(|o| format!("OFFSET {o}")).unwrap_or_default();
 
         let query = format!(
             r#"
@@ -140,9 +140,8 @@ impl<'a> RetrospectionAnalysisRepository<'a> {
                    metadata, status, created_at, updated_at
             FROM retrospection_analyses
             ORDER BY created_at DESC
-            {} {}
-            "#,
-            limit_clause, offset_clause
+            {limit_clause} {offset_clause}
+            "#
         );
 
         let mut stmt = self.conn.prepare(&query)?;
@@ -158,7 +157,7 @@ impl<'a> RetrospectionAnalysisRepository<'a> {
 
     pub fn update(&self, analysis: &RetrospectionAnalysis) -> Result<()> {
         let metadata_json = serde_json::to_string(&analysis.metadata)
-            .map_err(|e| anyhow!("Failed to serialize metadata: {}", e))?;
+            .map_err(|e| anyhow!("Failed to serialize metadata: {e}"))?;
 
         let rows_affected = self.conn.execute(
             r#"
@@ -229,7 +228,7 @@ impl<'a> RetrospectionAnalysisRepository<'a> {
             "#,
         )?;
 
-        let search_pattern = format!("%{}%", search_term);
+        let search_pattern = format!("%{search_term}%");
         let analysis_iter =
             stmt.query_map(params![search_pattern], |row| self.row_to_analysis(row))?;
 
@@ -477,7 +476,7 @@ mod tests {
         let repo = RetrospectionAnalysisRepository::new(&conn);
 
         let session_id = Uuid::new_v4();
-        let mut analysis1 = RetrospectionAnalysis::new(session_id, "template1".to_string());
+        let analysis1 = RetrospectionAnalysis::new(session_id, "template1".to_string());
         // Keep analysis1 in draft state
 
         let mut analysis2 = RetrospectionAnalysis::new(session_id, "template2".to_string());

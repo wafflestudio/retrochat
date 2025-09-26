@@ -30,7 +30,7 @@ pub struct RetrospectionWidget {
     pub analyses: Vec<RetrospectionAnalysis>,
     pub selected_analysis: Option<RetrospectionAnalysis>,
     pub analysis_list_state: ListState,
-    pub templates: Vec<crate::models::prompt_template::PromptTemplate>,
+    pub analysis_enabled: bool,
     pub template_list_state: ListState,
     pub selected_template: Option<String>,
     pub session_id: Option<Uuid>,
@@ -40,6 +40,12 @@ pub struct RetrospectionWidget {
     pub last_updated: std::time::Instant,
 }
 
+impl Default for RetrospectionWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RetrospectionWidget {
     pub fn new() -> Self {
         Self {
@@ -47,7 +53,7 @@ impl RetrospectionWidget {
             analyses: Vec::new(),
             selected_analysis: None,
             analysis_list_state: ListState::default(),
-            templates: Vec::new(),
+            analysis_enabled: true,
             template_list_state: ListState::default(),
             selected_template: None,
             session_id: None,
@@ -92,7 +98,7 @@ impl RetrospectionWidget {
                 }
             }
             Err(e) => {
-                self.error_message = Some(format!("Failed to load analyses: {}", e));
+                self.error_message = Some(format!("Failed to load analyses: {e}"));
                 self.loading = false;
             }
         }
@@ -100,30 +106,15 @@ impl RetrospectionWidget {
         Ok(())
     }
 
-    pub async fn refresh_templates(&mut self, db_manager: &DatabaseManager) -> Result<()> {
+    pub async fn refresh_templates(&mut self, _db_manager: &DatabaseManager) -> Result<()> {
         self.loading = true;
         self.error_message = None;
 
-        let prompt_service = PromptService::new(db_manager.clone());
+        let _prompt_service = PromptService::new();
 
-        match prompt_service.list_templates(true) {
-            Ok(templates) => {
-                self.templates = templates;
-                self.loading = false;
-                self.last_updated = std::time::Instant::now();
-
-                // Reset selection if current selection is invalid
-                if let Some(selected_index) = self.template_list_state.selected() {
-                    if selected_index >= self.templates.len() {
-                        self.template_list_state.select(None);
-                    }
-                }
-            }
-            Err(e) => {
-                self.error_message = Some(format!("Failed to load templates: {}", e));
-                self.loading = false;
-            }
-        }
+        self.analysis_enabled = true;
+        self.loading = false;
+        self.last_updated = std::time::Instant::now();
 
         Ok(())
     }
@@ -170,7 +161,7 @@ impl RetrospectionWidget {
                 self.refresh_analyses(db_manager).await?;
             }
             Err(e) => {
-                self.error_message = Some(format!("Analysis failed: {}", e));
+                self.error_message = Some(format!("Analysis failed: {e}"));
                 self.loading = false;
             }
         }
@@ -183,33 +174,31 @@ impl RetrospectionWidget {
         db_manager: &DatabaseManager,
         session_id: Uuid,
     ) -> Result<String> {
-        db_manager
-            .with_connection(|conn| {
-                let mut stmt = conn.prepare(
-                "SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY created_at ASC"
+        db_manager.with_connection(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY created_at ASC",
             )?;
 
-                let message_rows = stmt.query_map([session_id.to_string()], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })?;
+            let message_rows = stmt.query_map([session_id.to_string()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
 
-                let mut content = String::new();
-                for message_result in message_rows {
-                    let (role, message_content) = message_result?;
-                    content.push_str(&format!("{}: {}\n\n", role, message_content));
-                }
+            let mut content = String::new();
+            for message_result in message_rows {
+                let (role, message_content) = message_result?;
+                content.push_str(&format!("{role}: {message_content}\n\n"));
+            }
 
-                if content.is_empty() {
-                    return Err(rusqlite::Error::InvalidColumnType(
-                        0,
-                        format!("No messages found for session {}", session_id),
-                        rusqlite::types::Type::Text,
-                    ));
-                }
+            if content.is_empty() {
+                return Err(rusqlite::Error::InvalidColumnType(
+                    0,
+                    format!("No messages found for session {session_id}"),
+                    rusqlite::types::Type::Text,
+                ));
+            }
 
-                Ok(content)
-            })
-            .map_err(|e| anyhow::Error::from(e))
+            Ok(content)
+        })
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent) -> bool {
@@ -312,27 +301,26 @@ impl RetrospectionWidget {
                     if selected > 0 {
                         self.template_list_state.select(Some(selected - 1));
                     }
-                } else if !self.templates.is_empty() {
+                } else if self.analysis_enabled {
                     self.template_list_state.select(Some(0));
                 }
                 false
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if let Some(selected) = self.template_list_state.selected() {
-                    if selected < self.templates.len().saturating_sub(1) {
+                    if selected < 1 {
+                        // Simplified for single template
                         self.template_list_state.select(Some(selected + 1));
                     }
-                } else if !self.templates.is_empty() {
+                } else if self.analysis_enabled {
                     self.template_list_state.select(Some(0));
                 }
                 false
             }
             KeyCode::Enter => {
-                if let Some(selected) = self.template_list_state.selected() {
-                    if let Some(template) = self.templates.get(selected) {
-                        self.selected_template = Some(template.id.clone());
-                        self.mode = RetrospectionMode::TemplateDetail;
-                    }
+                if self.template_list_state.selected().is_some() {
+                    self.selected_template = Some("default".to_string());
+                    self.mode = RetrospectionMode::TemplateDetail;
                 }
                 false
             }
@@ -373,7 +361,7 @@ impl RetrospectionWidget {
 
     fn render_analysis_list(&mut self, f: &mut Frame, area: Rect) {
         let title = if let Some(session_id) = self.session_id {
-            format!("Retrospection Analyses - Session {}", session_id)
+            format!("Retrospection Analyses - Session {session_id}")
         } else {
             "Recent Retrospection Analyses".to_string()
         };
@@ -578,7 +566,7 @@ impl RetrospectionWidget {
             return;
         }
 
-        if self.templates.is_empty() {
+        if !self.analysis_enabled {
             let empty_text = Paragraph::new("No templates found.")
                 .block(block)
                 .style(Style::default().fg(Color::Gray));
@@ -586,29 +574,18 @@ impl RetrospectionWidget {
             return;
         }
 
-        let items: Vec<ListItem> = self
-            .templates
-            .iter()
-            .map(|template| {
-                let line = Line::from(vec![
-                    Span::styled(
-                        template.id.clone(),
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw(" | "),
-                    Span::raw(template.name.clone()),
-                    Span::raw(" | "),
-                    Span::styled(
-                        template.category.clone(),
-                        Style::default().fg(Color::Yellow),
-                    ),
-                ]);
-
-                ListItem::new(line)
-            })
-            .collect();
+        let items: Vec<ListItem> = vec![ListItem::new(Line::from(vec![
+            Span::styled(
+                "default".to_string(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" | "),
+            Span::raw("Default Analysis Template".to_string()),
+            Span::raw(" | "),
+            Span::styled("analysis".to_string(), Style::default().fg(Color::Yellow)),
+        ]))];
 
         let list = List::new(items)
             .block(block)
@@ -634,62 +611,58 @@ impl RetrospectionWidget {
     }
 
     fn render_template_detail(&mut self, f: &mut Frame, area: Rect) {
-        if let Some(template_id) = &self.selected_template {
-            if let Some(template) = self.templates.iter().find(|t| &t.id == template_id) {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(6), Constraint::Min(0)])
-                    .split(area);
+        if let Some(_template_id) = &self.selected_template {
+            // Static template information since we only have one hardcoded template
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(6), Constraint::Min(0)])
+                .split(area);
 
-                // Header
-                let header_block = Block::default()
-                    .title("Template Details")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Magenta));
+            // Header
+            let header_block = Block::default()
+                .title("Template Details")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Magenta));
 
-                let header_text = vec![
-                    Line::from(vec![
-                        Span::styled("ID: ", Style::default().add_modifier(Modifier::BOLD)),
-                        Span::raw(template.id.clone()),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("Name: ", Style::default().add_modifier(Modifier::BOLD)),
-                        Span::raw(template.name.clone()),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("Category: ", Style::default().add_modifier(Modifier::BOLD)),
-                        Span::styled(
-                            template.category.clone(),
-                            Style::default().fg(Color::Yellow),
-                        ),
-                    ]),
-                    Line::from(vec![
-                        Span::styled(
-                            "Description: ",
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
-                        Span::raw(template.description.clone()),
-                    ]),
-                ];
+            let header_text = vec![
+                Line::from(vec![
+                    Span::styled("ID: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw("default".to_string()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Name: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw("Default Analysis Template".to_string()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Category: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::styled("analysis".to_string(), Style::default().fg(Color::Yellow)),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "Description: ",
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("Hardcoded prompt template for chat analysis".to_string()),
+                ]),
+            ];
 
-                let header_paragraph = Paragraph::new(header_text)
-                    .block(header_block)
-                    .wrap(Wrap { trim: true });
+            let header_paragraph = Paragraph::new(header_text)
+                .block(header_block)
+                .wrap(Wrap { trim: true });
 
-                f.render_widget(header_paragraph, chunks[0]);
+            f.render_widget(header_paragraph, chunks[0]);
 
-                // Content
-                let content_block = Block::default()
-                    .title("Template Content")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Green));
+            // Content
+            let content_block = Block::default()
+                .title("Template Content")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green));
 
-                let content_paragraph = Paragraph::new(template.template.clone())
-                    .block(content_block)
-                    .wrap(Wrap { trim: true });
+            let content_paragraph = Paragraph::new("Hardcoded prompt for chat analysis")
+                .block(content_block)
+                .wrap(Wrap { trim: true });
 
-                f.render_widget(content_paragraph, chunks[1]);
-            }
+            f.render_widget(content_paragraph, chunks[1]);
         }
 
         // Help text

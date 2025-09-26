@@ -179,10 +179,8 @@ impl AnalysisRequest {
     pub fn get_processing_duration(&self) -> Option<chrono::Duration> {
         if let (Some(started), Some(completed)) = (self.started_at, self.completed_at) {
             Some(completed - started)
-        } else if let Some(started) = self.started_at {
-            Some(Utc::now() - started)
         } else {
-            None
+            self.started_at.map(|started| Utc::now() - started)
         }
     }
 

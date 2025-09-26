@@ -61,6 +61,7 @@ struct GenerateContentResponse {
     #[serde(rename = "usageMetadata")]
     usage_metadata: Option<UsageMetadata>,
     #[serde(rename = "modelVersion")]
+    #[allow(dead_code)]
     model_version: Option<String>,
 }
 
@@ -68,15 +69,19 @@ struct GenerateContentResponse {
 struct Candidate {
     content: ResponseContent,
     #[serde(rename = "finishReason")]
+    #[allow(dead_code)]
     finish_reason: Option<String>,
+    #[allow(dead_code)]
     index: Option<u32>,
     #[serde(rename = "safetyRatings")]
+    #[allow(dead_code)]
     safety_ratings: Option<Vec<SafetyRating>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ResponseContent {
     parts: Vec<ResponsePart>,
+    #[allow(dead_code)]
     role: Option<String>,
 }
 
@@ -92,12 +97,15 @@ struct UsageMetadata {
     #[serde(rename = "candidatesTokenCount")]
     candidates_token_count: u32,
     #[serde(rename = "totalTokenCount")]
+    #[allow(dead_code)]
     total_token_count: u32,
 }
 
 #[derive(Debug, Deserialize)]
 struct SafetyRating {
+    #[allow(dead_code)]
     category: String,
+    #[allow(dead_code)]
     probability: String,
 }
 
@@ -128,7 +136,7 @@ impl GeminiClient {
             .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECONDS))
             .user_agent("retrochat/1.0")
             .build()
-            .map_err(|e| anyhow!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| anyhow!("Failed to create HTTP client: {e}"))?;
 
         Ok(Self {
             client,
@@ -159,7 +167,7 @@ impl GeminiClient {
             .json(&request)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to send request to Gemini API: {}", e))?;
+            .map_err(|e| anyhow!("Failed to send request to Gemini API: {e}"))?;
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -170,12 +178,12 @@ impl GeminiClient {
         let response_text = response
             .text()
             .await
-            .map_err(|e| anyhow!("Failed to read response body: {}", e))?;
+            .map_err(|e| anyhow!("Failed to read response body: {e}"))?;
 
         debug!("Received response: {} chars", response_text.len());
 
         let api_response: GenerateContentResponse = serde_json::from_str(&response_text)
-            .map_err(|e| anyhow!("Failed to parse API response: {}", e))?;
+            .map_err(|e| anyhow!("Failed to parse API response: {e}"))?;
 
         self.extract_content_and_metadata(api_response, execution_time_ms, Some(response_text))
     }
@@ -199,7 +207,7 @@ impl GeminiClient {
             .json(&request)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to send request to Gemini API: {}", e))?;
+            .map_err(|e| anyhow!("Failed to send request to Gemini API: {e}"))?;
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -210,10 +218,10 @@ impl GeminiClient {
         let response_text = response
             .text()
             .await
-            .map_err(|e| anyhow!("Failed to read response body: {}", e))?;
+            .map_err(|e| anyhow!("Failed to read response body: {e}"))?;
 
         let api_response: GenerateContentResponse = serde_json::from_str(&response_text)
-            .map_err(|e| anyhow!("Failed to parse API response: {}", e))?;
+            .map_err(|e| anyhow!("Failed to parse API response: {e}"))?;
 
         self.extract_content_and_metadata(api_response, execution_time_ms, Some(response_text))
     }
@@ -351,24 +359,21 @@ impl GeminiClient {
             );
 
             match status.as_u16() {
-                400 => Err(anyhow!("Bad request: {}", error_msg)),
+                400 => Err(anyhow!("Bad request: {error_msg}")),
                 401 => Err(anyhow!(
-                    "Authentication failed - check GEMINI_API_KEY: {}",
-                    error_msg
+                    "Authentication failed - check GEMINI_API_KEY: {error_msg}"
                 )),
                 403 => Err(anyhow!(
-                    "Permission denied - check API key permissions: {}",
-                    error_msg
+                    "Permission denied - check API key permissions: {error_msg}"
                 )),
                 429 => Err(anyhow!(
-                    "Rate limit exceeded - please retry later: {}",
-                    error_msg
+                    "Rate limit exceeded - please retry later: {error_msg}"
                 )),
-                500..=599 => Err(anyhow!("Gemini API server error: {}", error_msg)),
-                _ => Err(anyhow!("Unexpected API error: {}", error_msg)),
+                500..=599 => Err(anyhow!("Gemini API server error: {error_msg}")),
+                _ => Err(anyhow!("Unexpected API error: {error_msg}")),
             }
         } else {
-            Err(anyhow!("HTTP {} - {}", status, response_text))
+            Err(anyhow!("HTTP {status} - {response_text}"))
         }
     }
 
@@ -402,13 +407,13 @@ impl GeminiClient {
         });
 
         // Create metadata
-        let metadata = if raw_response.is_some() {
+        let metadata = if let Some(raw_response) = raw_response {
             AnalysisMetadata::with_api_metadata(
                 self.model.clone(),
                 usage.prompt_token_count,
                 usage.candidates_token_count,
                 execution_time_ms,
-                raw_response.unwrap(),
+                raw_response,
             )
         } else {
             AnalysisMetadata::new(
@@ -538,7 +543,7 @@ mod tests {
 
         match result {
             Ok(()) => println!("API connection test passed"),
-            Err(e) => println!("API connection test failed: {}", e),
+            Err(e) => println!("API connection test failed: {e}"),
         }
     }
 
@@ -557,13 +562,13 @@ mod tests {
 
         match result {
             Ok((content, metadata)) => {
-                println!("Generated content: {}", content);
-                println!("Metadata: {:?}", metadata);
+                println!("Generated content: {content}");
+                println!("Metadata: {metadata:?}");
                 assert!(!content.is_empty());
                 assert!(metadata.total_tokens > 0);
             }
             Err(e) => {
-                println!("Content generation failed: {}", e);
+                println!("Content generation failed: {e}");
             }
         }
     }
@@ -585,13 +590,13 @@ mod tests {
 
         match result {
             Ok((content, metadata)) => {
-                println!("Generated creative content: {}", content);
-                println!("Metadata: {:?}", metadata);
+                println!("Generated creative content: {content}");
+                println!("Metadata: {metadata:?}");
                 assert!(!content.is_empty());
                 assert!(metadata.total_tokens > 0);
             }
             Err(e) => {
-                println!("Creative content generation failed: {}", e);
+                println!("Creative content generation failed: {e}");
             }
         }
     }
