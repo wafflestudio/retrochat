@@ -1,11 +1,16 @@
+pub mod analysis_request_repo;
 pub mod analytics_repo;
 pub mod chat_session_repo;
 pub mod connection;
 pub mod message_repo;
 pub mod migrations;
 pub mod project_repo;
+pub mod prompt_template_repo;
+pub mod retrospection_repo;
 pub mod schema;
+pub mod seeds;
 
+pub use analysis_request_repo::{AnalysisRequestRepository, QueueStatistics};
 pub use analytics_repo::{
     AnalyticsRepository, DailyPoint, DailyUsageStats, HourlyActivity, ProviderTrend,
     SessionLengthDistribution,
@@ -15,7 +20,12 @@ pub use connection::{DatabaseManager, TableInfo};
 pub use message_repo::MessageRepository;
 pub use migrations::{Migration, MigrationManager, MigrationStatus};
 pub use project_repo::ProjectRepository;
+pub use prompt_template_repo::PromptTemplateRepository;
+pub use retrospection_repo::{
+    AnalysisStatistics, RetrospectionAnalysisRepository, StatusStatistics,
+};
 pub use schema::{create_schema, SCHEMA_VERSION};
+pub use seeds::{seed_default_prompt_templates, verify_default_templates};
 
 // Main database structure for integration tests
 pub struct Database {

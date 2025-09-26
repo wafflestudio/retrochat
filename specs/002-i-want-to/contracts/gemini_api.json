@@ -1,0 +1,223 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Google AI Gemini API Integration",
+    "description": "Contract specification for Gemini 2.5 Flash Lite API integration",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta",
+      "description": "Google AI Gemini API"
+    }
+  ],
+  "paths": {
+    "/models/gemini-2.5-flash-lite:generateContent": {
+      "post": {
+        "summary": "Generate content analysis from chat session",
+        "description": "Send chat session data to Gemini for retrospective analysis",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeminiRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful analysis response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid input format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retry",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-goog-api-key",
+        "description": "Google AI API key from GEMINI_API_KEY environment variable"
+      }
+    },
+    "schemas": {
+      "GeminiRequest": {
+        "type": "object",
+        "required": ["contents"],
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            },
+            "description": "List of content messages for analysis"
+          }
+        }
+      },
+      "Content": {
+        "type": "object",
+        "required": ["role", "parts"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["user", "model"],
+            "description": "Message role in conversation"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            },
+            "description": "Content parts of the message"
+          }
+        }
+      },
+      "Part": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text content of the message part"
+          }
+        }
+      },
+      "GeminiResponse": {
+        "type": "object",
+        "required": ["candidates"],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Candidate"
+            },
+            "description": "Generated response candidates"
+          },
+          "usageMetadata": {
+            "$ref": "#/components/schemas/UsageMetadata",
+            "description": "Token usage information"
+          }
+        }
+      },
+      "Candidate": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/Content",
+            "description": "Generated content response"
+          },
+          "finishReason": {
+            "type": "string",
+            "enum": ["STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"],
+            "description": "Reason for completion"
+          }
+        }
+      },
+      "UsageMetadata": {
+        "type": "object",
+        "properties": {
+          "promptTokenCount": {
+            "type": "integer",
+            "description": "Tokens in the input prompt"
+          },
+          "candidatesTokenCount": {
+            "type": "integer",
+            "description": "Tokens in the generated response"
+          },
+          "totalTokenCount": {
+            "type": "integer",
+            "description": "Total tokens used in the request"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "integer",
+                "description": "Error code"
+              },
+              "message": {
+                "type": "string",
+                "description": "Error message"
+              },
+              "status": {
+                "type": "string",
+                "description": "Error status"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

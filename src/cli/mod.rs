@@ -2,6 +2,7 @@ pub mod analytics;
 pub mod import;
 pub mod init;
 pub mod query;
+pub mod retrospect;
 pub mod tui;
 
 use clap::{Parser, Subcommand};
@@ -37,6 +38,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: QueryCommands,
     },
+    /// Retrospection analysis using LLM
+    Retrospect {
+        #[command(subcommand)]
+        command: RetrospectCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -69,6 +75,115 @@ pub enum AnalyzeCommands {
         /// Output file path (optional)
         #[arg(short, long)]
         output: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum RetrospectCommands {
+    /// Analyze a specific session using LLM
+    Analyze {
+        /// Session ID to analyze
+        session_id: String,
+        /// Template ID to use for analysis (optional)
+        #[arg(short, long)]
+        template: Option<String>,
+        /// Force re-analysis even if already exists
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// List all retrospection analyses
+    List {
+        /// Session ID filter (optional)
+        #[arg(short, long)]
+        session: Option<String>,
+        /// Template ID filter (optional)
+        #[arg(short, long)]
+        template: Option<String>,
+        /// Page number (default: 1)
+        #[arg(short, long)]
+        page: Option<i32>,
+        /// Page size (default: 20)
+        #[arg(long)]
+        page_size: Option<i32>,
+    },
+    /// Show detailed retrospection analysis
+    Show {
+        /// Analysis ID to show
+        analysis_id: String,
+    },
+    /// Manage prompt templates
+    Template {
+        #[command(subcommand)]
+        command: TemplateCommands,
+    },
+    /// Process pending analysis requests
+    Process {
+        /// Maximum number of requests to process (default: all)
+        #[arg(short, long)]
+        limit: Option<i32>,
+        /// Force processing even if recently processed
+        #[arg(short, long)]
+        force: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TemplateCommands {
+    /// List all available templates
+    List,
+    /// Show template details
+    Show {
+        /// Template ID to show
+        template_id: String,
+    },
+    /// Create new template
+    Create {
+        /// Template ID
+        id: String,
+        /// Template name
+        name: String,
+        /// Template description
+        description: String,
+        /// Template content (use @file.txt to read from file)
+        content: String,
+    },
+    /// Update existing template
+    Update {
+        /// Template ID to update
+        id: String,
+        /// New template name (optional)
+        #[arg(short, long)]
+        name: Option<String>,
+        /// New template description (optional)
+        #[arg(short, long)]
+        description: Option<String>,
+        /// New template content (optional, use @file.txt to read from file)
+        #[arg(short, long)]
+        content: Option<String>,
+    },
+    /// Delete template
+    Delete {
+        /// Template ID to delete
+        id: String,
+        /// Force deletion without confirmation
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Import templates from file
+    Import {
+        /// Path to TOML file containing templates
+        file: String,
+        /// Overwrite existing templates
+        #[arg(short, long)]
+        overwrite: bool,
+    },
+    /// Export templates to file
+    Export {
+        /// Output file path
+        file: String,
+        /// Template IDs to export (optional, exports all if not specified)
+        #[arg(short, long)]
+        templates: Option<Vec<String>>,
     },
 }
 
@@ -139,6 +254,68 @@ impl Cli {
                     }
                     QueryCommands::Search { query, limit } => {
                         query::handle_search_command(query, limit).await
+                    }
+                },
+                Commands::Retrospect { command } => match command {
+                    RetrospectCommands::Analyze {
+                        session_id,
+                        template,
+                        force,
+                    } => retrospect::handle_analyze_command(session_id, template, force).await,
+                    RetrospectCommands::List {
+                        session,
+                        template,
+                        page,
+                        page_size,
+                    } => retrospect::handle_list_command(session, template, page, page_size).await,
+                    RetrospectCommands::Show { analysis_id } => {
+                        retrospect::handle_show_command(analysis_id).await
+                    }
+                    RetrospectCommands::Template { command } => match command {
+                        TemplateCommands::List => retrospect::handle_template_list_command().await,
+                        TemplateCommands::Show { template_id } => {
+                            retrospect::handle_template_show_command(template_id).await
+                        }
+                        TemplateCommands::Create {
+                            id,
+                            name,
+                            description,
+                            content,
+                        } => {
+                            retrospect::handle_template_create_command(
+                                id,
+                                name,
+                                description,
+                                content,
+                            )
+                            .await
+                        }
+                        TemplateCommands::Update {
+                            id,
+                            name,
+                            description,
+                            content,
+                        } => {
+                            retrospect::handle_template_update_command(
+                                id,
+                                name,
+                                description,
+                                content,
+                            )
+                            .await
+                        }
+                        TemplateCommands::Delete { id, force } => {
+                            retrospect::handle_template_delete_command(id, force).await
+                        }
+                        TemplateCommands::Import { file, overwrite } => {
+                            retrospect::handle_template_import_command(file, overwrite).await
+                        }
+                        TemplateCommands::Export { file, templates } => {
+                            retrospect::handle_template_export_command(file, templates).await
+                        }
+                    },
+                    RetrospectCommands::Process { limit, force } => {
+                        retrospect::handle_process_command(limit, force).await
                     }
                 },
             }

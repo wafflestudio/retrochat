@@ -3,13 +3,16 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use uuid::Uuid;
 
 use super::query_service::DateRange;
+use super::retrospection_service::{ProcessingResult, RetrospectionService};
 use crate::database::analytics_repo::AnalyticsRepository;
 use crate::database::chat_session_repo::ChatSessionRepository;
 use crate::database::connection::DatabaseManager;
 use crate::database::message_repo::MessageRepository;
-use crate::models::ChatSession;
+use crate::database::{AnalysisStatistics, QueueStatistics};
+use crate::models::{ChatSession, RetrospectionAnalysis};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UsageInsights {
@@ -91,13 +94,96 @@ pub struct ExportResponse {
     pub compression_used: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RetrospectionInsights {
+    pub total_analyses: u32,
+    pub analysis_statistics: AnalysisStatistics,
+    pub queue_statistics: QueueStatistics,
+    pub recent_analyses: Vec<RetrospectionAnalysis>,
+    pub top_templates_used: Vec<TemplateUsageStats>,
+    pub cost_analysis: CostAnalysis,
+    pub performance_metrics: PerformanceMetrics,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TemplateUsageStats {
+    pub template_id: String,
+    pub template_name: String,
+    pub usage_count: u32,
+    pub avg_cost: f64,
+    pub avg_tokens: f64,
+    pub avg_execution_time_ms: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CostAnalysis {
+    pub total_estimated_cost: f64,
+    pub total_tokens_used: u32,
+    pub avg_cost_per_analysis: f64,
+    pub cost_by_model: HashMap<String, ModelCostStats>,
+    pub cost_trend_last_30_days: Vec<DailyCostStats>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModelCostStats {
+    pub analyses_count: u32,
+    pub total_cost: f64,
+    pub total_tokens: u32,
+    pub avg_cost_per_token: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DailyCostStats {
+    pub date: String,
+    pub analyses_count: u32,
+    pub total_cost: f64,
+    pub total_tokens: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PerformanceMetrics {
+    pub avg_processing_time_ms: f64,
+    pub median_processing_time_ms: f64,
+    pub success_rate: f64,
+    pub throughput_analyses_per_hour: f64,
+    pub queue_health: QueueHealthStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QueueHealthStatus {
+    pub is_healthy: bool,
+    pub pending_requests: u32,
+    pub avg_queue_time_minutes: f64,
+    pub oldest_request_age_hours: f64,
+    pub processing_capacity_utilization: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnhancedUsageInsights {
+    pub usage_insights: UsageInsights,
+    pub retrospection_insights: Option<RetrospectionInsights>,
+}
+
 pub struct AnalyticsService {
     db_manager: DatabaseManager,
+    retrospection_service: Option<RetrospectionService>,
 }
 
 impl AnalyticsService {
     pub fn new(db_manager: DatabaseManager) -> Self {
-        Self { db_manager }
+        Self {
+            db_manager,
+            retrospection_service: None,
+        }
+    }
+
+    /// Create a new AnalyticsService with retrospection capabilities
+    pub fn with_retrospection(db_manager: DatabaseManager) -> Result<Self> {
+        let retrospection_service = Some(RetrospectionService::new(db_manager.clone())?);
+        Ok(Self {
+            db_manager,
+            retrospection_service,
+        })
     }
 
     pub async fn generate_insights(&self) -> Result<UsageInsights> {
@@ -552,6 +638,254 @@ impl AnalyticsService {
             .with_context(|| format!("Failed to write text file: {output_file}"))?;
 
         Ok(())
+    }
+
+    /// Generate enhanced insights that include both usage and retrospection data
+    pub async fn generate_enhanced_insights(&self) -> Result<EnhancedUsageInsights> {
+        let usage_insights = self.generate_insights().await?;
+
+        let retrospection_insights = if let Some(ref retro_service) = self.retrospection_service {
+            Some(self.generate_retrospection_insights(retro_service).await?)
+        } else {
+            None
+        };
+
+        Ok(EnhancedUsageInsights {
+            usage_insights,
+            retrospection_insights,
+        })
+    }
+
+    async fn generate_retrospection_insights(
+        &self,
+        retro_service: &RetrospectionService,
+    ) -> Result<RetrospectionInsights> {
+        let analysis_stats = retro_service.get_analysis_statistics().await?;
+        let queue_stats = retro_service.get_queue_statistics().await?;
+        let recent_analyses = retro_service.get_recent_analyses(10).await?;
+
+        let total_analyses = analysis_stats.total_analyses;
+
+        // Calculate template usage statistics
+        let top_templates_used = self
+            .calculate_template_usage_stats(&recent_analyses)
+            .await?;
+
+        // Calculate cost analysis
+        let cost_analysis = self.calculate_cost_analysis(&recent_analyses).await?;
+
+        // Calculate performance metrics
+        let performance_metrics = self
+            .calculate_performance_metrics(&analysis_stats, &queue_stats)
+            .await?;
+
+        Ok(RetrospectionInsights {
+            total_analyses,
+            analysis_statistics: analysis_stats,
+            queue_statistics: queue_stats,
+            recent_analyses,
+            top_templates_used,
+            cost_analysis,
+            performance_metrics,
+        })
+    }
+
+    async fn calculate_template_usage_stats(
+        &self,
+        analyses: &[RetrospectionAnalysis],
+    ) -> Result<Vec<TemplateUsageStats>> {
+        let mut template_map: HashMap<String, (u32, f64, f64, f64)> = HashMap::new();
+
+        for analysis in analyses {
+            let entry = template_map
+                .entry(analysis.prompt_template_id.clone())
+                .or_insert((0, 0.0, 0.0, 0.0));
+            entry.0 += 1; // count
+            entry.1 += analysis.metadata.estimated_cost; // total cost
+            entry.2 += analysis.metadata.total_tokens as f64; // total tokens
+            entry.3 += analysis.metadata.execution_time_ms as f64; // total execution time
+        }
+
+        let mut stats: Vec<TemplateUsageStats> = template_map
+            .into_iter()
+            .map(
+                |(template_id, (count, total_cost, total_tokens, total_time))| {
+                    TemplateUsageStats {
+                        template_name: template_id.clone(), // Could be enhanced to lookup actual name
+                        template_id,
+                        usage_count: count,
+                        avg_cost: total_cost / count as f64,
+                        avg_tokens: total_tokens / count as f64,
+                        avg_execution_time_ms: total_time / count as f64,
+                    }
+                },
+            )
+            .collect();
+
+        stats.sort_by(|a, b| b.usage_count.cmp(&a.usage_count));
+        stats.truncate(10); // Top 10 templates
+
+        Ok(stats)
+    }
+
+    async fn calculate_cost_analysis(
+        &self,
+        analyses: &[RetrospectionAnalysis],
+    ) -> Result<CostAnalysis> {
+        let total_estimated_cost: f64 = analyses.iter().map(|a| a.metadata.estimated_cost).sum();
+        let total_tokens_used: u32 = analyses.iter().map(|a| a.metadata.total_tokens).sum();
+        let avg_cost_per_analysis = if !analyses.is_empty() {
+            total_estimated_cost / analyses.len() as f64
+        } else {
+            0.0
+        };
+
+        // Group by model
+        let mut cost_by_model: HashMap<String, ModelCostStats> = HashMap::new();
+        for analysis in analyses {
+            let entry = cost_by_model
+                .entry(analysis.metadata.llm_service.clone())
+                .or_insert(ModelCostStats {
+                    analyses_count: 0,
+                    total_cost: 0.0,
+                    total_tokens: 0,
+                    avg_cost_per_token: 0.0,
+                });
+
+            entry.analyses_count += 1;
+            entry.total_cost += analysis.metadata.estimated_cost;
+            entry.total_tokens += analysis.metadata.total_tokens;
+        }
+
+        // Calculate averages
+        for stats in cost_by_model.values_mut() {
+            stats.avg_cost_per_token = if stats.total_tokens > 0 {
+                stats.total_cost / stats.total_tokens as f64
+            } else {
+                0.0
+            };
+        }
+
+        Ok(CostAnalysis {
+            total_estimated_cost,
+            total_tokens_used,
+            avg_cost_per_analysis,
+            cost_by_model,
+            cost_trend_last_30_days: Vec::new(), // Could be implemented with date-based grouping
+        })
+    }
+
+    async fn calculate_performance_metrics(
+        &self,
+        analysis_stats: &AnalysisStatistics,
+        queue_stats: &QueueStatistics,
+    ) -> Result<PerformanceMetrics> {
+        // Calculate basic metrics from status breakdown
+        let total_processed = analysis_stats
+            .status_breakdown
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.status,
+                    crate::models::AnalysisStatus::Complete | crate::models::AnalysisStatus::Failed
+                )
+            })
+            .map(|s| s.count)
+            .sum::<u32>();
+
+        let successful = analysis_stats
+            .status_breakdown
+            .iter()
+            .find(|s| matches!(s.status, crate::models::AnalysisStatus::Complete))
+            .map(|s| s.count)
+            .unwrap_or(0);
+
+        let success_rate = if total_processed > 0 {
+            successful as f64 / total_processed as f64
+        } else {
+            0.0
+        };
+
+        let avg_processing_time_ms = analysis_stats
+            .status_breakdown
+            .iter()
+            .find(|s| matches!(s.status, crate::models::AnalysisStatus::Complete))
+            .and_then(|s| s.avg_execution_time_ms)
+            .unwrap_or(0.0);
+
+        let queue_health = QueueHealthStatus {
+            is_healthy: queue_stats.queued_count < 50 && queue_stats.avg_queue_age_minutes < 60.0,
+            pending_requests: queue_stats.total_pending(),
+            avg_queue_time_minutes: queue_stats.avg_queue_age_minutes,
+            oldest_request_age_hours: queue_stats.max_queue_age_minutes / 60.0,
+            processing_capacity_utilization: if queue_stats.total_pending() > 0 {
+                queue_stats.processing_count as f64
+                    / (queue_stats.processing_count + queue_stats.queued_count) as f64
+            } else {
+                0.0
+            },
+        };
+
+        Ok(PerformanceMetrics {
+            avg_processing_time_ms,
+            median_processing_time_ms: avg_processing_time_ms, // Simplified
+            success_rate,
+            throughput_analyses_per_hour: 0.0, // Could be calculated with time-based data
+            queue_health,
+        })
+    }
+
+    /// Submit an analysis request for a session
+    pub async fn analyze_session(
+        &self,
+        session_id: Uuid,
+        template_id: String,
+        variables: HashMap<String, String>,
+    ) -> Result<Option<ProcessingResult>> {
+        match &self.retrospection_service {
+            Some(retro_service) => {
+                let request = retro_service
+                    .submit_analysis_request(session_id, template_id, variables)
+                    .await?;
+                let _analysis = retro_service.process_analysis_request(request).await?;
+
+                // Create a simple processing result
+                Ok(Some(ProcessingResult {
+                    processed: 1,
+                    successful: 1,
+                    failed: 0,
+                    errors: Vec::new(),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Process pending retrospection requests
+    pub async fn process_pending_retrospections(&self) -> Result<Option<ProcessingResult>> {
+        match &self.retrospection_service {
+            Some(retro_service) => {
+                let result = retro_service.process_pending_requests().await?;
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get retrospection insights only
+    pub async fn get_retrospection_insights(&self) -> Result<Option<RetrospectionInsights>> {
+        match &self.retrospection_service {
+            Some(retro_service) => {
+                let insights = self.generate_retrospection_insights(retro_service).await?;
+                Ok(Some(insights))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Check if retrospection is enabled
+    pub fn has_retrospection(&self) -> bool {
+        self.retrospection_service.is_some()
     }
 
     pub async fn print_insights_summary(&self) -> Result<()> {

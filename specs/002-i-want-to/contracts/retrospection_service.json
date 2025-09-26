@@ -1,0 +1,759 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Retrospection Service API",
+    "description": "Internal service contract for LLM-powered chat session retrospection",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/retrospection/analyze": {
+      "post": {
+        "summary": "Trigger retrospection analysis for a chat session",
+        "description": "Queue analysis request for specific session using configured prompt template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Analysis request queued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrospection/sessions/{sessionId}/analyses": {
+      "get": {
+        "summary": "Get all analyses for a chat session",
+        "description": "Retrieve retrospection analyses performed on a specific session",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Chat session UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of analyses for the session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnalysisResult"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrospection/analyses": {
+      "get": {
+        "summary": "List all retrospection analyses",
+        "description": "Get paginated list of all analyses with optional filtering",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Maximum number of results to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Number of results to skip"
+          },
+          {
+            "name": "template",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by prompt template ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of analyses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrospection/analyses/{analysisId}": {
+      "get": {
+        "summary": "Get specific analysis result",
+        "description": "Retrieve detailed analysis result by ID",
+        "parameters": [
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Analysis UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis result details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Analysis not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete analysis result",
+        "description": "Remove analysis result from storage",
+        "parameters": [
+          {
+            "name": "analysisId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Analysis UUID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Analysis deleted successfully"
+          },
+          "404": {
+            "description": "Analysis not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrospection/templates": {
+      "get": {
+        "summary": "List available prompt templates",
+        "description": "Get all available prompt templates (built-in and user-defined)",
+        "responses": {
+          "200": {
+            "description": "List of prompt templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PromptTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new prompt template",
+        "description": "Add user-defined prompt template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromptTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid template specification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Template ID already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrospection/templates/{templateId}": {
+      "get": {
+        "summary": "Get prompt template details",
+        "description": "Retrieve specific prompt template with variables",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Template ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update prompt template",
+        "description": "Modify existing user-defined template",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Template ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromptTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid template specification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot modify built-in template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete prompt template",
+        "description": "Remove user-defined template",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Template ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Template deleted successfully"
+          },
+          "403": {
+            "description": "Cannot delete built-in template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalysisRequest": {
+        "type": "object",
+        "required": ["sessionId", "templateId"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Chat session to analyze"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "Prompt template to use"
+          },
+          "templateVariables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Variable values for template"
+          }
+        }
+      },
+      "AnalysisRequestResponse": {
+        "type": "object",
+        "required": ["requestId", "status"],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Analysis request UUID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "processing", "completed", "failed"],
+            "description": "Current request status"
+          },
+          "estimatedCompletionTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expected completion time"
+          }
+        }
+      },
+      "AnalysisResult": {
+        "type": "object",
+        "required": ["id", "sessionId", "templateId", "content", "metadata", "createdAt", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Analysis UUID"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Analyzed session UUID"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "Prompt template used"
+          },
+          "content": {
+            "type": "string",
+            "description": "LLM analysis response"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/AnalysisMetadata",
+            "description": "Analysis execution metadata"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "failed"],
+            "description": "Analysis status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Analysis creation time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update time"
+          }
+        }
+      },
+      "AnalysisMetadata": {
+        "type": "object",
+        "required": ["llmService", "promptTokens", "completionTokens", "totalTokens", "estimatedCost", "executionTimeMs"],
+        "properties": {
+          "llmService": {
+            "type": "string",
+            "description": "LLM service used for analysis"
+          },
+          "promptTokens": {
+            "type": "integer",
+            "description": "Input tokens consumed"
+          },
+          "completionTokens": {
+            "type": "integer",
+            "description": "Output tokens generated"
+          },
+          "totalTokens": {
+            "type": "integer",
+            "description": "Total tokens used"
+          },
+          "estimatedCost": {
+            "type": "number",
+            "description": "Estimated API cost in USD"
+          },
+          "executionTimeMs": {
+            "type": "integer",
+            "description": "Analysis duration in milliseconds"
+          },
+          "apiResponseMetadata": {
+            "type": "string",
+            "description": "Raw API metadata JSON"
+          }
+        }
+      },
+      "AnalysisListResponse": {
+        "type": "object",
+        "required": ["analyses", "pagination"],
+        "properties": {
+          "analyses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisResult"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationInfo"
+          }
+        }
+      },
+      "PaginationInfo": {
+        "type": "object",
+        "required": ["total", "limit", "offset"],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of analyses"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Results per page"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Current page offset"
+          },
+          "hasNext": {
+            "type": "boolean",
+            "description": "Whether more results available"
+          }
+        }
+      },
+      "PromptTemplate": {
+        "type": "object",
+        "required": ["id", "name", "description", "template", "variables", "category", "isDefault", "createdAt", "modifiedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Template identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable template name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Template purpose description"
+          },
+          "template": {
+            "type": "string",
+            "description": "Prompt template with variables"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptVariable"
+            },
+            "description": "Template variable definitions"
+          },
+          "category": {
+            "type": "string",
+            "description": "Template category"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this is a built-in template"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Template creation time"
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last modification time"
+          }
+        }
+      },
+      "PromptVariable": {
+        "type": "object",
+        "required": ["name", "description", "required"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+            "description": "Variable name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Variable purpose"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether variable is required"
+          },
+          "defaultValue": {
+            "type": "string",
+            "description": "Default value if optional"
+          }
+        }
+      },
+      "CreatePromptTemplate": {
+        "type": "object",
+        "required": ["id", "name", "description", "template", "variables", "category"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]+$",
+            "description": "Template identifier (URL-safe)"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Human-readable template name"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Template purpose description"
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "description": "Prompt template with variables"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptVariable"
+            },
+            "description": "Template variable definitions"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["analysis", "retrospective", "custom"],
+            "description": "Template category"
+          }
+        }
+      },
+      "UpdatePromptTemplate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Human-readable template name"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Template purpose description"
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "description": "Prompt template with variables"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptVariable"
+            },
+            "description": "Template variable definitions"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["analysis", "retrospective", "custom"],
+            "description": "Template category"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details"
+          }
+        }
+      }
+    }
+  }
+}

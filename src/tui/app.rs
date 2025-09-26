@@ -15,8 +15,8 @@ use crate::database::DatabaseManager;
 use crate::services::{AnalyticsService, QueryService};
 
 use super::{
-    analytics::AnalyticsWidget, session_detail::SessionDetailWidget,
-    session_list::SessionListWidget,
+    analytics::AnalyticsWidget, retrospection::RetrospectionWidget,
+    session_detail::SessionDetailWidget, session_list::SessionListWidget,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +24,7 @@ pub enum AppMode {
     SessionList,
     SessionDetail,
     Analytics,
+    Retrospection,
     Help,
 }
 
@@ -82,8 +83,10 @@ pub struct App {
     pub session_list: SessionListWidget,
     pub session_detail: SessionDetailWidget,
     pub analytics: AnalyticsWidget,
+    pub retrospection: RetrospectionWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
+    pub db_manager: std::sync::Arc<DatabaseManager>,
 }
 
 impl App {
@@ -95,9 +98,11 @@ impl App {
             state: AppState::new(),
             session_list: SessionListWidget::new(db_manager.clone()),
             session_detail: SessionDetailWidget::new(db_manager.clone()),
-            analytics: AnalyticsWidget::new(db_manager),
+            analytics: AnalyticsWidget::new(db_manager.clone()),
+            retrospection: RetrospectionWidget::new(),
             query_service,
             analytics_service,
+            db_manager,
         })
     }
 
@@ -176,6 +181,7 @@ impl App {
                     match self.state.mode {
                         AppMode::SessionDetail => self.state.back_to_list(),
                         AppMode::Analytics => self.state.set_mode(AppMode::SessionList),
+                        AppMode::Retrospection => self.state.set_mode(AppMode::SessionList),
                         _ => {}
                     }
                 }
@@ -218,6 +224,14 @@ impl App {
             AppMode::Analytics => {
                 self.analytics.handle_key(key).await?;
             }
+            AppMode::Retrospection => {
+                if self.retrospection.handle_key_event(key) {
+                    // Handle refresh requests from retrospection widget
+                    self.retrospection
+                        .refresh_analyses(&self.db_manager)
+                        .await?;
+                }
+            }
             AppMode::Help => {
                 // Help is handled above
             }
@@ -229,7 +243,8 @@ impl App {
     fn next_tab(&mut self) {
         self.state.mode = match self.state.mode {
             AppMode::SessionList => AppMode::Analytics,
-            AppMode::Analytics => AppMode::SessionList,
+            AppMode::Analytics => AppMode::Retrospection,
+            AppMode::Retrospection => AppMode::SessionList,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
@@ -237,8 +252,9 @@ impl App {
 
     fn previous_tab(&mut self) {
         self.state.mode = match self.state.mode {
-            AppMode::SessionList => AppMode::Analytics,
+            AppMode::SessionList => AppMode::Retrospection,
             AppMode::Analytics => AppMode::SessionList,
+            AppMode::Retrospection => AppMode::Analytics,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
@@ -254,6 +270,11 @@ impl App {
             }
             AppMode::Analytics => {
                 self.analytics.refresh().await?;
+            }
+            AppMode::Retrospection => {
+                self.retrospection
+                    .refresh_analyses(&self.db_manager)
+                    .await?;
             }
             AppMode::Help => {}
         }
@@ -288,6 +309,9 @@ impl App {
                 AppMode::Analytics => {
                     self.analytics.render(f, main_layout[1]);
                 }
+                AppMode::Retrospection => {
+                    self.retrospection.render(f, main_layout[1]);
+                }
                 AppMode::Help => {
                     self.render_help(f, main_layout[1]);
                 }
@@ -299,10 +323,11 @@ impl App {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let tab_titles = vec!["Sessions", "Analytics"];
+        let tab_titles = vec!["Sessions", "Analytics", "Retrospection"];
         let selected_tab = match self.state.mode {
             AppMode::SessionList | AppMode::SessionDetail => 0,
             AppMode::Analytics => 1,
+            AppMode::Retrospection => 2,
             AppMode::Help => 0,
         };
 
@@ -328,6 +353,7 @@ impl App {
                 "↑/↓: Scroll | Esc: Back | Tab: Switch Views | ?: Help | q: Quit"
             }
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
+            AppMode::Retrospection => "↑/↓: Navigate | Enter: View Detail | t: Templates | n: New | r: Refresh | Tab: Switch Views | q: Quit",
             AppMode::Help => "Any key: Close Help",
         };
 
@@ -366,6 +392,13 @@ impl App {
             Line::from("Analytics:"),
             Line::from("  ↑/↓            - Navigate insights"),
             Line::from("  r              - Refresh analytics"),
+            Line::from(""),
+            Line::from("Retrospection:"),
+            Line::from("  ↑/↓            - Navigate analyses"),
+            Line::from("  Enter          - View analysis details"),
+            Line::from("  t              - View templates"),
+            Line::from("  n              - New analysis (coming soon)"),
+            Line::from("  r              - Refresh analyses"),
             Line::from(""),
             Line::from("Press any key to close this help screen"),
         ];

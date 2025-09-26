@@ -23,8 +23,15 @@ tracing-subscriber = "0.3"
 futures = "0.3"
 async-trait = "0.1"
 flate2 = "1.0"
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.12", features = ["json"] }
+toml = "0.8"
+directories = "5.0"
+regex = "1.10"
 atty = "0.2"
+
+[features]
+default = ["reqwest"]
+reqwest = []
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -76,6 +83,30 @@ path = "tests/integration/test_session_detail.rs"
 [[test]]
 name = "test_export_reporting"
 path = "tests/integration/test_export_reporting.rs"
+
+[[test]]
+name = "test_gemini_api"
+path = "tests/contract/test_gemini_api.rs"
+
+[[test]]
+name = "test_retrospection_service"
+path = "tests/contract/test_retrospection_service.rs"
+
+[[test]]
+name = "test_session_analysis"
+path = "tests/integration/test_session_analysis.rs"
+
+[[test]]
+name = "test_custom_prompt"
+path = "tests/integration/test_custom_prompt.rs"
+
+[[test]]
+name = "test_tui_retrospection"
+path = "tests/integration/test_tui_retrospection.rs"
+
+[[test]]
+name = "test_prompt_templates"
+path = "tests/integration/test_prompt_templates.rs"
 
 [profile.release]
 lto = true

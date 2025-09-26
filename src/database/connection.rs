@@ -6,6 +6,7 @@ use tracing::{debug, error, info};
 
 use super::migrations::MigrationManager;
 
+#[derive(Debug)]
 pub struct DatabaseManager {
     db_path: PathBuf,
     connection: Arc<Mutex<Connection>>,
@@ -111,6 +112,14 @@ impl DatabaseManager {
     {
         let conn = self.connection.lock().unwrap();
         f(&conn).with_context(|| "Database operation failed")
+    }
+
+    pub fn with_connection_anyhow<F, R>(&self, f: F) -> AnyhowResult<R>
+    where
+        F: FnOnce(&Connection) -> AnyhowResult<R>,
+    {
+        let conn = self.connection.lock().unwrap();
+        f(&conn)
     }
 
     pub fn with_transaction<F, R>(&self, f: F) -> AnyhowResult<R>

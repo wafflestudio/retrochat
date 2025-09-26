@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 pub fn create_schema(conn: &Connection) -> Result<()> {
     // Create schema version table
@@ -103,6 +103,67 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // Retrospection analysis tables (Migration 2)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS retrospection_analyses (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            prompt_template_id TEXT NOT NULL,
+            analysis_content TEXT NOT NULL,
+            metadata TEXT NOT NULL, -- JSON object with AnalysisMetadata
+            status TEXT NOT NULL CHECK (status IN ('draft', 'in_progress', 'complete', 'failed', 'archived')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY (prompt_template_id) REFERENCES prompt_templates(id)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS prompt_templates (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            template TEXT NOT NULL,
+            category TEXT NOT NULL,
+            is_default BOOLEAN NOT NULL DEFAULT false,
+            created_at TEXT NOT NULL,
+            modified_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS prompt_variables (
+            id TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            required BOOLEAN NOT NULL DEFAULT false,
+            default_value TEXT,
+            FOREIGN KEY (template_id) REFERENCES prompt_templates(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS analysis_requests (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            prompt_template_id TEXT NOT NULL,
+            template_variables TEXT NOT NULL, -- JSON object with variable values
+            status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+            error_message TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY (prompt_template_id) REFERENCES prompt_templates(id)
+        )",
+        [],
+    )?;
+
     create_indexes(conn)?;
     create_triggers(conn)?;
     create_fts_table(conn)?;
@@ -165,6 +226,58 @@ pub fn create_indexes(conn: &Connection) -> Result<()> {
     // Project queries
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name)",
+        [],
+    )?;
+
+    // Retrospection analysis queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_retrospection_session ON retrospection_analyses(session_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_retrospection_template ON retrospection_analyses(prompt_template_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_retrospection_status ON retrospection_analyses(status)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_retrospection_created ON retrospection_analyses(created_at)",
+        [],
+    )?;
+
+    // Prompt template queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompt_templates_category ON prompt_templates(category)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompt_templates_default ON prompt_templates(is_default)",
+        [],
+    )?;
+
+    // Prompt variable queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompt_variables_template ON prompt_variables(template_id)",
+        [],
+    )?;
+
+    // Analysis request queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_requests_session ON analysis_requests(session_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_requests_template ON analysis_requests(prompt_template_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_requests_status ON analysis_requests(status)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_requests_created ON analysis_requests(created_at)",
         [],
     )?;
 
@@ -318,6 +431,10 @@ pub fn create_fts_table(conn: &Connection) -> Result<()> {
 pub fn drop_schema(conn: &Connection) -> Result<()> {
     // Drop tables in reverse dependency order
     conn.execute("DROP TABLE IF EXISTS messages_fts", [])?;
+    conn.execute("DROP TABLE IF EXISTS analysis_requests", [])?;
+    conn.execute("DROP TABLE IF EXISTS retrospection_analyses", [])?;
+    conn.execute("DROP TABLE IF EXISTS prompt_variables", [])?;
+    conn.execute("DROP TABLE IF EXISTS prompt_templates", [])?;
     conn.execute("DROP TABLE IF EXISTS usage_analyses", [])?;
     conn.execute("DROP TABLE IF EXISTS messages", [])?;
     conn.execute("DROP TABLE IF EXISTS chat_sessions", [])?;

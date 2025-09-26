@@ -39,20 +39,113 @@ impl MigrationManager {
             },
         });
 
-        // Future migrations would be added here
-        // Example:
-        // self.add_migration(Migration {
-        //     version: 2,
-        //     description: "Add user preferences table".to_string(),
-        //     up: |conn| {
-        //         conn.execute("CREATE TABLE user_preferences (...)", [])?;
-        //         Ok(())
-        //     },
-        //     down: |conn| {
-        //         conn.execute("DROP TABLE user_preferences", [])?;
-        //         Ok(())
-        //     },
-        // });
+        // Migration 2: Add retrospection tables
+        self.add_migration(Migration {
+            version: 2,
+            description: "Add retrospection analysis tables".to_string(),
+            up: |conn| {
+                // Retrospection analyses storage
+                conn.execute(
+                    "CREATE TABLE retrospection_analyses (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        prompt_template_id TEXT NOT NULL,
+                        analysis_content TEXT NOT NULL,
+                        llm_service TEXT NOT NULL,
+                        prompt_tokens INTEGER NOT NULL,
+                        completion_tokens INTEGER NOT NULL,
+                        total_tokens INTEGER NOT NULL,
+                        estimated_cost REAL NOT NULL,
+                        execution_time_ms INTEGER NOT NULL,
+                        api_response_metadata TEXT,
+                        status TEXT NOT NULL DEFAULT 'completed',
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY (session_id) REFERENCES chat_sessions (id)
+                    )",
+                    [],
+                )?;
+
+                // Prompt templates storage
+                conn.execute(
+                    "CREATE TABLE prompt_templates (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        template TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        is_default BOOLEAN NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        modified_at TEXT NOT NULL,
+                        UNIQUE(name)
+                    )",
+                    [],
+                )?;
+
+                // Template variables (normalized)
+                conn.execute(
+                    "CREATE TABLE prompt_variables (
+                        template_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        required BOOLEAN NOT NULL,
+                        default_value TEXT,
+                        PRIMARY KEY (template_id, name),
+                        FOREIGN KEY (template_id) REFERENCES prompt_templates (id) ON DELETE CASCADE
+                    )",
+                    [],
+                )?;
+
+                // Analysis request queue
+                conn.execute(
+                    "CREATE TABLE analysis_requests (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        prompt_template_id TEXT NOT NULL,
+                        template_variables TEXT NOT NULL, -- JSON
+                        status TEXT NOT NULL DEFAULT 'queued',
+                        error_message TEXT,
+                        created_at TEXT NOT NULL,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        FOREIGN KEY (session_id) REFERENCES chat_sessions (id),
+                        FOREIGN KEY (prompt_template_id) REFERENCES prompt_templates (id)
+                    )",
+                    [],
+                )?;
+
+                // Create indexes for better performance
+                conn.execute(
+                    "CREATE INDEX idx_retrospection_session ON retrospection_analyses (session_id)",
+                    [],
+                )?;
+                conn.execute(
+                    "CREATE INDEX idx_retrospection_created ON retrospection_analyses (created_at)",
+                    [],
+                )?;
+                conn.execute(
+                    "CREATE INDEX idx_requests_status ON analysis_requests (status)",
+                    [],
+                )?;
+                conn.execute(
+                    "CREATE INDEX idx_requests_created ON analysis_requests (created_at)",
+                    [],
+                )?;
+
+                Ok(())
+            },
+            down: |conn| {
+                conn.execute("DROP INDEX IF EXISTS idx_requests_created", [])?;
+                conn.execute("DROP INDEX IF EXISTS idx_requests_status", [])?;
+                conn.execute("DROP INDEX IF EXISTS idx_retrospection_created", [])?;
+                conn.execute("DROP INDEX IF EXISTS idx_retrospection_session", [])?;
+                conn.execute("DROP TABLE IF EXISTS analysis_requests", [])?;
+                conn.execute("DROP TABLE IF EXISTS prompt_variables", [])?;
+                conn.execute("DROP TABLE IF EXISTS prompt_templates", [])?;
+                conn.execute("DROP TABLE IF EXISTS retrospection_analyses", [])?;
+                Ok(())
+            },
+        });
     }
 
     pub fn add_migration(&mut self, migration: Migration) {
@@ -261,6 +354,10 @@ impl MigrationManager {
             "usage_analyses",
             "llm_providers",
             "messages_fts",
+            "retrospection_analyses",
+            "prompt_templates",
+            "prompt_variables",
+            "analysis_requests",
         ];
 
         for table in expected_tables {
