@@ -3,7 +3,7 @@ use retrochat::services::{AnalyticsService, DateRange, ExportFilters, ExportRequ
 
 #[tokio::test]
 async fn test_export_csv_basic() {
-    let db_manager = DatabaseManager::new(":memory:").unwrap();
+    let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
         format: "csv".to_string(),
@@ -36,7 +36,7 @@ async fn test_export_csv_basic() {
 
 #[tokio::test]
 async fn test_export_json_with_filters() {
-    let db_manager = DatabaseManager::new(":memory:").unwrap();
+    let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
         format: "json".to_string(),
@@ -75,7 +75,7 @@ async fn test_export_json_with_filters() {
 
 #[tokio::test]
 async fn test_export_multiple_data_types() {
-    let db_manager = DatabaseManager::new(":memory:").unwrap();
+    let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
         format: "json".to_string(),
@@ -111,7 +111,7 @@ async fn test_export_multiple_data_types() {
 
 #[tokio::test]
 async fn test_export_parquet_format() {
-    let db_manager = DatabaseManager::new(":memory:").unwrap();
+    let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
         format: "txt".to_string(),

@@ -13,10 +13,10 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     // Create database manager with SQLx
-    let db_manager = SqlxDatabaseManager::new("example.db").await?;
+    let db_manager = DatabaseManager::new("example.db").await?;
 
     // Get migration manager
-    let migration_manager = SqlxMigrationManager::new(db_manager.pool().clone());
+    let migration_manager = MigrationManager::new(db_manager.pool().clone());
 
     // Check migration status
     let status = migration_manager.get_migration_status().await?;

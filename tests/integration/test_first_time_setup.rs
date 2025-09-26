@@ -22,9 +22,10 @@ async fn test_first_time_setup_workflow() {
     ).unwrap();
 
     // Step 2: Setup database and services
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let db_manager = Arc::new(database.manager);
     let import_service = ImportService::new(db_manager.clone());
@@ -132,9 +133,10 @@ async fn test_import_performance_simulation() {
     }
 
     // Setup database
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let import_service = ImportService::new(Arc::new(database.manager));
 
@@ -163,9 +165,10 @@ async fn test_import_performance_simulation() {
 #[tokio::test]
 async fn test_query_service_basic_functionality() {
     // Use in-memory database for testing
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let query_service = QueryService::with_database(Arc::new(database.manager));
 

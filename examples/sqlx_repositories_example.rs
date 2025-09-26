@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     println!("=============================");
 
     // Create SQLx database (in-memory for this example)
-    let db = SqlxDatabase::new_in_memory().await?;
+    let db = Database::new_in_memory().await?;
     println!("✅ Database initialized with SQLx migrations");
 
     // Get all repositories

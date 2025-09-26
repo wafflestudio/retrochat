@@ -10,9 +10,10 @@ async fn test_session_detail_basic_workflow() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     // Setup database
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let import_service = ImportService::new(Arc::new(database.manager));
 
@@ -39,9 +40,10 @@ async fn test_session_detail_basic_workflow() {
 
     // Query service tests
     // Use in-memory database for testing
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let query_service = QueryService::with_database(Arc::new(database.manager));
 
@@ -113,9 +115,10 @@ async fn test_session_detail_basic_workflow() {
 #[tokio::test]
 async fn test_session_filtering_and_pagination() {
     // Use in-memory database for testing
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let query_service = QueryService::with_database(Arc::new(database.manager));
 
@@ -155,9 +158,10 @@ async fn test_session_filtering_and_pagination() {
 #[tokio::test]
 async fn test_session_detail_options() {
     // Use in-memory database for testing
-    let database = Database::new_in_memory().unwrap();
+    let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
+        .await
         .expect("Failed to initialize database");
     let query_service = QueryService::with_database(Arc::new(database.manager));
 
