@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Tabs},
     Frame, Terminal,
 };
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
@@ -118,7 +119,7 @@ pub struct App {
     pub retrospection: RetrospectionWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
-    pub retrospection_service: Option<RetrospectionService>,
+    pub retrospection_service: Option<Arc<RetrospectionService>>,
 }
 
 impl App {
@@ -130,19 +131,30 @@ impl App {
         let retrospection_service = if let Ok(_) = std::env::var("GOOGLE_AI_API_KEY") {
             let config = GoogleAiConfig::default();
             match GoogleAiClient::new(config) {
-                Ok(client) => Some(RetrospectionService::new(db_manager.clone(), client)),
+                Ok(client) => Some(Arc::new(RetrospectionService::new(db_manager.clone(), client))),
                 Err(_) => None,
             }
         } else {
             None
         };
 
+        // Create the retrospection widget with service
+        let service_for_widget = if let Some(service) = &retrospection_service {
+            service.clone()
+        } else {
+            // Create a fallback service with default config
+            let config = GoogleAiConfig::default();
+            let client = GoogleAiClient::new(config).expect("Failed to create Google AI client");
+            Arc::new(RetrospectionService::new(db_manager.clone(), client))
+        };
+        let retrospection_widget = RetrospectionWidget::new(service_for_widget);
+
         Ok(Self {
             state: AppState::new(),
             session_list: SessionListWidget::new(db_manager.clone()),
             session_detail: SessionDetailWidget::new(db_manager.clone()),
             analytics: AnalyticsWidget::new(db_manager.clone()),
-            retrospection: RetrospectionWidget::new(),
+            retrospection: retrospection_widget,
             query_service,
             analytics_service,
             retrospection_service,
@@ -247,11 +259,11 @@ impl App {
         // Tab navigation
         match key.code {
             KeyCode::Tab => {
-                self.next_tab();
+                self.next_tab().await?;
                 return Ok(true);
             }
             KeyCode::BackTab => {
-                self.previous_tab();
+                self.previous_tab().await?;
                 return Ok(true);
             }
             _ => {}
@@ -315,7 +327,8 @@ impl App {
         Ok(true)
     }
 
-    fn next_tab(&mut self) {
+    async fn next_tab(&mut self) -> Result<()> {
+        let old_mode = self.state.mode.clone();
         self.state.mode = match self.state.mode {
             AppMode::SessionList => AppMode::Analytics,
             AppMode::Analytics => AppMode::Retrospection,
@@ -323,9 +336,17 @@ impl App {
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
+
+        // Trigger refresh when entering retrospection tab
+        if self.state.mode == AppMode::Retrospection && old_mode != AppMode::Retrospection {
+            self.retrospection.refresh().await?;
+        }
+
+        Ok(())
     }
 
-    fn previous_tab(&mut self) {
+    async fn previous_tab(&mut self) -> Result<()> {
+        let old_mode = self.state.mode.clone();
         self.state.mode = match self.state.mode {
             AppMode::SessionList => AppMode::Retrospection,
             AppMode::Analytics => AppMode::SessionList,
@@ -333,6 +354,13 @@ impl App {
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
+
+        // Trigger refresh when entering retrospection tab
+        if self.state.mode == AppMode::Retrospection && old_mode != AppMode::Retrospection {
+            self.retrospection.refresh().await?;
+        }
+
+        Ok(())
     }
 
     async fn refresh_current_view(&mut self) -> Result<()> {

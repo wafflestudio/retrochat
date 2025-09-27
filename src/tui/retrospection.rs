@@ -4,12 +4,14 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 use tokio::sync::mpsc;
+use std::sync::Arc;
 
-use crate::models::{RetrospectRequest, RetrospectionAnalysisType, OperationStatus};
+use crate::models::{RetrospectRequest, Retrospection, RetrospectionAnalysisType, OperationStatus};
+use crate::services::retrospection_service::RetrospectionService;
 
 #[derive(Debug, Clone)]
 pub struct RetrospectionProgress {
@@ -23,12 +25,15 @@ pub struct RetrospectionProgress {
 }
 
 pub struct RetrospectionWidget {
-    active_requests: Vec<RetrospectionProgress>,
+    active_requests: Vec<RetrospectRequest>,
     completed_requests: Vec<RetrospectRequest>,
     selected_index: usize,
-    list_state: ListState,
     show_details: bool,
     selected_session_id: Option<String>,
+    selected_retrospection: Option<Retrospection>,
+
+    // Service dependency
+    retrospection_service: Arc<RetrospectionService>,
 
     // Progress tracking
     progress_receiver: Option<mpsc::UnboundedReceiver<RetrospectionProgress>>,
@@ -36,16 +41,17 @@ pub struct RetrospectionWidget {
 }
 
 impl RetrospectionWidget {
-    pub fn new() -> Self {
+    pub fn new(retrospection_service: Arc<RetrospectionService>) -> Self {
         let (progress_sender, progress_receiver) = mpsc::unbounded_channel();
 
         Self {
             active_requests: Vec::new(),
             completed_requests: Vec::new(),
             selected_index: 0,
-            list_state: ListState::default(),
             show_details: false,
             selected_session_id: None,
+            selected_retrospection: None,
+            retrospection_service,
             progress_receiver: Some(progress_receiver),
             progress_sender: Some(progress_sender),
         }
@@ -65,9 +71,24 @@ impl RetrospectionWidget {
             self.update_progress(progress);
         }
 
-        // Load active and completed requests from database
-        // This would need to be implemented in the repository
-        // For now, we'll maintain the in-memory state
+        // Load all requests from database
+        let all_requests = self.retrospection_service.list_analyses(None, Some(100)).await
+            .map_err(|e| anyhow::anyhow!("Failed to load requests: {}", e))?;
+
+        // Separate active and completed requests
+        self.active_requests.clear();
+        self.completed_requests.clear();
+
+        for request in all_requests {
+            match request.status {
+                OperationStatus::Pending | OperationStatus::Running => {
+                    self.active_requests.push(request);
+                }
+                OperationStatus::Completed | OperationStatus::Failed | OperationStatus::Cancelled => {
+                    self.completed_requests.push(request);
+                }
+            }
+        }
 
         Ok(())
     }
@@ -81,7 +102,7 @@ impl RetrospectionWidget {
                 self.move_selection_down();
             }
             KeyCode::Enter => {
-                self.toggle_details();
+                self.toggle_details().await?;
             }
             KeyCode::Char('r') => {
                 self.refresh().await?;
@@ -91,6 +112,9 @@ impl RetrospectionWidget {
             }
             KeyCode::Char('d') => {
                 self.show_details = !self.show_details;
+            }
+            KeyCode::Char('v') => {
+                self.view_retrospection_result().await?;
             }
             _ => {}
         }
@@ -109,8 +133,12 @@ impl RetrospectionWidget {
 
         self.render_header(f, chunks[0]);
 
-        if self.show_details && self.selected_index < self.active_requests.len() {
-            self.render_request_details(f, chunks[1]);
+        if self.show_details {
+            if let Some(retrospection) = &self.selected_retrospection {
+                self.render_retrospection_details(f, chunks[1], retrospection);
+            } else {
+                self.render_request_details(f, chunks[1]);
+            }
         } else {
             self.render_request_list(f, chunks[1]);
         }
@@ -118,19 +146,9 @@ impl RetrospectionWidget {
         self.render_footer(f, chunks[2]);
     }
 
-    pub fn start_analysis(&mut self, session_id: String, analysis_type: RetrospectionAnalysisType) {
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let progress = RetrospectionProgress {
-            request_id: request_id.clone(),
-            session_id: session_id.clone(),
-            analysis_type,
-            status: OperationStatus::Pending,
-            progress_percent: 0,
-            message: "Starting analysis...".to_string(),
-            error: None,
-        };
-
-        self.active_requests.push(progress);
+    pub fn start_analysis(&mut self, session_id: String, _analysis_type: RetrospectionAnalysisType) {
+        // This method is kept for backward compatibility
+        // Analysis requests are now created through the RetrospectionService
         self.selected_session_id = Some(session_id);
     }
 
@@ -138,24 +156,9 @@ impl RetrospectionWidget {
         self.progress_sender.clone()
     }
 
-    fn update_progress(&mut self, progress: RetrospectionProgress) {
-        // Update existing request or add new one
-        if let Some(existing) = self.active_requests.iter_mut()
-            .find(|r| r.request_id == progress.request_id) {
-            *existing = progress;
-        } else {
-            self.active_requests.push(progress);
-        }
-
-        // Move completed requests to completed list
-        self.active_requests.retain(|req| {
-            if matches!(req.status, OperationStatus::Completed | OperationStatus::Failed | OperationStatus::Cancelled) {
-                // Would normally move to completed_requests, but for now just remove
-                false
-            } else {
-                true
-            }
-        });
+    fn update_progress(&mut self, _progress: RetrospectionProgress) {
+        // Progress updates are now handled through database refresh
+        // This method is kept for backward compatibility with progress_receiver
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
@@ -179,9 +182,23 @@ impl RetrospectionWidget {
     }
 
     fn render_request_list(&mut self, f: &mut Frame, area: Rect) {
+        // Split area into two sections: active and completed
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(50), // Active requests
+                Constraint::Percentage(50), // Completed requests
+            ])
+            .split(area);
+
+        self.render_active_requests(f, chunks[0]);
+        self.render_completed_requests(f, chunks[1]);
+    }
+
+    fn render_active_requests(&mut self, f: &mut Frame, area: Rect) {
         if self.active_requests.is_empty() {
-            let empty_msg = Paragraph::new("No active retrospection requests\n\nPress 'r' to start analysis from session detail")
-                .block(Block::default().borders(Borders::ALL))
+            let empty_msg = Paragraph::new("No active retrospection requests\n\nPress 'r' to refresh")
+                .block(Block::default().borders(Borders::ALL).title("Active Requests"))
                 .style(Style::default().fg(Color::Gray))
                 .wrap(Wrap { trim: true });
 
@@ -200,18 +217,11 @@ impl RetrospectionWidget {
                     OperationStatus::Cancelled => Color::Gray,
                 };
 
-                let progress_bar = if request.progress_percent > 0 {
-                    format!(" [{}%]", request.progress_percent)
-                } else {
-                    String::new()
-                };
-
                 let content = format!(
-                    "{} | {} | {}{}",
-                    request.session_id.chars().take(12).collect::<String>(),
+                    "{} | {} | {}",
+                    request.session_id.chars().take(8).collect::<String>(),
                     request.analysis_type,
-                    request.status,
-                    progress_bar
+                    request.status
                 );
 
                 ListItem::new(Line::from(vec![
@@ -228,17 +238,76 @@ impl RetrospectionWidget {
                     .add_modifier(Modifier::BOLD),
             );
 
-        // Update list state
-        if self.selected_index >= self.active_requests.len() && !self.active_requests.is_empty() {
-            self.selected_index = self.active_requests.len() - 1;
+        // Only highlight if we're in the active section
+        let total_requests = self.active_requests.len() + self.completed_requests.len();
+        if self.selected_index < self.active_requests.len() && total_requests > 0 {
+            let mut list_state = ListState::default();
+            list_state.select(Some(self.selected_index));
+            f.render_stateful_widget(list, area, &mut list_state);
+        } else {
+            f.render_widget(list, area);
         }
-        self.list_state.select(Some(self.selected_index));
+    }
 
-        f.render_stateful_widget(list, area, &mut self.list_state);
+    fn render_completed_requests(&mut self, f: &mut Frame, area: Rect) {
+        if self.completed_requests.is_empty() {
+            let empty_msg = Paragraph::new("No completed retrospection requests")
+                .block(Block::default().borders(Borders::ALL).title("Completed Requests"))
+                .style(Style::default().fg(Color::Gray))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(empty_msg, area);
+            return;
+        }
+
+        let items: Vec<ListItem> = self.completed_requests
+            .iter()
+            .map(|request| {
+                let status_color = match request.status {
+                    OperationStatus::Completed => Color::Green,
+                    OperationStatus::Failed => Color::Red,
+                    OperationStatus::Cancelled => Color::Gray,
+                    _ => Color::White,
+                };
+
+                let content = format!(
+                    "{} | {} | {}",
+                    request.session_id.chars().take(8).collect::<String>(),
+                    request.analysis_type,
+                    request.status
+                );
+
+                ListItem::new(Line::from(vec![
+                    Span::styled(content, Style::default().fg(status_color)),
+                ]))
+            })
+            .collect();
+
+        let list = List::new(items)
+            .block(Block::default().borders(Borders::ALL).title("Completed Requests"))
+            .highlight_style(
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            );
+
+        // Only highlight if we're in the completed section
+        let active_count = self.active_requests.len();
+        if self.selected_index >= active_count && self.selected_index < active_count + self.completed_requests.len() {
+            let mut list_state = ListState::default();
+            list_state.select(Some(self.selected_index - active_count));
+            f.render_stateful_widget(list, area, &mut list_state);
+        } else {
+            f.render_widget(list, area);
+        }
     }
 
     fn render_request_details(&self, f: &mut Frame, area: Rect) {
-        if let Some(request) = self.active_requests.get(self.selected_index) {
+        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
+            .chain(self.completed_requests.iter())
+            .collect();
+
+        if let Some(request) = all_requests.get(self.selected_index) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -250,12 +319,14 @@ impl RetrospectionWidget {
 
             // Request information
             let info_lines = vec![
-                Line::from(vec![Span::raw(format!("Request ID: {}", request.request_id))]),
+                Line::from(vec![Span::raw(format!("Request ID: {}", request.id))]),
                 Line::from(vec![Span::raw(format!("Session ID: {}", request.session_id))]),
                 Line::from(vec![Span::raw(format!("Analysis Type: {}", request.analysis_type))]),
                 Line::from(vec![Span::raw(format!("Status: {}", request.status))]),
-                Line::from(vec![Span::raw(format!("Progress: {}%", request.progress_percent))]),
-                Line::from(vec![Span::raw(format!("Message: {}", request.message))]),
+                Line::from(vec![Span::raw(format!("Started: {}", request.started_at.format("%Y-%m-%d %H:%M:%S")))]),
+                Line::from(vec![Span::raw(format!("Completed: {}",
+                    request.completed_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_else(|| "N/A".to_string())))]),
             ];
 
             let info_block = Paragraph::new(info_lines)
@@ -264,18 +335,25 @@ impl RetrospectionWidget {
 
             f.render_widget(info_block, chunks[0]);
 
-            // Progress bar
-            let progress = Gauge::default()
-                .block(Block::default().borders(Borders::ALL).title("Progress"))
-                .gauge_style(Style::default().fg(Color::Blue))
-                .percent(request.progress_percent)
-                .label(format!("{}%", request.progress_percent));
+            // Status information
+            let status_info = match request.status {
+                OperationStatus::Completed => "Request completed successfully. Press 'v' to view results.",
+                OperationStatus::Failed => "Request failed. Check error message below.",
+                OperationStatus::Cancelled => "Request was cancelled.",
+                OperationStatus::Pending => "Request is pending execution.",
+                OperationStatus::Running => "Request is currently running.",
+            };
 
-            f.render_widget(progress, chunks[1]);
+            let status_block = Paragraph::new(status_info)
+                .block(Block::default().borders(Borders::ALL).title("Status"))
+                .style(Style::default().fg(Color::White))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(status_block, chunks[1]);
 
             // Error details if any
-            if let Some(error) = &request.error {
-                let error_block = Paragraph::new(error.as_str())
+            if let Some(error_message) = &request.error_message {
+                let error_block = Paragraph::new(error_message.as_str())
                     .block(Block::default().borders(Borders::ALL).title("Error Details"))
                     .style(Style::default().fg(Color::Red))
                     .wrap(Wrap { trim: true });
@@ -285,8 +363,55 @@ impl RetrospectionWidget {
         }
     }
 
+    fn render_retrospection_details(&self, f: &mut Frame, area: Rect, retrospection: &Retrospection) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5),   // Header info
+                Constraint::Percentage(33), // Insights
+                Constraint::Percentage(33), // Reflection
+                Constraint::Percentage(34), // Recommendations
+            ])
+            .split(area);
+
+        // Header
+        let header = Paragraph::new(format!(
+            "Retrospection ID: {}\nCreated: {}",
+            retrospection.id,
+            retrospection.created_at.format("%Y-%m-%d %H:%M:%S")
+        ))
+        .block(Block::default().borders(Borders::ALL).title("Retrospection Details"))
+        .style(Style::default().fg(Color::Cyan));
+
+        f.render_widget(header, chunks[0]);
+
+        // Insights
+        let insights = Paragraph::new(retrospection.insights.as_str())
+            .block(Block::default().borders(Borders::ALL).title("Insights"))
+            .style(Style::default().fg(Color::Green))
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(insights, chunks[1]);
+
+        // Reflection
+        let reflection = Paragraph::new(retrospection.reflection.as_str())
+            .block(Block::default().borders(Borders::ALL).title("Reflection"))
+            .style(Style::default().fg(Color::Yellow))
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(reflection, chunks[2]);
+
+        // Recommendations
+        let recommendations = Paragraph::new(retrospection.recommendations.as_str())
+            .block(Block::default().borders(Borders::ALL).title("Recommendations"))
+            .style(Style::default().fg(Color::Blue))
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(recommendations, chunks[3]);
+    }
+
     fn render_footer(&self, f: &mut Frame, area: Rect) {
-        let controls = "↑/↓: Navigate | Enter/d: Toggle Details | r: Refresh | c: Cancel Selected | Esc: Back";
+        let controls = "↑/↓: Navigate | Enter/d: Toggle Details | v: View Results | r: Refresh | c: Cancel Selected | Esc: Back";
 
         let footer = Paragraph::new(controls)
             .block(Block::default().borders(Borders::ALL))
@@ -302,22 +427,62 @@ impl RetrospectionWidget {
     }
 
     fn move_selection_down(&mut self) {
-        if self.selected_index < self.active_requests.len().saturating_sub(1) {
+        let total_requests = self.active_requests.len() + self.completed_requests.len();
+        if self.selected_index < total_requests.saturating_sub(1) {
             self.selected_index += 1;
         }
     }
 
-    fn toggle_details(&mut self) {
+    async fn toggle_details(&mut self) -> Result<()> {
         self.show_details = !self.show_details;
+
+        // Clear retrospection when toggling off details
+        if !self.show_details {
+            self.selected_retrospection = None;
+        }
+
+        Ok(())
+    }
+
+    async fn view_retrospection_result(&mut self) -> Result<()> {
+        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
+            .chain(self.completed_requests.iter())
+            .collect();
+
+        if let Some(request) = all_requests.get(self.selected_index) {
+            if matches!(request.status, OperationStatus::Completed) {
+                // Load the retrospection result
+                match self.retrospection_service.get_analysis_result(request.id.clone()).await
+                    .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {}", e))? {
+                    Some(retrospection) => {
+                        self.selected_retrospection = Some(retrospection);
+                        self.show_details = true;
+                    }
+                    None => {
+                        // No retrospection result found
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     async fn cancel_selected_request(&mut self) -> Result<()> {
-        if let Some(request) = self.active_requests.get_mut(self.selected_index) {
-            if matches!(request.status, OperationStatus::Pending | OperationStatus::Running) {
-                request.status = OperationStatus::Cancelled;
-                request.message = "Cancelled by user".to_string();
+        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
+            .chain(self.completed_requests.iter())
+            .collect();
 
-                // TODO: Send cancellation signal to actual background task
+        if let Some(request) = all_requests.get(self.selected_index) {
+            if matches!(request.status, OperationStatus::Pending | OperationStatus::Running) {
+                // Use the service to cancel the request
+                if let Err(e) = self.retrospection_service.cancel_analysis(request.id.clone()).await {
+                    // Handle error if needed
+                    eprintln!("Failed to cancel request: {}", e);
+                } else {
+                    // Refresh to update the UI
+                    self.refresh().await?;
+                }
             }
         }
         Ok(())
