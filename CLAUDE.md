@@ -43,4 +43,26 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 - 001-i-want-to: Added Rust TUI app for LLM chat history analysis with SQLite persistence
 
 <!-- MANUAL ADDITIONS START -->
+
+## Development Rules
+
+### Test-Driven Development (TDD)
+- **Sequential TDD**: Write one test at a time, then implement the corresponding functionality
+- **No bulk testing**: Do not write all tests upfront - follow the red-green-refactor cycle strictly
+- **One test, one implementation**: Each test should drive exactly one piece of implementation
+
+### Architecture & Dependency Rules
+- **Layer Dependencies**: Maintain strict dependency hierarchy: `Repo <- Service <- TUI/CLI`
+- **No Direct Repo Access**: TUI and CLI modules must never directly access Repo layer
+- **Service Layer**: All business logic must go through the Service layer
+
+### Output & UI Rules
+- **No stdout in Core Modules**: Repo, Service, and TUI modules must not use stdout directly
+- **TUI Protection**: Avoid stdout usage to prevent TUI interface from breaking
+- **Output Isolation**: Keep output handling separate from core business logic
+
+### Database Migration Rules
+- **SQLx Prepare**: After creating database migrations, use `sqlx prepare` to update .sqlx files appropriately
+- **Migration Updates**: Ensure .sqlx files are kept in sync with schema changes
+
 <!-- MANUAL ADDITIONS END -->
