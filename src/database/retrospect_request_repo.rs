@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::models::{RetrospectRequest, OperationStatus, RetrospectionAnalysisType};
+use crate::models::{OperationStatus, RetrospectRequest, RetrospectionAnalysisType};
 
 #[derive(Clone)]
 pub struct RetrospectRequestRepository {
@@ -82,22 +82,22 @@ impl RetrospectRequestRepository {
     ) -> Result<Option<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let row = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE id = ?",
-            id
-        )
-        .fetch_optional(pool)
-        .await?;
+        let row = sqlx::query!("SELECT * FROM retrospect_requests WHERE id = ?", id)
+            .fetch_optional(pool)
+            .await?;
 
         if let Some(row) = row {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -140,14 +140,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -188,14 +191,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -239,14 +245,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -289,14 +298,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -341,14 +353,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -392,14 +407,17 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row.analysis_type.parse::<RetrospectionAnalysisType>()
+            let analysis_type = row
+                .analysis_type
+                .parse::<RetrospectionAnalysisType>()
                 .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
 
-            let status = row.status.parse::<OperationStatus>()
+            let status = row
+                .status
+                .parse::<OperationStatus>()
                 .map_err(|e| format!("Invalid status '{}': {}", row.status, e))?;
 
-            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?
-                .with_timezone(&Utc);
+            let started_at = DateTime::parse_from_rfc3339(&row.started_at)?.with_timezone(&Utc);
 
             let completed_at = if let Some(completed_at_str) = &row.completed_at {
                 if !completed_at_str.is_empty() {
@@ -433,12 +451,9 @@ impl RetrospectRequestRepository {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let result = sqlx::query!(
-            "DELETE FROM retrospect_requests WHERE id = ?",
-            id
-        )
-        .execute(pool)
-        .await?;
+        let result = sqlx::query!("DELETE FROM retrospect_requests WHERE id = ?", id)
+            .execute(pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -488,13 +503,12 @@ impl RetrospectRequestRepository {
 
         Ok(row.count.unwrap_or(0) as u64)
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{Database, ChatSessionRepository};
+    use crate::database::{ChatSessionRepository, Database};
     use crate::models::{ChatSession, LlmProvider};
 
     #[tokio::test]

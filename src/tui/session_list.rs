@@ -247,7 +247,9 @@ impl SessionListWidget {
 
         // Use different colors based on retrospection status
         let project_style = if session.has_retrospection {
-            Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::Yellow)
         };
@@ -268,7 +270,12 @@ impl SessionListWidget {
 
         // Add retrospection indicator
         let retrospection_indicator = if session.has_retrospection {
-            Span::styled("* ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD))
+            Span::styled(
+                "* ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
             Span::raw("  ")
         };
@@ -280,10 +287,7 @@ impl SessionListWidget {
                 provider_style.add_modifier(Modifier::BOLD),
             ),
             Span::raw(" │ "),
-            Span::styled(
-                format!("{project_text:20}"),
-                project_style,
-            ),
+            Span::styled(format!("{project_text:20}"), project_style),
             Span::raw(" │ "),
             Span::styled(format!("{start_time:16}"), Style::default().fg(Color::Cyan)),
             Span::raw(" │ "),

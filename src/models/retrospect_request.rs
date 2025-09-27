@@ -38,7 +38,7 @@ impl std::str::FromStr for RetrospectionAnalysisType {
             s if s.starts_with("custom:") => {
                 Ok(RetrospectionAnalysisType::Custom(s[7..].to_string()))
             }
-            _ => Err(format!("Invalid analysis type: {}", s)),
+            _ => Err(format!("Invalid analysis type: {s}")),
         }
     }
 }
@@ -113,7 +113,10 @@ impl RetrospectRequest {
     }
 
     pub fn is_active(&self) -> bool {
-        matches!(self.status, OperationStatus::Pending | OperationStatus::Running)
+        matches!(
+            self.status,
+            OperationStatus::Pending | OperationStatus::Running
+        )
     }
 
     pub fn is_completed(&self) -> bool {

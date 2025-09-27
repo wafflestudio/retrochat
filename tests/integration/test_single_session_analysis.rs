@@ -1,7 +1,7 @@
 use retrochat::database::DatabaseManager;
-use retrochat::services::{RetrospectionService};
-use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::models::RetrospectionAnalysisType;
+use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
+use retrochat::services::RetrospectionService;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -22,12 +22,14 @@ async fn test_single_session_analysis_workflow() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Step 1: Create analysis request
-    let request = service.create_analysis_request(
-        session_id.clone(),
-        RetrospectionAnalysisType::UserInteractionAnalysis,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let request = service
+        .create_analysis_request(
+            session_id.clone(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     let request = match request {
         Ok(req) => req,
@@ -62,11 +64,11 @@ async fn test_single_session_analysis_workflow() {
             println!("Expected failure until implementation: {:?}", e);
             let error_msg = e.to_string();
             assert!(
-                error_msg.contains("not implemented") ||
-                error_msg.contains("GoogleAi") ||
-                error_msg.contains("API") ||
-                error_msg.contains("database") ||
-                error_msg.contains("session")
+                error_msg.contains("not implemented")
+                    || error_msg.contains("GoogleAi")
+                    || error_msg.contains("API")
+                    || error_msg.contains("database")
+                    || error_msg.contains("session")
             );
         }
     }
@@ -85,12 +87,14 @@ async fn test_single_session_analysis_with_custom_prompt() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Create analysis request with custom prompt
-    let result = service.create_analysis_request(
-        session_id.clone(),
-        RetrospectionAnalysisType::Custom(custom_prompt.clone()),
-        Some("test_user".to_string()),
-        Some(custom_prompt.clone()),
-    ).await;
+    let result = service
+        .create_analysis_request(
+            session_id.clone(),
+            RetrospectionAnalysisType::Custom(custom_prompt.clone()),
+            Some("test_user".to_string()),
+            Some(custom_prompt.clone()),
+        )
+        .await;
 
     match result {
         Ok(request) => {
@@ -119,12 +123,14 @@ async fn test_single_session_analysis_error_handling() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Try to create analysis request for nonexistent session
-    let result = service.create_analysis_request(
-        "nonexistent-session".to_string(),
-        RetrospectionAnalysisType::UserInteractionAnalysis,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            "nonexistent-session".to_string(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     // This may succeed or fail depending on validation strategy
     match result {
@@ -140,9 +146,9 @@ async fn test_single_session_analysis_error_handling() {
                     // Expected failure
                     let error_msg = e.to_string();
                     assert!(
-                        error_msg.contains("session") ||
-                        error_msg.contains("not found") ||
-                        error_msg.contains("database")
+                        error_msg.contains("session")
+                            || error_msg.contains("not found")
+                            || error_msg.contains("database")
                     );
                 }
             }
@@ -151,9 +157,9 @@ async fn test_single_session_analysis_error_handling() {
             // Expected failure during request creation
             let error_msg = e.to_string();
             assert!(
-                error_msg.contains("session") ||
-                error_msg.contains("not found") ||
-                error_msg.contains("database")
+                error_msg.contains("session")
+                    || error_msg.contains("not found")
+                    || error_msg.contains("database")
             );
         }
     }
@@ -171,12 +177,14 @@ async fn test_single_session_analysis_cancellation() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Create analysis request
-    let result = service.create_analysis_request(
-        session_id.clone(),
-        RetrospectionAnalysisType::TaskBreakdown,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            session_id.clone(),
+            RetrospectionAnalysisType::TaskBreakdown,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     match result {
         Ok(request) => {
@@ -191,10 +199,10 @@ async fn test_single_session_analysis_cancellation() {
                     // Cancellation may fail if operation doesn't exist or already completed
                     let error_msg = e.to_string();
                     assert!(
-                        error_msg.contains("not found") ||
-                        error_msg.contains("already") ||
-                        error_msg.contains("completed") ||
-                        error_msg.contains("database")
+                        error_msg.contains("not found")
+                            || error_msg.contains("already")
+                            || error_msg.contains("completed")
+                            || error_msg.contains("database")
                     );
                 }
             }

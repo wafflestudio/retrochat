@@ -8,7 +8,9 @@ pub use analytics_service::{
     AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest, ExportResponse,
     MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
 };
-pub use google_ai::{GoogleAiClient, GoogleAiConfig, GoogleAiError, GenerateContentRequest, GenerateContentResponse};
+pub use google_ai::{
+    GenerateContentRequest, GenerateContentResponse, GoogleAiClient, GoogleAiConfig, GoogleAiError,
+};
 pub use import_service::{
     BatchImportRequest, BatchImportResponse, ChatFile, ImportFileRequest, ImportFileResponse,
     ImportService, ScanRequest, ScanResponse,
@@ -18,4 +20,6 @@ pub use query_service::{
     SessionDetailResponse, SessionFilters, SessionSummary, SessionsQueryRequest,
     SessionsQueryResponse,
 };
-pub use retrospection_service::{RetrospectionService, RetrospectionCleanupHandler, AnalysisData, SessionMetrics};
+pub use retrospection_service::{
+    AnalysisData, RetrospectionCleanupHandler, RetrospectionService, SessionMetrics,
+};

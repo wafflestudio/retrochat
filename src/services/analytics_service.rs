@@ -552,7 +552,6 @@ impl AnalyticsService {
 
         Ok(())
     }
-
 }
 
 impl Default for AnalyticsService {

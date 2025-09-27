@@ -499,12 +499,16 @@ impl SessionDetailWidget {
             let lines = vec![
                 Line::from(vec![Span::styled(
                     "Retrospection Analysis",
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 )]),
                 Line::from(""),
                 Line::from(vec![Span::styled(
                     "Insights:",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 )]),
                 Line::from(""),
             ];
@@ -519,19 +523,33 @@ impl SessionDetailWidget {
             // Add reflection section
             content_lines.push(Line::from(vec![Span::styled(
                 "Reflection:",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(retrospection.reflection.lines().map(|line| Line::from(line)));
+            content_lines.extend(
+                retrospection
+                    .reflection
+                    .lines()
+                    .map(|line| Line::from(line)),
+            );
             content_lines.push(Line::from(""));
 
             // Add recommendations section
             content_lines.push(Line::from(vec![Span::styled(
                 "Recommendations:",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(retrospection.recommendations.lines().map(|line| Line::from(line)));
+            content_lines.extend(
+                retrospection
+                    .recommendations
+                    .lines()
+                    .map(|line| Line::from(line)),
+            );
 
             let all_lines = [lines, content_lines].concat();
 
@@ -544,7 +562,11 @@ impl SessionDetailWidget {
                 .collect();
 
             let retrospection_block = Paragraph::new(visible_lines)
-                .block(Block::default().borders(Borders::ALL).title("Retrospection Analysis"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Retrospection Analysis"),
+                )
                 .wrap(Wrap { trim: true })
                 .scroll((0, 0));
 
@@ -560,9 +582,16 @@ impl SessionDetailWidget {
                 };
 
                 let metadata_text = if let Some(tokens) = retrospection.token_usage {
-                    format!("Tokens: {} | Created: {}", tokens, retrospection.created_at.format("%Y-%m-%d %H:%M"))
+                    format!(
+                        "Tokens: {} | Created: {}",
+                        tokens,
+                        retrospection.created_at.format("%Y-%m-%d %H:%M")
+                    )
                 } else {
-                    format!("Created: {}", retrospection.created_at.format("%Y-%m-%d %H:%M"))
+                    format!(
+                        "Created: {}",
+                        retrospection.created_at.format("%Y-%m-%d %H:%M")
+                    )
                 };
 
                 let metadata = Paragraph::new(metadata_text)

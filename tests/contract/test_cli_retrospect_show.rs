@@ -7,10 +7,11 @@ async fn test_retrospect_show_command_structure() {
     // Test command execution with session ID
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id
-        false, // all
-        "text".to_string(), // format
-        None, // analysis_type
-    ).await;
+        false,                           // all
+        "text".to_string(),              // format
+        None,                            // analysis_type
+    )
+    .await;
 
     // The command should execute (may succeed or fail based on environment)
     match result {
@@ -24,10 +25,10 @@ async fn test_retrospect_show_command_structure() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("session") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("session")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }
@@ -38,11 +39,12 @@ async fn test_retrospect_show_all_formats() {
     // Test all output formats
     for format in ["text", "json", "markdown"] {
         let result = handle_show_command(
-            None, // session_id (None when using --all)
-            true, // all
+            None,               // session_id (None when using --all)
+            true,               // all
             format.to_string(), // format
-            None, // analysis_type
-        ).await;
+            None,               // analysis_type
+        )
+        .await;
 
         // The command should execute
         match result {
@@ -53,10 +55,10 @@ async fn test_retrospect_show_all_formats() {
                 assert!(!error_msg.is_empty());
                 // Common error scenarios
                 assert!(
-                    error_msg.contains("database") ||
-                    error_msg.contains("connection") ||
-                    error_msg.contains("analyses") ||
-                    error_msg.contains("GOOGLE_AI_API_KEY")
+                    error_msg.contains("database")
+                        || error_msg.contains("connection")
+                        || error_msg.contains("analyses")
+                        || error_msg.contains("GOOGLE_AI_API_KEY")
                 );
             }
         }
@@ -67,11 +69,12 @@ async fn test_retrospect_show_all_formats() {
 async fn test_retrospect_show_filtering() {
     // Test filtering by analysis type
     let result = handle_show_command(
-        None, // session_id
-        true, // all
-        "text".to_string(), // format
+        None,                                 // session_id
+        true,                                 // all
+        "text".to_string(),                   // format
         Some(AnalysisTypeArg::Collaboration), // analysis_type filter
-    ).await;
+    )
+    .await;
 
     // The command should execute
     match result {
@@ -82,10 +85,10 @@ async fn test_retrospect_show_filtering() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("analyses") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("analyses")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }
@@ -96,10 +99,11 @@ async fn test_retrospect_show_specific_session() {
     // Test showing results for a specific session
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id
-        false, // all
-        "text".to_string(), // format
-        None, // analysis_type
-    ).await;
+        false,                           // all
+        "text".to_string(),              // format
+        None,                            // analysis_type
+    )
+    .await;
 
     // The command should execute
     match result {
@@ -110,12 +114,12 @@ async fn test_retrospect_show_specific_session() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("session") ||
-                error_msg.contains("analysis") ||
-                error_msg.contains("GOOGLE_AI_API_KEY") ||
-                error_msg.contains("not found")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("session")
+                    || error_msg.contains("analysis")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
+                    || error_msg.contains("not found")
             );
         }
     }

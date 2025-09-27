@@ -1,7 +1,7 @@
-use retrochat::services::{RetrospectionService};
-use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::database::DatabaseManager;
 use retrochat::models::RetrospectionAnalysisType;
+use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
+use retrochat::services::RetrospectionService;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,12 +24,14 @@ async fn test_google_ai_api_error_recovery() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Test creating analysis request
-    let result = service.create_analysis_request(
-        session_id.clone(),
-        RetrospectionAnalysisType::UserInteractionAnalysis,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            session_id.clone(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     match result {
         Ok(request) => {
@@ -74,12 +76,14 @@ async fn test_service_creation_with_invalid_config() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Try to create an analysis request
-    let result = service.create_analysis_request(
-        "test-session".to_string(),
-        RetrospectionAnalysisType::UserInteractionAnalysis,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            "test-session".to_string(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     // Request creation should succeed
     match result {
@@ -109,12 +113,14 @@ async fn test_analysis_execution_error_handling() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Create analysis request
-    let result = service.create_analysis_request(
-        "timeout-test-session".to_string(),
-        RetrospectionAnalysisType::TaskBreakdown,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            "timeout-test-session".to_string(),
+            RetrospectionAnalysisType::TaskBreakdown,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     match result {
         Ok(request) => {
@@ -150,12 +156,14 @@ async fn test_nonexistent_session_handling() {
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     // Try to create analysis request for nonexistent session
-    let result = service.create_analysis_request(
-        "definitely-nonexistent-session-12345".to_string(),
-        RetrospectionAnalysisType::UserInteractionAnalysis,
-        Some("test_user".to_string()),
-        None,
-    ).await;
+    let result = service
+        .create_analysis_request(
+            "definitely-nonexistent-session-12345".to_string(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        )
+        .await;
 
     // This may succeed or fail depending on validation strategy
     match result {
@@ -171,9 +179,9 @@ async fn test_nonexistent_session_handling() {
                     // Expected failure
                     let error_msg = e.to_string();
                     assert!(
-                        error_msg.contains("session") ||
-                        error_msg.contains("not found") ||
-                        error_msg.contains("database")
+                        error_msg.contains("session")
+                            || error_msg.contains("not found")
+                            || error_msg.contains("database")
                     );
                 }
             }
@@ -182,9 +190,9 @@ async fn test_nonexistent_session_handling() {
             // Expected failure during request creation
             let error_msg = e.to_string();
             assert!(
-                error_msg.contains("session") ||
-                error_msg.contains("not found") ||
-                error_msg.contains("database")
+                error_msg.contains("session")
+                    || error_msg.contains("not found")
+                    || error_msg.contains("database")
             );
         }
     }
@@ -203,18 +211,29 @@ async fn test_database_error_handling() {
 
     // Try various operations that might trigger database errors
     let operations = vec![
-        ("test-db-session-1", RetrospectionAnalysisType::UserInteractionAnalysis),
-        ("test-db-session-2", RetrospectionAnalysisType::CollaborationInsights),
-        ("test-db-session-3", RetrospectionAnalysisType::Custom("Test prompt".to_string())),
+        (
+            "test-db-session-1",
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+        ),
+        (
+            "test-db-session-2",
+            RetrospectionAnalysisType::CollaborationInsights,
+        ),
+        (
+            "test-db-session-3",
+            RetrospectionAnalysisType::Custom("Test prompt".to_string()),
+        ),
     ];
 
     for (session_id, analysis_type) in operations {
-        let result = service.create_analysis_request(
-            session_id.to_string(),
-            analysis_type,
-            Some("test_user".to_string()),
-            None,
-        ).await;
+        let result = service
+            .create_analysis_request(
+                session_id.to_string(),
+                analysis_type,
+                Some("test_user".to_string()),
+                None,
+            )
+            .await;
 
         // All these should succeed or fail gracefully
         match result {

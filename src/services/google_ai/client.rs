@@ -1,13 +1,13 @@
+use reqwest::{Client, Response};
 use std::sync::Arc;
 use std::time::Duration;
-use reqwest::{Client, Response};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
-use crate::models::RetrospectionAnalysisType;
 use super::errors::{GoogleAiError, RetryError};
 use super::models::{GenerateContentRequest, GenerateContentResponse, GenerationConfig};
-use super::retry::{RetryConfig, with_retry};
+use super::retry::{with_retry, RetryConfig};
+use crate::models::RetrospectionAnalysisType;
 
 #[derive(Debug, Clone)]
 pub struct GoogleAiConfig {
@@ -91,7 +91,7 @@ impl GoogleAiClient {
             .timeout(config.timeout)
             .build()
             .map_err(|e| GoogleAiError::ConfigurationError {
-                message: format!("Failed to create HTTP client: {}", e),
+                message: format!("Failed to create HTTP client: {e}"),
             })?;
 
         // Rate limiter - allows 15 requests per minute by default
@@ -108,22 +108,20 @@ impl GoogleAiClient {
         &self,
         request: GenerateContentRequest,
     ) -> Result<GenerateContentResponse, GoogleAiError> {
-        let retry_config = RetryConfig::new(self.config.max_retries)
-            .with_total_timeout(self.config.timeout);
+        let retry_config =
+            RetryConfig::new(self.config.max_retries).with_total_timeout(self.config.timeout);
 
-        with_retry(retry_config, || {
-            self.generate_content_once(request.clone())
-        })
-        .await
-        .map_err(|retry_error| match retry_error {
-            RetryError::NonRetryable { source } => source,
-            RetryError::MaxAttemptsExceeded => GoogleAiError::RateLimitExceeded {
-                message: "Maximum retry attempts exceeded".to_string(),
-            },
-            RetryError::TimeoutExceeded => GoogleAiError::Timeout {
-                timeout_ms: self.config.timeout.as_millis() as u64,
-            },
-        })
+        with_retry(retry_config, || self.generate_content_once(request.clone()))
+            .await
+            .map_err(|retry_error| match retry_error {
+                RetryError::NonRetryable { source } => source,
+                RetryError::MaxAttemptsExceeded => GoogleAiError::RateLimitExceeded {
+                    message: "Maximum retry attempts exceeded".to_string(),
+                },
+                RetryError::TimeoutExceeded => GoogleAiError::Timeout {
+                    timeout_ms: self.config.timeout.as_millis() as u64,
+                },
+            })
     }
 
     async fn generate_content_once(
@@ -131,14 +129,18 @@ impl GoogleAiClient {
         request: GenerateContentRequest,
     ) -> Result<GenerateContentResponse, GoogleAiError> {
         // Acquire rate limit permit
-        let _permit = self.rate_limiter
-            .acquire()
-            .await
-            .map_err(|_| GoogleAiError::RateLimitExceeded {
-                message: "Rate limiter closed".to_string(),
-            })?;
+        let _permit =
+            self.rate_limiter
+                .acquire()
+                .await
+                .map_err(|_| GoogleAiError::RateLimitExceeded {
+                    message: "Rate limiter closed".to_string(),
+                })?;
 
-        let url = format!("{}/models/{}:generateContent", self.config.base_url, self.config.model);
+        let url = format!(
+            "{}/models/{}:generateContent",
+            self.config.base_url, self.config.model
+        );
 
         let response = timeout(
             self.config.timeout,
@@ -147,7 +149,7 @@ impl GoogleAiClient {
                 .header("x-goog-api-key", &self.config.api_key)
                 .header("Content-Type", "application/json")
                 .json(&request)
-                .send()
+                .send(),
         )
         .await
         .map_err(|_| GoogleAiError::Timeout {
@@ -175,7 +177,8 @@ impl GoogleAiClient {
                     message: format!("Failed to parse response: {}", e),
                 })?;
 
-            parsed_response.validate()
+            parsed_response
+                .validate()
                 .map_err(|e| GoogleAiError::InvalidResponse { message: e })?;
 
             Ok(parsed_response)
@@ -195,7 +198,7 @@ impl GoogleAiClient {
         chat_data: &str,
     ) -> GenerateContentRequest {
         let prompt = self.build_analysis_prompt(analysis_type);
-        let full_content = format!("{}\n\nChat Session:\n{}", prompt, chat_data);
+        let full_content = format!("{prompt}\n\nChat Session:\n{chat_data}");
 
         GenerateContentRequest::new(full_content)
             .with_generation_config(GenerationConfig::default())
@@ -367,12 +370,13 @@ mod tests {
         let config = GoogleAiConfig::new("test_key".to_string());
         let client = GoogleAiClient::new(config).unwrap();
 
-        let prompt = client.build_analysis_prompt(&RetrospectionAnalysisType::UserInteractionAnalysis);
+        let prompt =
+            client.build_analysis_prompt(&RetrospectionAnalysisType::UserInteractionAnalysis);
         assert!(prompt.contains("communication patterns"));
 
         let custom_prompt = "Custom analysis prompt";
         let custom_analysis_prompt = client.build_analysis_prompt(
-            &RetrospectionAnalysisType::Custom(custom_prompt.to_string())
+            &RetrospectionAnalysisType::Custom(custom_prompt.to_string()),
         );
         assert_eq!(custom_analysis_prompt, custom_prompt);
     }
@@ -393,7 +397,7 @@ mod tests {
 
         let request = client.build_analysis_request(
             &RetrospectionAnalysisType::UserInteractionAnalysis,
-            "Test chat data"
+            "Test chat data",
         );
 
         assert!(!request.contents.is_empty());

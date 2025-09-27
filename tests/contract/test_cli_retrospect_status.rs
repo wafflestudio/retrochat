@@ -9,7 +9,8 @@ async fn test_retrospect_status_command_structure() {
         false, // all
         false, // watch
         false, // history
-    ).await;
+    )
+    .await;
 
     // The command should execute (may succeed or fail based on environment)
     match result {
@@ -23,9 +24,9 @@ async fn test_retrospect_status_command_structure() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }
@@ -36,10 +37,11 @@ async fn test_retrospect_status_command_structure() {
 async fn test_retrospect_status_active_only() {
     // Test showing only active operations (same as --all in current implementation)
     let result = handle_status_command(
-        true, // all (shows active operations)
+        true,  // all (shows active operations)
         false, // watch
         false, // history
-    ).await;
+    )
+    .await;
 
     // The command should execute
     match result {
@@ -50,10 +52,10 @@ async fn test_retrospect_status_active_only() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("analyses") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("analyses")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }
@@ -65,8 +67,9 @@ async fn test_retrospect_status_history() {
     let result = handle_status_command(
         false, // all
         false, // watch
-        true, // history
-    ).await;
+        true,  // history
+    )
+    .await;
 
     // The command should execute
     match result {
@@ -77,10 +80,10 @@ async fn test_retrospect_status_history() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("analyses") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("analyses")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }
@@ -91,9 +94,10 @@ async fn test_retrospect_status_watch_mode() {
     // Test watch mode (current implementation just shows status once)
     let result = handle_status_command(
         false, // all
-        true, // watch
+        true,  // watch
         false, // history
-    ).await;
+    )
+    .await;
 
     // The command should execute
     match result {
@@ -104,10 +108,10 @@ async fn test_retrospect_status_watch_mode() {
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
-                error_msg.contains("database") ||
-                error_msg.contains("connection") ||
-                error_msg.contains("analyses") ||
-                error_msg.contains("GOOGLE_AI_API_KEY")
+                error_msg.contains("database")
+                    || error_msg.contains("connection")
+                    || error_msg.contains("analyses")
+                    || error_msg.contains("GOOGLE_AI_API_KEY")
             );
         }
     }

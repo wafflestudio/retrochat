@@ -132,7 +132,8 @@ impl GenerateContentRequest {
 
     pub fn estimate_tokens(&self) -> u32 {
         // Simple token estimation - roughly 4 characters per token
-        let total_chars: usize = self.contents
+        let total_chars: usize = self
+            .contents
             .iter()
             .flat_map(|content| &content.parts)
             .map(|part| match part {
@@ -166,8 +167,8 @@ impl GenerateContentResponse {
             .content
             .parts
             .first()
-            .and_then(|part| match part {
-                Part::Text { text } => Some(text.clone()),
+            .map(|part| match part {
+                Part::Text { text } => text.clone(),
             })
     }
 
@@ -188,9 +189,9 @@ impl GenerateContentResponse {
             .first()
             .and_then(|candidate| candidate.safety_ratings.as_ref())
             .map(|ratings| {
-                ratings.iter().any(|rating| {
-                    rating.probability == "HIGH" || rating.probability == "MEDIUM"
-                })
+                ratings
+                    .iter()
+                    .any(|rating| rating.probability == "HIGH" || rating.probability == "MEDIUM")
             })
             .unwrap_or(false)
     }

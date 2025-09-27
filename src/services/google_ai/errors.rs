@@ -90,8 +90,8 @@ impl GoogleAiError {
     pub fn retry_after_seconds(&self) -> Option<u64> {
         match self {
             GoogleAiError::RateLimitExceeded { .. } => Some(60), // Wait 60 seconds for rate limits
-            GoogleAiError::Timeout { .. } => Some(5),           // Wait 5 seconds for timeouts
-            GoogleAiError::ServerError { .. } => Some(30),      // Wait 30 seconds for server errors
+            GoogleAiError::Timeout { .. } => Some(5),            // Wait 5 seconds for timeouts
+            GoogleAiError::ServerError { .. } => Some(30), // Wait 30 seconds for server errors
             GoogleAiError::ServiceUnavailable { .. } => Some(120), // Wait 2 minutes for service issues
             _ => None,
         }
@@ -168,16 +168,17 @@ impl GoogleAiError {
         let status_code = status.as_u16();
 
         // Try to parse error details from response body
-        let error_message = if let Ok(error_response) = serde_json::from_str::<serde_json::Value>(body) {
-            error_response
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(|m| m.as_str())
-                .unwrap_or(body)
-                .to_string()
-        } else {
-            body.to_string()
-        };
+        let error_message =
+            if let Ok(error_response) = serde_json::from_str::<serde_json::Value>(body) {
+                error_response
+                    .get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or(body)
+                    .to_string()
+            } else {
+                body.to_string()
+            };
 
         match status_code {
             400 => GoogleAiError::InvalidRequest {
@@ -208,7 +209,7 @@ impl GoogleAiError {
                 message: error_message,
             },
             _ => GoogleAiError::InvalidRequest {
-                message: format!("HTTP {}: {}", status_code, error_message),
+                message: format!("HTTP {status_code}: {error_message}"),
             },
         }
     }

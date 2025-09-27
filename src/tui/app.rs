@@ -10,16 +10,16 @@ use ratatui::{
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::time::timeout;
 use tokio::task;
+use tokio::time::timeout;
 
 use crate::database::DatabaseManager;
-use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
+use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
 use super::{
-    analytics::AnalyticsWidget, retrospection::RetrospectionWidget, session_detail::SessionDetailWidget,
-    session_list::SessionListWidget,
+    analytics::AnalyticsWidget, retrospection::RetrospectionWidget,
+    session_detail::SessionDetailWidget, session_list::SessionListWidget,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,10 +40,10 @@ pub struct AppState {
     pub last_updated: Instant,
     pub retrospection_active: bool,
     pub active_analysis_requests: Vec<String>, // Track active request IDs
-    pub error_dialog: Option<String>, // Error message to display in dialog
-    pub processing_status: Option<String>, // Status message for background processing
-    pub spinner_frame: usize, // Current frame of the spinner animation
-    pub last_spinner_update: Instant, // Last time the spinner was updated
+    pub error_dialog: Option<String>,          // Error message to display in dialog
+    pub processing_status: Option<String>,     // Status message for background processing
+    pub spinner_frame: usize,                  // Current frame of the spinner animation
+    pub last_spinner_update: Instant,          // Last time the spinner was updated
 }
 
 impl AppState {
@@ -125,7 +125,8 @@ impl AppState {
         } else {
             let count = self.active_analysis_requests.len();
             let spinner = self.get_spinner_char();
-            self.processing_status = Some(format!("{} {} request{} processing...",
+            self.processing_status = Some(format!(
+                "{} {} request{} processing...",
                 spinner,
                 count,
                 if count == 1 { "" } else { "s" }
@@ -174,7 +175,10 @@ impl App {
         let retrospection_service = if let Ok(_) = std::env::var("GOOGLE_AI_API_KEY") {
             let config = GoogleAiConfig::default();
             match GoogleAiClient::new(config) {
-                Ok(client) => Some(Arc::new(RetrospectionService::new(db_manager.clone(), client))),
+                Ok(client) => Some(Arc::new(RetrospectionService::new(
+                    db_manager.clone(),
+                    client,
+                ))),
                 Err(_) => None,
             }
         } else {
@@ -337,15 +341,21 @@ impl App {
 
                         if let Some(ref service) = self.retrospection_service {
                             // Start actual analysis
-                            match service.create_analysis_request(
-                                session_id.clone(),
-                                RetrospectionAnalysisType::UserInteractionAnalysis,
-                                None,
-                                None,
-                            ).await {
+                            match service
+                                .create_analysis_request(
+                                    session_id.clone(),
+                                    RetrospectionAnalysisType::UserInteractionAnalysis,
+                                    None,
+                                    None,
+                                )
+                                .await
+                            {
                                 Ok(request) => {
                                     self.state.start_retrospection(request.id.clone());
-                                    self.retrospection.start_analysis(session_id.clone(), RetrospectionAnalysisType::UserInteractionAnalysis);
+                                    self.retrospection.start_analysis(
+                                        session_id.clone(),
+                                        RetrospectionAnalysisType::UserInteractionAnalysis,
+                                    );
 
                                     // Update processing status with count (stay on current tab)
                                     self.state.update_processing_status();
@@ -354,13 +364,16 @@ impl App {
                                     let service_clone = service.clone();
                                     let request_id = request.id.clone();
                                     task::spawn(async move {
-                                        if let Err(e) = service_clone.execute_analysis(request_id).await {
+                                        if let Err(e) =
+                                            service_clone.execute_analysis(request_id).await
+                                        {
                                             tracing::error!(error = %e, "Background analysis failed");
                                         }
                                     });
                                 }
                                 Err(e) => {
-                                    self.state.show_error(format!("Failed to start analysis: {e}"));
+                                    self.state
+                                        .show_error(format!("Failed to start analysis: {e}"));
                                 }
                             }
                         } else {
@@ -458,9 +471,9 @@ impl App {
             for request_id in &self.state.active_analysis_requests {
                 if let Ok(request) = service.get_analysis_status(request_id.clone()).await {
                     match request.status {
-                        crate::models::OperationStatus::Completed |
-                        crate::models::OperationStatus::Failed |
-                        crate::models::OperationStatus::Cancelled => {
+                        crate::models::OperationStatus::Completed
+                        | crate::models::OperationStatus::Failed
+                        | crate::models::OperationStatus::Cancelled => {
                             completed_requests.push(request_id.clone());
                         }
                         _ => {}
@@ -632,9 +645,7 @@ impl App {
         let error_text = vec![
             Line::from(vec![Span::styled(
                 "Error",
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(error_message),

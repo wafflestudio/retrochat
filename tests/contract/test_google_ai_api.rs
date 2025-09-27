@@ -1,8 +1,7 @@
-use retrochat::services::google_ai::{
-    GoogleAiClient, GoogleAiConfig, GenerateContentRequest,
-    Content, Part, GenerationConfig
-};
 use retrochat::models::RetrospectionAnalysisType;
+use retrochat::services::google_ai::{
+    Content, GenerateContentRequest, GenerationConfig, GoogleAiClient, GoogleAiConfig, Part,
+};
 use std::time::Duration;
 
 #[tokio::test]
@@ -54,9 +53,8 @@ async fn test_google_ai_api_request_response_structure() {
             assert!(!response.candidates.is_empty());
             assert!(response.candidates[0].content.parts.len() > 0);
 
-            if let Part::Text { text } = &response.candidates[0].content.parts[0] {
-                assert!(!text.is_empty());
-            }
+            let Part::Text { text } = &response.candidates[0].content.parts[0];
+            assert!(!text.is_empty());
 
             if let Some(usage) = &response.usage_metadata {
                 assert!(usage.total_token_count.unwrap_or(0) > 0);
@@ -99,17 +97,21 @@ async fn test_google_ai_analysis_types() {
         assert!(!request.contents.is_empty());
         assert!(!request.contents[0].parts.is_empty());
 
-        if let Part::Text { text } = &request.contents[0].parts[0] {
-            assert!(text.contains(test_chat_data));
-            // Each analysis type should have different prompts
-            match analysis_type {
-                RetrospectionAnalysisType::UserInteractionAnalysis => assert!(text.contains("communication patterns") || text.contains("user's communication")),
-                RetrospectionAnalysisType::CollaborationInsights => assert!(text.contains("collaboration")),
+        let Part::Text { text } = &request.contents[0].parts[0];
+        assert!(text.contains(test_chat_data));
+        // Each analysis type should have different prompts
+        match analysis_type {
+                RetrospectionAnalysisType::UserInteractionAnalysis => assert!(
+                    text.contains("communication patterns")
+                        || text.contains("user's communication")
+                ),
+                RetrospectionAnalysisType::CollaborationInsights => {
+                    assert!(text.contains("collaboration"))
+                }
                 RetrospectionAnalysisType::QuestionQuality => assert!(text.contains("question")),
                 RetrospectionAnalysisType::TaskBreakdown => assert!(text.contains("task")),
                 RetrospectionAnalysisType::FollowUpPatterns => assert!(text.contains("follow-up")),
                 RetrospectionAnalysisType::Custom(prompt) => assert!(text.contains(&prompt)),
-            }
         }
     }
 }
@@ -130,7 +132,7 @@ async fn test_google_ai_error_handling() {
     let request = GenerateContentRequest {
         contents: vec![Content {
             parts: vec![Part::Text {
-                text: "Test content".to_string()
+                text: "Test content".to_string(),
             }],
             role: Some("user".to_string()),
         }],

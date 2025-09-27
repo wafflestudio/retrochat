@@ -7,11 +7,11 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::task;
-use std::sync::Arc;
 
-use crate::models::{RetrospectRequest, Retrospection, RetrospectionAnalysisType, OperationStatus};
+use crate::models::{OperationStatus, RetrospectRequest, Retrospection, RetrospectionAnalysisType};
 use crate::services::retrospection_service::RetrospectionService;
 
 #[derive(Debug, Clone)]
@@ -71,7 +71,10 @@ impl RetrospectionWidget {
         }
 
         // Load all requests from database
-        self.all_requests = self.retrospection_service.list_analyses(None, Some(100)).await
+        self.all_requests = self
+            .retrospection_service
+            .list_analyses(None, Some(100))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to load requests: {}", e))?;
 
         // Sort requests: active first (pending, running), then by creation time (newest first)
@@ -155,7 +158,11 @@ impl RetrospectionWidget {
         self.render_footer(f, chunks[2]);
     }
 
-    pub fn start_analysis(&mut self, session_id: String, _analysis_type: RetrospectionAnalysisType) {
+    pub fn start_analysis(
+        &mut self,
+        session_id: String,
+        _analysis_type: RetrospectionAnalysisType,
+    ) {
         // This method is kept for backward compatibility
         // Analysis requests are now created through the RetrospectionService
         self.selected_session_id = Some(session_id);
@@ -171,14 +178,23 @@ impl RetrospectionWidget {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let active_count = self.all_requests.iter()
-            .filter(|r| matches!(r.status, OperationStatus::Pending | OperationStatus::Running))
+        let active_count = self
+            .all_requests
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r.status,
+                    OperationStatus::Pending | OperationStatus::Running
+                )
+            })
             .count();
         let completed_count = self.all_requests.len() - active_count;
 
         let header_text = format!(
             "Retrospection Status - Active: {} | Completed: {} | Total: {}",
-            active_count, completed_count, self.all_requests.len()
+            active_count,
+            completed_count,
+            self.all_requests.len()
         );
 
         let header = Paragraph::new(header_text)
@@ -194,16 +210,22 @@ impl RetrospectionWidget {
 
     fn render_request_list(&mut self, f: &mut Frame, area: Rect) {
         if self.all_requests.is_empty() {
-            let empty_msg = Paragraph::new("No retrospection requests\n\n(Auto-refreshes every 2 seconds)")
-                .block(Block::default().borders(Borders::ALL).title("Retrospection Requests"))
-                .style(Style::default().fg(Color::Gray))
-                .wrap(Wrap { trim: true });
+            let empty_msg =
+                Paragraph::new("No retrospection requests\n\n(Auto-refreshes every 2 seconds)")
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Retrospection Requests"),
+                    )
+                    .style(Style::default().fg(Color::Gray))
+                    .wrap(Wrap { trim: true });
 
             f.render_widget(empty_msg, area);
             return;
         }
 
-        let items: Vec<ListItem> = self.all_requests
+        let items: Vec<ListItem> = self
+            .all_requests
             .iter()
             .map(|request| {
                 let status_color = match request.status {
@@ -271,14 +293,19 @@ impl RetrospectionWidget {
                     duration_info
                 );
 
-                ListItem::new(Line::from(vec![
-                    Span::styled(content, Style::default().fg(status_color)),
-                ]))
+                ListItem::new(Line::from(vec![Span::styled(
+                    content,
+                    Style::default().fg(status_color),
+                )]))
             })
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("St  Session  | Type     | Time     | Status   | Duration"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("St  Session  | Type     | Time     | Status   | Duration"),
+            )
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
@@ -291,7 +318,6 @@ impl RetrospectionWidget {
         }
         f.render_stateful_widget(list, area, &mut list_state);
     }
-
 
     fn render_request_details(&self, f: &mut Frame, area: Rect) {
         if let Some(request) = self.all_requests.get(self.selected_index) {
@@ -307,24 +333,43 @@ impl RetrospectionWidget {
             // Request information
             let info_lines = vec![
                 Line::from(vec![Span::raw(format!("Request ID: {}", request.id))]),
-                Line::from(vec![Span::raw(format!("Session ID: {}", request.session_id))]),
-                Line::from(vec![Span::raw(format!("Analysis Type: {}", request.analysis_type))]),
+                Line::from(vec![Span::raw(format!(
+                    "Session ID: {}",
+                    request.session_id
+                ))]),
+                Line::from(vec![Span::raw(format!(
+                    "Analysis Type: {}",
+                    request.analysis_type
+                ))]),
                 Line::from(vec![Span::raw(format!("Status: {}", request.status))]),
-                Line::from(vec![Span::raw(format!("Started: {}", request.started_at.format("%Y-%m-%d %H:%M:%S")))]),
-                Line::from(vec![Span::raw(format!("Completed: {}",
-                    request.completed_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_else(|| "N/A".to_string())))]),
+                Line::from(vec![Span::raw(format!(
+                    "Started: {}",
+                    request.started_at.format("%Y-%m-%d %H:%M:%S")
+                ))]),
+                Line::from(vec![Span::raw(format!(
+                    "Completed: {}",
+                    request
+                        .completed_at
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_else(|| "N/A".to_string())
+                ))]),
             ];
 
             let info_block = Paragraph::new(info_lines)
-                .block(Block::default().borders(Borders::ALL).title("Request Details"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Request Details"),
+                )
                 .style(Style::default().fg(Color::White));
 
             f.render_widget(info_block, chunks[0]);
 
             // Status information
             let status_info = match request.status {
-                OperationStatus::Completed => "Request completed successfully. Press 'v' to view results.",
+                OperationStatus::Completed => {
+                    "Request completed successfully. Press 'v' to view results."
+                }
                 OperationStatus::Failed => "Request failed. Check error message below.",
                 OperationStatus::Cancelled => "Request was cancelled.",
                 OperationStatus::Pending => "Request is pending execution.",
@@ -341,7 +386,11 @@ impl RetrospectionWidget {
             // Error details if any
             if let Some(error_message) = &request.error_message {
                 let error_block = Paragraph::new(error_message.as_str())
-                    .block(Block::default().borders(Borders::ALL).title("Error Details"))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Error Details"),
+                    )
                     .style(Style::default().fg(Color::Red))
                     .wrap(Wrap { trim: true });
 
@@ -350,11 +399,16 @@ impl RetrospectionWidget {
         }
     }
 
-    fn render_retrospection_details(&self, f: &mut Frame, area: Rect, retrospection: &Retrospection) {
+    fn render_retrospection_details(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        retrospection: &Retrospection,
+    ) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),   // Header info
+                Constraint::Length(5),      // Header info
                 Constraint::Percentage(33), // Insights
                 Constraint::Percentage(33), // Reflection
                 Constraint::Percentage(34), // Recommendations
@@ -367,7 +421,11 @@ impl RetrospectionWidget {
             retrospection.id,
             retrospection.created_at.format("%Y-%m-%d %H:%M:%S")
         ))
-        .block(Block::default().borders(Borders::ALL).title("Retrospection Details"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Retrospection Details"),
+        )
         .style(Style::default().fg(Color::Cyan));
 
         f.render_widget(header, chunks[0]);
@@ -390,7 +448,11 @@ impl RetrospectionWidget {
 
         // Recommendations
         let recommendations = Paragraph::new(retrospection.recommendations.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Recommendations"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Recommendations"),
+            )
             .style(Style::default().fg(Color::Blue))
             .wrap(Wrap { trim: true });
 
@@ -434,8 +496,12 @@ impl RetrospectionWidget {
         if let Some(request) = self.all_requests.get(self.selected_index) {
             if matches!(request.status, OperationStatus::Completed) {
                 // Load the retrospection result
-                match self.retrospection_service.get_analysis_result(request.id.clone()).await
-                    .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {}", e))? {
+                match self
+                    .retrospection_service
+                    .get_analysis_result(request.id.clone())
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {}", e))?
+                {
                     Some(retrospection) => {
                         self.selected_retrospection = Some(retrospection);
                         self.show_details = true;
@@ -452,9 +518,16 @@ impl RetrospectionWidget {
 
     async fn cancel_selected_request(&mut self) -> Result<()> {
         if let Some(request) = self.all_requests.get(self.selected_index) {
-            if matches!(request.status, OperationStatus::Pending | OperationStatus::Running) {
+            if matches!(
+                request.status,
+                OperationStatus::Pending | OperationStatus::Running
+            ) {
                 // Use the service to cancel the request
-                if let Err(e) = self.retrospection_service.cancel_analysis(request.id.clone()).await {
+                if let Err(e) = self
+                    .retrospection_service
+                    .cancel_analysis(request.id.clone())
+                    .await
+                {
                     // Handle error if needed
                     tracing::error!(error = %e, "Failed to cancel request");
                 } else {
@@ -468,7 +541,10 @@ impl RetrospectionWidget {
 
     async fn rerun_selected_request(&mut self) -> Result<()> {
         if let Some(request) = self.all_requests.get(self.selected_index) {
-            if matches!(request.status, OperationStatus::Failed | OperationStatus::Cancelled | OperationStatus::Pending) {
+            if matches!(
+                request.status,
+                OperationStatus::Failed | OperationStatus::Cancelled | OperationStatus::Pending
+            ) {
                 // Execute the existing request in background (this will restart it)
                 let service_clone = self.retrospection_service.clone();
                 let request_id = request.id.clone();

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use backoff::{backoff::Backoff, ExponentialBackoff};
+use std::time::Duration;
 
 use super::errors::{GoogleAiError, RetryError};
 
@@ -148,13 +148,11 @@ impl RetryHandler {
                             Duration::from_secs(retry_after)
                         } else {
                             // Use exponential backoff
-                            self.backoff.next_backoff()
-                                .unwrap_or(self.config.max_delay)
+                            self.backoff.next_backoff().unwrap_or(self.config.max_delay)
                         }
                     } else {
                         // Use exponential backoff
-                        self.backoff.next_backoff()
-                            .unwrap_or(self.config.max_delay)
+                        self.backoff.next_backoff().unwrap_or(self.config.max_delay)
                     };
 
                     tracing::warn!(
@@ -243,10 +241,7 @@ impl Default for RetryMetrics {
     }
 }
 
-pub async fn with_retry<F, Fut, T>(
-    config: RetryConfig,
-    operation: F,
-) -> Result<T, RetryError>
+pub async fn with_retry<F, Fut, T>(config: RetryConfig, operation: F) -> Result<T, RetryError>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, GoogleAiError>>,
@@ -255,9 +250,7 @@ where
     handler.retry(operation).await
 }
 
-pub async fn with_default_retry<F, Fut, T>(
-    operation: F,
-) -> Result<T, RetryError>
+pub async fn with_default_retry<F, Fut, T>(operation: F) -> Result<T, RetryError>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, GoogleAiError>>,
@@ -294,7 +287,8 @@ mod tests {
                     Ok("success")
                 }
             }
-        }).await;
+        })
+        .await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
@@ -314,7 +308,8 @@ mod tests {
             Err(GoogleAiError::AuthenticationFailed {
                 message: "Invalid API key".to_string(),
             })
-        }).await;
+        })
+        .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -336,7 +331,8 @@ mod tests {
             Err(GoogleAiError::RateLimitExceeded {
                 message: "Rate limited".to_string(),
             })
-        }).await;
+        })
+        .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {

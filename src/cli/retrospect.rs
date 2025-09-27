@@ -1,10 +1,13 @@
-use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::Subcommand;
+use std::sync::Arc;
 
-use crate::database::{DatabaseManager};
-use crate::services::{RetrospectionService, google_ai::{GoogleAiClient, GoogleAiConfig}};
-use crate::models::{RetrospectionAnalysisType, OperationStatus};
+use crate::database::DatabaseManager;
+use crate::models::{OperationStatus, RetrospectionAnalysisType};
+use crate::services::{
+    google_ai::{GoogleAiClient, GoogleAiConfig},
+    RetrospectionService,
+};
 
 #[derive(Subcommand)]
 pub enum RetrospectCommands {
@@ -129,15 +132,20 @@ async fn execute_analysis_for_session(
     analysis_type: RetrospectionAnalysisType,
     background: bool,
 ) -> Result<()> {
-    println!("Starting retrospection analysis for session: {}", session_id);
+    println!(
+        "Starting retrospection analysis for session: {session_id}"
+    );
 
     // Create analysis request
-    let request = service.create_analysis_request(
-        session_id.clone(),
-        analysis_type,
-        None, // created_by
-        None, // custom_prompt handled above
-    ).await.map_err(|e| anyhow::anyhow!("Failed to create analysis request: {}", e))?;
+    let request = service
+        .create_analysis_request(
+            session_id.clone(),
+            analysis_type,
+            None, // created_by
+            None, // custom_prompt handled above
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create analysis request: {}", e))?;
 
     if background {
         println!("Analysis request created: {}", request.id);
@@ -152,11 +160,13 @@ async fn execute_analysis_for_session(
     match service.execute_analysis(request.id.clone()).await {
         Ok(_) => {
             println!("✓ Analysis completed successfully");
-            println!("Use 'retrochat retrospect show {}' to view results", session_id);
+            println!(
+                "Use 'retrochat retrospect show {session_id}' to view results"
+            );
         }
         Err(e) => {
-            println!("✗ Analysis failed: {}", e);
-            return Err(anyhow::anyhow!("Analysis failed: {}", e));
+            println!("✗ Analysis failed: {e}");
+            return Err(anyhow::anyhow!("Analysis failed: {e}"));
         }
     }
 
@@ -212,62 +222,74 @@ async fn show_session_results(
     format: &str,
 ) -> Result<()> {
     // Find analysis requests for this session
-    let requests = service.list_analyses(Some(session_id.to_string()), None).await
+    let requests = service
+        .list_analyses(Some(session_id.to_string()), None)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to list analyses: {}", e))?;
 
     if requests.is_empty() {
-        println!("No retrospection analysis found for session: {}", session_id);
-        println!("Run 'retrochat retrospect execute {}' to analyze this session", session_id);
+        println!(
+            "No retrospection analysis found for session: {}",
+            session_id
+        );
+        println!(
+            "Run 'retrochat retrospect execute {}' to analyze this session",
+            session_id
+        );
         return Ok(());
     }
 
-    println!("=== Retrospection Results for Session: {} ===", session_id);
+    println!("=== Retrospection Results for Session: {session_id} ===");
     println!();
 
     for request in requests {
-        match service.get_analysis_result(request.id.clone()).await.map_err(|e| anyhow::anyhow!("{}", e))? {
-            Some(retrospection) => {
-                match format {
-                    "json" => {
-                        println!("{}", serde_json::to_string_pretty(&retrospection)?);
-                    }
-                    "markdown" => {
-                        println!("## Analysis: {:?}", request.analysis_type);
-                        println!("**Created:** {}", retrospection.created_at);
-                        println!();
-                        println!("### Insights");
-                        println!("{}", retrospection.insights);
-                        println!();
-                        println!("### Reflection");
-                        println!("{}", retrospection.reflection);
-                        println!();
-                        println!("### Recommendations");
-                        println!("{}", retrospection.recommendations);
-                        println!();
-                    }
-                    _ => {
-                        println!("Analysis Type: {:?}", request.analysis_type);
-                        println!("Status: {:?}", request.status);
-                        println!("Created: {}", retrospection.created_at);
-                        if let Some(token_usage) = retrospection.token_usage {
-                            println!("Token Usage: {}", token_usage);
-                        }
-                        println!();
-                        println!("Insights:");
-                        println!("{}", retrospection.insights);
-                        println!();
-                        println!("Reflection:");
-                        println!("{}", retrospection.reflection);
-                        println!();
-                        println!("Recommendations:");
-                        println!("{}", retrospection.recommendations);
-                        println!();
-                    }
+        match service
+            .get_analysis_result(request.id.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+        {
+            Some(retrospection) => match format {
+                "json" => {
+                    println!("{}", serde_json::to_string_pretty(&retrospection)?);
                 }
-            }
+                "markdown" => {
+                    println!("## Analysis: {:?}", request.analysis_type);
+                    println!("**Created:** {}", retrospection.created_at);
+                    println!();
+                    println!("### Insights");
+                    println!("{}", retrospection.insights);
+                    println!();
+                    println!("### Reflection");
+                    println!("{}", retrospection.reflection);
+                    println!();
+                    println!("### Recommendations");
+                    println!("{}", retrospection.recommendations);
+                    println!();
+                }
+                _ => {
+                    println!("Analysis Type: {:?}", request.analysis_type);
+                    println!("Status: {:?}", request.status);
+                    println!("Created: {}", retrospection.created_at);
+                    if let Some(token_usage) = retrospection.token_usage {
+                        println!("Token Usage: {}", token_usage);
+                    }
+                    println!();
+                    println!("Insights:");
+                    println!("{}", retrospection.insights);
+                    println!();
+                    println!("Reflection:");
+                    println!("{}", retrospection.reflection);
+                    println!();
+                    println!("Recommendations:");
+                    println!("{}", retrospection.recommendations);
+                    println!();
+                }
+            },
             None => {
-                println!("Request {} ({:?}) - Status: {:?}",
-                    request.id, request.analysis_type, request.status);
+                println!(
+                    "Request {} ({:?}) - Status: {:?}",
+                    request.id, request.analysis_type, request.status
+                );
                 if let Some(error) = &request.error_message {
                     println!("Error: {}", error);
                 }
@@ -284,7 +306,9 @@ async fn show_all_results(
     format: &str,
     _analysis_type: Option<AnalysisTypeArg>,
 ) -> Result<()> {
-    let requests = service.list_analyses(None, Some(50)).await
+    let requests = service
+        .list_analyses(None, Some(50))
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to list analyses: {}", e))?;
 
     if requests.is_empty() {
@@ -297,25 +321,33 @@ async fn show_all_results(
     println!();
 
     for request in requests {
-        match service.get_analysis_result(request.id.clone()).await.map_err(|e| anyhow::anyhow!("{}", e))? {
+        match service
+            .get_analysis_result(request.id.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+        {
             Some(retrospection) => {
-                println!("Session: {} | Type: {:?} | Status: {:?}",
-                    request.session_id, request.analysis_type, request.status);
+                println!(
+                    "Session: {} | Type: {:?} | Status: {:?}",
+                    request.session_id, request.analysis_type, request.status
+                );
 
                 if format == "summary" || format == "text" {
                     let preview = if retrospection.insights.chars().count() > 100 {
                         let truncated: String = retrospection.insights.chars().take(100).collect();
-                        format!("{}...", truncated)
+                        format!("{truncated}...")
                     } else {
                         retrospection.insights.clone()
                     };
-                    println!("  {}", preview);
+                    println!("  {preview}");
                 }
                 println!();
             }
             None => {
-                println!("Session: {} | Type: {:?} | Status: {:?}",
-                    request.session_id, request.analysis_type, request.status);
+                println!(
+                    "Session: {} | Type: {:?} | Status: {:?}",
+                    request.session_id, request.analysis_type, request.status
+                );
                 if let Some(error) = &request.error_message {
                     println!("  Error: {}", error);
                 }
@@ -327,11 +359,7 @@ async fn show_all_results(
     Ok(())
 }
 
-pub async fn handle_status_command(
-    all: bool,
-    watch: bool,
-    history: bool,
-) -> Result<()> {
+pub async fn handle_status_command(all: bool, watch: bool, history: bool) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     let config = GoogleAiConfig::default();
@@ -354,8 +382,10 @@ pub async fn handle_status_command(
 }
 
 async fn show_current_status(service: &RetrospectionService) -> Result<()> {
-    let active_requests = service.get_active_analyses().await
-        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {}", e))?;
+    let active_requests = service
+        .get_active_analyses()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {e}"))?;
 
     if active_requests.is_empty() {
         println!("No active retrospection operations");
@@ -385,15 +415,19 @@ async fn show_all_active_status(service: &RetrospectionService) -> Result<()> {
 }
 
 async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
-    let all_requests = service.list_analyses(None, Some(100)).await
+    let all_requests = service
+        .list_analyses(None, Some(100))
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get historical analyses: {}", e))?;
 
     println!("=== Retrospection History ===");
     println!();
 
     for request in all_requests {
-        println!("Request: {} | Session: {} | Type: {:?} | Status: {:?}",
-            request.id, request.session_id, request.analysis_type, request.status);
+        println!(
+            "Request: {} | Session: {} | Type: {:?} | Status: {:?}",
+            request.id, request.session_id, request.analysis_type, request.status
+        );
         println!("  Started: {}", request.started_at);
         if let Some(completed_at) = request.completed_at {
             println!("  Completed: {}", completed_at);
@@ -407,10 +441,7 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_cancel_command(
-    request_id: Option<String>,
-    all: bool,
-) -> Result<()> {
+pub async fn handle_cancel_command(request_id: Option<String>, all: bool) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     let config = GoogleAiConfig::default();
@@ -432,8 +463,8 @@ async fn cancel_single_request(service: &RetrospectionService, request_id: &str)
             println!("✓ Successfully cancelled analysis request: {}", request_id);
         }
         Err(e) => {
-            println!("✗ Failed to cancel request: {}", e);
-            return Err(anyhow::anyhow!("Cancellation failed: {}", e));
+            println!("✗ Failed to cancel request: {e}");
+            return Err(anyhow::anyhow!("Cancellation failed: {e}"));
         }
     }
 
@@ -441,8 +472,10 @@ async fn cancel_single_request(service: &RetrospectionService, request_id: &str)
 }
 
 async fn cancel_all_requests(service: &RetrospectionService) -> Result<()> {
-    let active_requests = service.get_active_analyses().await
-        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {}", e))?;
+    let active_requests = service
+        .get_active_analyses()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {e}"))?;
 
     if active_requests.is_empty() {
         println!("No active requests to cancel");
@@ -474,8 +507,10 @@ async fn cancel_all_requests(service: &RetrospectionService) -> Result<()> {
 }
 
 async fn list_cancellable_requests(service: &RetrospectionService) -> Result<()> {
-    let active_requests = service.get_active_analyses().await
-        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {}", e))?;
+    let active_requests = service
+        .get_active_analyses()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get active analyses: {e}"))?;
 
     if active_requests.is_empty() {
         println!("No active requests available to cancel");
@@ -488,8 +523,10 @@ async fn list_cancellable_requests(service: &RetrospectionService) -> Result<()>
     for request in active_requests {
         match request.status {
             OperationStatus::Pending | OperationStatus::Running => {
-                println!("ID: {} | Session: {} | Type: {:?} | Status: {:?}",
-                    request.id, request.session_id, request.analysis_type, request.status);
+                println!(
+                    "ID: {} | Session: {} | Type: {:?} | Status: {:?}",
+                    request.id, request.session_id, request.analysis_type, request.status
+                );
             }
             _ => {} // Skip non-cancellable requests
         }

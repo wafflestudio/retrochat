@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 
 use crate::database::DatabaseManager;
 use crate::models::Retrospection;
@@ -21,8 +21,10 @@ impl RetrospectionRepository {
         let pool = self.db_manager.pool();
 
         let created_at_str = retrospection.created_at.to_rfc3339();
-        let response_text = format!("Insights: {}\n\nReflection: {}\n\nRecommendations: {}",
-            retrospection.insights, retrospection.reflection, retrospection.recommendations);
+        let response_text = format!(
+            "Insights: {}\n\nReflection: {}\n\nRecommendations: {}",
+            retrospection.insights, retrospection.reflection, retrospection.recommendations
+        );
         let response_time_ms = retrospection.response_time.map(|d| d.as_millis() as i32);
 
         sqlx::query!(
@@ -53,19 +55,16 @@ impl RetrospectionRepository {
     ) -> Result<Option<Retrospection>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let row = sqlx::query!(
-            "SELECT * FROM retrospections WHERE id = ?",
-            id
-        )
-        .fetch_optional(pool)
-        .await?;
+        let row = sqlx::query!("SELECT * FROM retrospections WHERE id = ?", id)
+            .fetch_optional(pool)
+            .await?;
 
         if let Some(row) = row {
-            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
-                .with_timezone(&Utc);
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&Utc);
 
             // Parse the combined response_text back into separate fields
-            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+            let (insights, reflection, recommendations) =
+                self.parse_response_text(&row.response_text);
 
             Ok(Some(Retrospection {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
@@ -76,7 +75,9 @@ impl RetrospectionRepository {
                 metadata: row.metadata,
                 created_at,
                 token_usage: row.token_usage.map(|t| t as u32),
-                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+                response_time: row
+                    .response_time_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
             }))
         } else {
             Ok(None)
@@ -98,10 +99,10 @@ impl RetrospectionRepository {
 
         let mut retrospections = Vec::new();
         for row in rows {
-            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
-                .with_timezone(&Utc);
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&Utc);
 
-            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+            let (insights, reflection, recommendations) =
+                self.parse_response_text(&row.response_text);
 
             retrospections.push(Retrospection {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
@@ -112,7 +113,9 @@ impl RetrospectionRepository {
                 metadata: row.metadata,
                 created_at,
                 token_usage: row.token_usage.map(|t| t as u32),
-                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+                response_time: row
+                    .response_time_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
             });
         }
 
@@ -136,10 +139,10 @@ impl RetrospectionRepository {
 
         let mut retrospections = Vec::new();
         for row in rows {
-            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
-                .with_timezone(&Utc);
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&Utc);
 
-            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+            let (insights, reflection, recommendations) =
+                self.parse_response_text(&row.response_text);
 
             retrospections.push(Retrospection {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
@@ -150,7 +153,9 @@ impl RetrospectionRepository {
                 metadata: row.metadata,
                 created_at,
                 token_usage: row.token_usage.map(|t| t as u32),
-                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+                response_time: row
+                    .response_time_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
             });
         }
 
@@ -173,10 +178,10 @@ impl RetrospectionRepository {
 
         let mut retrospections = Vec::new();
         for row in rows {
-            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
-                .with_timezone(&Utc);
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&Utc);
 
-            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+            let (insights, reflection, recommendations) =
+                self.parse_response_text(&row.response_text);
 
             retrospections.push(Retrospection {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
@@ -187,7 +192,9 @@ impl RetrospectionRepository {
                 metadata: row.metadata,
                 created_at,
                 token_usage: row.token_usage.map(|t| t as u32),
-                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+                response_time: row
+                    .response_time_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
             });
         }
 
@@ -200,12 +207,9 @@ impl RetrospectionRepository {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let result = sqlx::query!(
-            "DELETE FROM retrospections WHERE id = ?",
-            id
-        )
-        .execute(pool)
-        .await?;
+        let result = sqlx::query!("DELETE FROM retrospections WHERE id = ?", id)
+            .execute(pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -246,11 +250,9 @@ impl RetrospectionRepository {
     pub async fn count(&self) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let row = sqlx::query!(
-            "SELECT COUNT(*) as count FROM retrospections"
-        )
-        .fetch_one(pool)
-        .await?;
+        let row = sqlx::query!("SELECT COUNT(*) as count FROM retrospections")
+            .fetch_one(pool)
+            .await?;
 
         Ok(row.count as u64)
     }
@@ -291,10 +293,10 @@ impl RetrospectionRepository {
 
         let mut retrospections = Vec::new();
         for row in rows {
-            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
-                .with_timezone(&Utc);
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&Utc);
 
-            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+            let (insights, reflection, recommendations) =
+                self.parse_response_text(&row.response_text);
 
             retrospections.push(Retrospection {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
@@ -305,7 +307,9 @@ impl RetrospectionRepository {
                 metadata: row.metadata,
                 created_at,
                 token_usage: row.token_usage.map(|t| t as u32),
-                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+                response_time: row
+                    .response_time_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64)),
             });
         }
 
@@ -325,9 +329,15 @@ impl RetrospectionRepository {
             if section.starts_with("Insights: ") {
                 insights = section.strip_prefix("Insights: ").unwrap_or("").to_string();
             } else if section.starts_with("Reflection: ") {
-                reflection = section.strip_prefix("Reflection: ").unwrap_or("").to_string();
+                reflection = section
+                    .strip_prefix("Reflection: ")
+                    .unwrap_or("")
+                    .to_string();
             } else if section.starts_with("Recommendations: ") {
-                recommendations = section.strip_prefix("Recommendations: ").unwrap_or("").to_string();
+                recommendations = section
+                    .strip_prefix("Recommendations: ")
+                    .unwrap_or("")
+                    .to_string();
             }
         }
 
@@ -338,7 +348,7 @@ impl RetrospectionRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{Database, ChatSessionRepository, RetrospectRequestRepository};
+    use crate::database::{ChatSessionRepository, Database, RetrospectRequestRepository};
     use crate::models::{ChatSession, LlmProvider, RetrospectRequest, RetrospectionAnalysisType};
     use std::sync::Arc;
 
@@ -348,7 +358,7 @@ mod tests {
         database.initialize().await.unwrap();
 
         let db_manager = Arc::new(database.manager);
-        
+
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&db_manager);
         let session = ChatSession::new(
@@ -388,7 +398,10 @@ mod tests {
         assert_eq!(found_retrospection.request_id, retrospection.request_id);
         assert_eq!(found_retrospection.insights, retrospection.insights);
         assert_eq!(found_retrospection.reflection, retrospection.reflection);
-        assert_eq!(found_retrospection.recommendations, retrospection.recommendations);
+        assert_eq!(
+            found_retrospection.recommendations,
+            retrospection.recommendations
+        );
     }
 
     #[tokio::test]
@@ -397,7 +410,7 @@ mod tests {
         database.initialize().await.unwrap();
 
         let db_manager = Arc::new(database.manager);
-        
+
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&db_manager);
         let session = ChatSession::new(

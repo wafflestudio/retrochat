@@ -6,8 +6,8 @@ pub mod retrospect;
 pub mod tui;
 
 use clap::{Parser, Subcommand};
-use tokio::runtime::Runtime;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 use retrospect::RetrospectCommands;
 
@@ -174,33 +174,33 @@ impl Cli {
                         custom_prompt,
                         all,
                         background,
-                    } => retrospect::handle_execute_command(
-                        session_id,
-                        analysis_type,
-                        custom_prompt,
-                        all,
-                        background,
-                    ).await,
+                    } => {
+                        retrospect::handle_execute_command(
+                            session_id,
+                            analysis_type,
+                            custom_prompt,
+                            all,
+                            background,
+                        )
+                        .await
+                    }
                     RetrospectCommands::Show {
                         session_id,
                         all,
                         format,
                         analysis_type,
-                    } => retrospect::handle_show_command(
-                        session_id,
-                        all,
-                        format,
-                        analysis_type,
-                    ).await,
+                    } => {
+                        retrospect::handle_show_command(session_id, all, format, analysis_type)
+                            .await
+                    }
                     RetrospectCommands::Status {
                         all,
                         watch,
                         history,
                     } => retrospect::handle_status_command(all, watch, history).await,
-                    RetrospectCommands::Cancel {
-                        request_id,
-                        all,
-                    } => retrospect::handle_cancel_command(request_id, all).await,
+                    RetrospectCommands::Cancel { request_id, all } => {
+                        retrospect::handle_cancel_command(request_id, all).await
+                    }
                 },
             }
         })
@@ -211,15 +211,15 @@ impl Cli {
         rt: Arc<Runtime>,
     ) -> anyhow::Result<crate::services::RetrospectionCleanupHandler> {
         use crate::database::DatabaseManager;
-        use crate::services::{RetrospectionService, RetrospectionCleanupHandler, google_ai::{GoogleAiClient, GoogleAiConfig}};
+        use crate::services::{
+            google_ai::{GoogleAiClient, GoogleAiConfig},
+            RetrospectionCleanupHandler, RetrospectionService,
+        };
 
         // Create the necessary components synchronously
-        let db_manager = rt.block_on(async {
-            DatabaseManager::new("retrochat.db").await
-        })?;
+        let db_manager = rt.block_on(async { DatabaseManager::new("retrochat.db").await })?;
 
-        let api_key = std::env::var("GOOGLE_AI_API_KEY")
-            .unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
+        let api_key = std::env::var("GOOGLE_AI_API_KEY").unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
 
         let google_ai_config = if api_key.is_empty() {
             GoogleAiConfig::default()
@@ -227,7 +227,10 @@ impl Cli {
             GoogleAiConfig::new(api_key)
         };
         let google_ai_client = GoogleAiClient::new(google_ai_config)?;
-        let service = Arc::new(RetrospectionService::new(Arc::new(db_manager), google_ai_client));
+        let service = Arc::new(RetrospectionService::new(
+            Arc::new(db_manager),
+            google_ai_client,
+        ));
 
         Ok(RetrospectionCleanupHandler::new(service, rt))
     }

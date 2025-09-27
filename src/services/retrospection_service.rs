@@ -1,8 +1,14 @@
 use std::sync::Arc;
 
-use crate::database::{DatabaseManager, RetrospectRequestRepository, RetrospectionRepository, ChatSessionRepository, MessageRepository};
-use crate::models::{RetrospectRequest, Retrospection, RetrospectionAnalysisType, OperationStatus, ChatSession, Message, MessageRole};
-use crate::services::google_ai::{GoogleAiClient, AnalysisRequest, AnalysisResponse};
+use crate::database::{
+    ChatSessionRepository, DatabaseManager, MessageRepository, RetrospectRequestRepository,
+    RetrospectionRepository,
+};
+use crate::models::{
+    ChatSession, Message, MessageRole, OperationStatus, RetrospectRequest, Retrospection,
+    RetrospectionAnalysisType,
+};
+use crate::services::google_ai::{AnalysisRequest, AnalysisResponse, GoogleAiClient};
 
 pub struct RetrospectionService {
     google_ai_client: GoogleAiClient,
@@ -13,10 +19,7 @@ pub struct RetrospectionService {
 }
 
 impl RetrospectionService {
-    pub fn new(
-        db_manager: Arc<DatabaseManager>,
-        google_ai_client: GoogleAiClient,
-    ) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
         let retrospection_repo = RetrospectionRepository::new(db_manager.clone());
         let session_repo = ChatSessionRepository::new(&*db_manager);
@@ -52,12 +55,7 @@ impl RetrospectionService {
             }
         }
 
-        let request = RetrospectRequest::new(
-            session_id,
-            analysis_type,
-            created_by,
-            custom_prompt,
-        );
+        let request = RetrospectRequest::new(session_id, analysis_type, created_by, custom_prompt);
 
         self.request_repo.create(&request).await?;
 
@@ -69,7 +67,10 @@ impl RetrospectionService {
         request_id: String,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Get the request from database
-        let mut request = self.request_repo.find_by_id(&request_id).await?
+        let mut request = self
+            .request_repo
+            .find_by_id(&request_id)
+            .await?
             .ok_or("Request not found")?;
 
         // Check if request is already running or completed
@@ -113,7 +114,10 @@ impl RetrospectionService {
         &self,
         request_id: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut request = self.request_repo.find_by_id(&request_id).await?
+        let mut request = self
+            .request_repo
+            .find_by_id(&request_id)
+            .await?
             .ok_or("Request not found")?;
 
         // Only allow cancelling pending or running requests
@@ -124,7 +128,7 @@ impl RetrospectionService {
 
                 Ok(())
             }
-            _ => Err(format!("Cannot cancel request with status: {:?}", request.status).into())
+            _ => Err(format!("Cannot cancel request with status: {:?}", request.status).into()),
         }
     }
 
@@ -132,7 +136,9 @@ impl RetrospectionService {
         &self,
         request_id: String,
     ) -> Result<RetrospectRequest, Box<dyn std::error::Error + Send + Sync>> {
-        self.request_repo.find_by_id(&request_id).await?
+        self.request_repo
+            .find_by_id(&request_id)
+            .await?
             .ok_or("Request not found".into())
     }
 
@@ -140,7 +146,10 @@ impl RetrospectionService {
         &self,
         request_id: String,
     ) -> Result<Option<Retrospection>, Box<dyn std::error::Error + Send + Sync>> {
-        let retrospections = self.retrospection_repo.find_by_request_id(&request_id).await?;
+        let retrospections = self
+            .retrospection_repo
+            .find_by_request_id(&request_id)
+            .await?;
 
         // Return the most recent retrospection for this request
         Ok(retrospections.into_iter().next())
@@ -152,12 +161,8 @@ impl RetrospectionService {
         limit: Option<usize>,
     ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
         match session_id {
-            Some(session_id) => {
-                self.request_repo.find_by_session_id(&session_id).await
-            }
-            None => {
-                self.request_repo.find_recent(limit).await
-            }
+            Some(session_id) => self.request_repo.find_by_session_id(&session_id).await,
+            None => self.request_repo.find_recent(limit).await,
         }
     }
 
@@ -192,7 +197,10 @@ impl RetrospectionService {
         let retrospections_deleted = self.retrospection_repo.delete_before(cutoff_date).await?;
 
         // Then clean up old completed requests
-        let requests_deleted = self.request_repo.delete_completed_before(cutoff_date).await?;
+        let requests_deleted = self
+            .request_repo
+            .delete_completed_before(cutoff_date)
+            .await?;
 
         Ok(retrospections_deleted + requests_deleted)
     }
@@ -227,11 +235,17 @@ impl RetrospectionService {
         request: &RetrospectRequest,
     ) -> Result<AnalysisData, Box<dyn std::error::Error + Send + Sync>> {
         // Get the chat session
-        let session = self.session_repo.get_by_id(&uuid::Uuid::parse_str(&request.session_id)?).await?
+        let session = self
+            .session_repo
+            .get_by_id(&uuid::Uuid::parse_str(&request.session_id)?)
+            .await?
             .ok_or("Chat session not found")?;
 
         // Get messages for the session
-        let messages = self.message_repo.get_by_session_id(&uuid::Uuid::parse_str(&request.session_id)?).await?;
+        let messages = self
+            .message_repo
+            .get_by_session_id(&uuid::Uuid::parse_str(&request.session_id)?)
+            .await?;
 
         // Calculate session metrics
         let metrics = self.calculate_session_metrics(&session, &messages)?;
@@ -309,7 +323,10 @@ impl RetrospectionService {
         }
     }
 
-    fn build_context(&self, data: &AnalysisData) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    fn build_context(
+        &self,
+        data: &AnalysisData,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = String::new();
 
         // Session information
@@ -377,7 +394,7 @@ impl RetrospectionService {
         // Parse the JSON response to extract insights, reflection, and recommendations
         // For now, we'll use the response text directly and create a simple structure
         // In a real implementation, this would parse the JSON and extract structured data
-        
+
         let insights = response.text.clone();
         let reflection = "Analysis completed successfully".to_string();
         let recommendations = "Review the insights above for actionable next steps".to_string();
@@ -399,8 +416,14 @@ impl RetrospectionService {
         messages: &[Message],
     ) -> Result<SessionMetrics, Box<dyn std::error::Error + Send + Sync>> {
         let message_count = messages.len();
-        let user_messages: Vec<_> = messages.iter().filter(|m| m.role == MessageRole::User).collect();
-        let assistant_messages: Vec<_> = messages.iter().filter(|m| m.role == MessageRole::Assistant).collect();
+        let user_messages: Vec<_> = messages
+            .iter()
+            .filter(|m| m.role == MessageRole::User)
+            .collect();
+        let assistant_messages: Vec<_> = messages
+            .iter()
+            .filter(|m| m.role == MessageRole::Assistant)
+            .collect();
 
         let total_chars: usize = messages.iter().map(|m| m.content.len()).sum();
         let avg_message_length = if message_count > 0 {
@@ -409,12 +432,13 @@ impl RetrospectionService {
             0
         };
 
-        let duration_minutes = if let (Some(first), Some(last)) = (messages.first(), messages.last()) {
-            let duration = last.timestamp - first.timestamp;
-            duration.num_minutes() as u32
-        } else {
-            0
-        };
+        let duration_minutes =
+            if let (Some(first), Some(last)) = (messages.first(), messages.last()) {
+                let duration = last.timestamp - first.timestamp;
+                duration.num_minutes() as u32
+            } else {
+                0
+            };
 
         Ok(SessionMetrics {
             message_count: message_count as u32,
@@ -464,7 +488,10 @@ impl Drop for RetrospectionCleanupHandler {
         let _ = self.runtime.block_on(async move {
             match service.cancel_all_active_analyses().await {
                 Ok(count) if count > 0 => {
-                    tracing::info!(count = count, "Cancelled running retrospection requests due to CLI exit");
+                    tracing::info!(
+                        count = count,
+                        "Cancelled running retrospection requests due to CLI exit"
+                    );
                 }
                 Ok(_) => {
                     // No active requests to cancel
@@ -510,15 +537,21 @@ mod tests {
         );
 
         let session_id = test_session.id.to_string();
-        let request = service.create_analysis_request(
-            session_id.clone(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        ).await.unwrap();
+        let request = service
+            .create_analysis_request(
+                session_id.clone(),
+                RetrospectionAnalysisType::UserInteractionAnalysis,
+                Some("test_user".to_string()),
+                None,
+            )
+            .await
+            .unwrap();
 
         assert_eq!(request.session_id, session_id);
-        assert_eq!(request.analysis_type, RetrospectionAnalysisType::UserInteractionAnalysis);
+        assert_eq!(
+            request.analysis_type,
+            RetrospectionAnalysisType::UserInteractionAnalysis
+        );
         assert_eq!(request.status, OperationStatus::Pending);
     }
 
@@ -549,14 +582,20 @@ mod tests {
         );
 
         let session_id = test_session.id.to_string();
-        let request = service.create_analysis_request(
-            session_id,
-            RetrospectionAnalysisType::CollaborationInsights,
-            Some("test_user".to_string()),
-            None,
-        ).await.unwrap();
+        let request = service
+            .create_analysis_request(
+                session_id,
+                RetrospectionAnalysisType::CollaborationInsights,
+                Some("test_user".to_string()),
+                None,
+            )
+            .await
+            .unwrap();
 
-        let status = service.get_analysis_status(request.id.clone()).await.unwrap();
+        let status = service
+            .get_analysis_status(request.id.clone())
+            .await
+            .unwrap();
         assert_eq!(status.id, request.id);
         assert_eq!(status.status, OperationStatus::Pending);
     }
