@@ -227,13 +227,9 @@ impl QueryService {
                 .ok()
                 .and_then(|messages| {
                     messages.first().map(|msg| {
-                        let preview = if msg.content.len() > 100 {
-                            // Find a safe character boundary
-                            let mut end = 97;
-                            while end > 0 && !msg.content.is_char_boundary(end) {
-                                end -= 1;
-                            }
-                            format!("{}...", &msg.content[..end])
+                        let preview = if msg.content.chars().count() > 100 {
+                            let truncated: String = msg.content.chars().take(97).collect();
+                            format!("{}...", truncated)
                         } else {
                             msg.content.clone()
                         };
@@ -322,13 +318,9 @@ impl QueryService {
                 .flatten();
 
             // Create content snippet
-            let content_snippet = if message.content.len() > 200 {
-                // Find a safe character boundary
-                let mut end = 197;
-                while end > 0 && !message.content.is_char_boundary(end) {
-                    end -= 1;
-                }
-                format!("...{}...", &message.content[..end])
+            let content_snippet = if message.content.chars().count() > 200 {
+                let truncated: String = message.content.chars().take(197).collect();
+                format!("...{}...", truncated)
             } else {
                 message.content.clone()
             };

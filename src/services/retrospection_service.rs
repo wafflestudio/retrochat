@@ -327,11 +327,8 @@ impl RetrospectionService {
                 MessageRole::System => "System",
             };
             let content_preview = if message.content.len() > 200 {
-                let mut end = 200;
-                while !message.content.is_char_boundary(end) && end > 0 {
-                    end -= 1;
-                }
-                format!("{}...", &message.content[..end])
+                let truncated: String = message.content.chars().take(200).collect();
+                format!("{}...", truncated)
             } else {
                 message.content.clone()
             };

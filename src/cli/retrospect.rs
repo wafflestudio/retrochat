@@ -303,8 +303,9 @@ async fn show_all_results(
                     request.session_id, request.analysis_type, request.status);
 
                 if format == "summary" || format == "text" {
-                    let preview = if retrospection.insights.len() > 100 {
-                        format!("{}...", &retrospection.insights[..100])
+                    let preview = if retrospection.insights.chars().count() > 100 {
+                        let truncated: String = retrospection.insights.chars().take(100).collect();
+                        format!("{}...", truncated)
                     } else {
                         retrospection.insights.clone()
                     };

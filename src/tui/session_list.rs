@@ -249,10 +249,11 @@ impl SessionListWidget {
         };
 
         let project_text = session.project.as_deref().unwrap_or("No Project");
-        let start_time = if session.start_time.len() >= 16 {
-            &session.start_time[0..16]
+        let start_time = if session.start_time.chars().count() >= 16 {
+            let truncated: String = session.start_time.chars().take(16).collect();
+            truncated
         } else {
-            &session.start_time
+            session.start_time.clone()
         };
 
         Line::from(vec![

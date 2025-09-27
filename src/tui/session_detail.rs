@@ -370,10 +370,12 @@ impl SessionDetailWidget {
                 } else {
                     // Handle very long words by breaking them
                     let mut remaining = word;
-                    while remaining.len() > width {
+                    while remaining.chars().count() > width {
                         if width > 0 {
-                            lines.push(remaining[..width].to_string());
-                            remaining = &remaining[width..];
+                            let mut chars = remaining.chars();
+                            let chunk: String = chars.by_ref().take(width).collect();
+                            lines.push(chunk);
+                            remaining = chars.as_str();
                         } else {
                             break;
                         }
@@ -397,10 +399,12 @@ impl SessionDetailWidget {
     }
 
     fn truncate_text(&self, text: &str, max_len: usize) -> String {
-        if text.len() <= max_len {
+        if text.chars().count() <= max_len {
             text.to_string()
         } else {
-            format!("{}...", &text[0..max_len.saturating_sub(3)])
+            let truncate_len = max_len.saturating_sub(3);
+            let truncated: String = text.chars().take(truncate_len).collect();
+            format!("{}...", truncated)
         }
     }
 
