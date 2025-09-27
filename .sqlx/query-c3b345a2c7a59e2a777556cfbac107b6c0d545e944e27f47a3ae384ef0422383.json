@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM retrospect_requests WHERE session_id = ? ORDER BY started_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "session_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "analysis_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "completed_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "custom_prompt",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "c3b345a2c7a59e2a777556cfbac107b6c0d545e944e27f47a3ae384ef0422383"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM retrospections WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3f90104d15a0c90cac0a856bd3add00a94034c9bd416ff0eb4bd8a7ac19e75c7"
+}

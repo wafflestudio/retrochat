@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT r.* FROM retrospections r\n            JOIN retrospect_requests rr ON r.retrospect_request_id = rr.id\n            WHERE rr.session_id = ?\n            ORDER BY r.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "retrospect_request_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "response_text",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "token_usage",
+        "ordinal": 3,
+        "type_info": "Int64"
+      },
+      {
+        "name": "response_time_ms",
+        "ordinal": 4,
+        "type_info": "Int64"
+      },
+      {
+        "name": "model_used",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "a35a4d0d5e06349722bb78331780076d885b48fc668fd6ca1fc606534e0910f0"
+}
