@@ -74,7 +74,7 @@ impl RetrospectionWidget {
         self.all_requests = self.retrospection_service.list_analyses(None, Some(100)).await
             .map_err(|e| anyhow::anyhow!("Failed to load requests: {}", e))?;
 
-        // Sort requests: active first (pending, running), then completed/failed/cancelled
+        // Sort requests: active first (pending, running), then by creation time (newest first)
         self.all_requests.sort_by(|a, b| {
             use OperationStatus::*;
             let a_priority = match a.status {
@@ -91,7 +91,12 @@ impl RetrospectionWidget {
                 Cancelled => 3,
                 Completed => 4,
             };
-            a_priority.cmp(&b_priority)
+
+            // First sort by status priority, then by creation time (newest first)
+            match a_priority.cmp(&b_priority) {
+                std::cmp::Ordering::Equal => b.started_at.cmp(&a.started_at), // Reverse order for newest first
+                other => other,
+            }
         });
 
         Ok(())
@@ -209,11 +214,61 @@ impl RetrospectionWidget {
                     OperationStatus::Cancelled => Color::Gray,
                 };
 
+                // Format time as relative or absolute
+                let time_str = {
+                    let elapsed = chrono::Utc::now() - request.started_at;
+                    if elapsed.num_hours() < 24 {
+                        if elapsed.num_hours() > 0 {
+                            format!("{}h ago", elapsed.num_hours())
+                        } else if elapsed.num_minutes() > 0 {
+                            format!("{}m ago", elapsed.num_minutes())
+                        } else {
+                            "Just now".to_string()
+                        }
+                    } else {
+                        request.started_at.format("%m/%d %H:%M").to_string()
+                    }
+                };
+
+                // Get analysis type abbreviation
+                let analysis_abbrev = match request.analysis_type {
+                    RetrospectionAnalysisType::UserInteractionAnalysis => "UserInt",
+                    RetrospectionAnalysisType::CollaborationInsights => "Collab",
+                    RetrospectionAnalysisType::QuestionQuality => "Question",
+                    RetrospectionAnalysisType::TaskBreakdown => "TaskBreak",
+                    RetrospectionAnalysisType::FollowUpPatterns => "FollowUp",
+                    RetrospectionAnalysisType::Custom(_) => "Custom",
+                };
+
+                // Status indicator
+                let status_indicator = match request.status {
+                    OperationStatus::Pending => "[P]",
+                    OperationStatus::Running => "[R]",
+                    OperationStatus::Completed => "[C]",
+                    OperationStatus::Failed => "[F]",
+                    OperationStatus::Cancelled => "[X]",
+                };
+
+                // Duration info for completed/failed requests
+                let duration_info = if let Some(completed_at) = request.completed_at {
+                    let duration = completed_at - request.started_at;
+                    if duration.num_minutes() > 0 {
+                        format!(" ({}m)", duration.num_minutes())
+                    } else {
+                        format!(" ({}s)", duration.num_seconds())
+                    }
+                } else {
+                    String::new()
+                };
+
                 let content = format!(
-                    "{} | {} | {}",
+                    "{:3} {:8} | {:8} | {:8} | {:9}{}",
+                    status_indicator,
                     request.session_id.chars().take(8).collect::<String>(),
-                    request.analysis_type,
-                    request.status
+                    analysis_abbrev,
+                    time_str,
+                    format!("{}", request.status),
+                    duration_info
                 );
 
                 ListItem::new(Line::from(vec![
@@ -223,7 +278,7 @@ impl RetrospectionWidget {
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Retrospection Requests"))
+            .block(Block::default().borders(Borders::ALL).title("St  Session  | Type     | Time     | Status   | Duration"))
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
@@ -401,7 +456,7 @@ impl RetrospectionWidget {
                 // Use the service to cancel the request
                 if let Err(e) = self.retrospection_service.cancel_analysis(request.id.clone()).await {
                     // Handle error if needed
-                    eprintln!("Failed to cancel request: {}", e);
+                    tracing::error!(error = %e, "Failed to cancel request");
                 } else {
                     // Refresh to update the UI
                     self.refresh().await?;
@@ -420,7 +475,7 @@ impl RetrospectionWidget {
 
                 task::spawn(async move {
                     if let Err(e) = service_clone.execute_analysis(request_id).await {
-                        eprintln!("Background rerun analysis failed: {}", e);
+                        tracing::error!(error = %e, "Background rerun analysis failed");
                     }
                 });
             }

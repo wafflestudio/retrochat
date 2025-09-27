@@ -76,7 +76,7 @@ impl SessionDetailWidget {
                     self.load_retrospections().await;
                 }
                 Err(e) => {
-                    eprintln!("Failed to load session details: {e}");
+                    tracing::error!(error = %e, "Failed to load session details");
                 }
             }
 
@@ -471,7 +471,7 @@ impl SessionDetailWidget {
                     self.retrospections = retrospections;
                 }
                 Err(e) => {
-                    eprintln!("Failed to load retrospections: {e}");
+                    tracing::error!(error = %e, "Failed to load retrospections");
                     self.retrospections.clear();
                 }
             }

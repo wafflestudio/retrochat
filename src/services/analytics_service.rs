@@ -104,7 +104,7 @@ impl AnalyticsService {
         let session_repo = ChatSessionRepository::new(&self.db_manager);
         let message_repo = MessageRepository::new(&self.db_manager);
 
-        println!("Generating usage insights...");
+        tracing::info!("Generating usage insights...");
 
         // Basic counts
         let sessions = session_repo.get_all().await?;
@@ -164,7 +164,7 @@ impl AnalyticsService {
         // Session duration stats
         let session_duration_stats = self.calculate_duration_stats(&sessions).await?;
 
-        println!("✓ Generated comprehensive usage insights");
+        tracing::info!("Generated comprehensive usage insights");
 
         Ok(UsageInsights {
             total_sessions,
@@ -411,7 +411,7 @@ impl AnalyticsService {
         let file_size = file_metadata.len() as i64;
         let export_duration = start_time.elapsed().as_millis() as i32;
 
-        println!("✓ Exported data to: {output_file}");
+        tracing::info!(output_file = %output_file, "Exported data successfully");
 
         Ok(ExportResponse {
             export_id: format!("export_{}", Utc::now().timestamp()),
@@ -553,34 +553,6 @@ impl AnalyticsService {
         Ok(())
     }
 
-    pub async fn print_insights_summary(&self) -> Result<()> {
-        let insights = self.generate_insights().await?;
-
-        println!("\nUsage Insights Summary");
-        println!("======================");
-        println!("Total Sessions: {}", insights.total_sessions);
-        println!("Total Messages: {}", insights.total_messages);
-        println!("Total Tokens: {}", insights.total_tokens);
-
-        if !insights.date_range.start_date.is_empty() && !insights.date_range.end_date.is_empty() {
-            println!(
-                "Date Range: {} to {} ({} days)",
-                insights.date_range.start_date, insights.date_range.end_date, insights.span_days
-            );
-        }
-
-        println!("\nProvider Breakdown:");
-        for (provider, stats) in &insights.provider_breakdown {
-            println!(
-                "  {}: {} sessions ({:.1}%)",
-                provider, stats.sessions, stats.percentage_of_total
-            );
-        }
-
-        println!("\nFor detailed analysis, use: retrochat analyze export json");
-
-        Ok(())
-    }
 }
 
 impl Default for AnalyticsService {

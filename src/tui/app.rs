@@ -42,6 +42,8 @@ pub struct AppState {
     pub active_analysis_requests: Vec<String>, // Track active request IDs
     pub error_dialog: Option<String>, // Error message to display in dialog
     pub processing_status: Option<String>, // Status message for background processing
+    pub spinner_frame: usize, // Current frame of the spinner animation
+    pub last_spinner_update: Instant, // Last time the spinner was updated
 }
 
 impl AppState {
@@ -56,6 +58,8 @@ impl AppState {
             active_analysis_requests: Vec::new(),
             error_dialog: None,
             processing_status: None,
+            spinner_frame: 0,
+            last_spinner_update: Instant::now(),
         }
     }
 
@@ -120,11 +124,27 @@ impl AppState {
             self.processing_status = None;
         } else {
             let count = self.active_analysis_requests.len();
-            self.processing_status = Some(format!("{} request{} processing...",
+            let spinner = self.get_spinner_char();
+            self.processing_status = Some(format!("{} {} request{} processing...",
+                spinner,
                 count,
                 if count == 1 { "" } else { "s" }
             ));
         }
+    }
+
+    pub fn advance_spinner(&mut self) {
+        self.spinner_frame = (self.spinner_frame + 1) % 8;
+        self.last_spinner_update = Instant::now();
+    }
+
+    pub fn should_update_spinner(&self) -> bool {
+        self.last_spinner_update.elapsed() >= Duration::from_millis(150)
+    }
+
+    fn get_spinner_char(&self) -> char {
+        const SPINNER_CHARS: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+        SPINNER_CHARS[self.spinner_frame]
     }
 }
 
@@ -204,6 +224,12 @@ impl App {
             // Check if we should quit
             if self.state.should_quit {
                 break;
+            }
+
+            // Advance spinner animation for processing status (throttled to ~6.7 FPS)
+            if self.state.processing_status.is_some() && self.state.should_update_spinner() {
+                self.state.advance_spinner();
+                self.state.update_processing_status();
             }
 
             // Auto-refresh data periodically - frequent refresh for active views
@@ -329,7 +355,7 @@ impl App {
                                     let request_id = request.id.clone();
                                     task::spawn(async move {
                                         if let Err(e) = service_clone.execute_analysis(request_id).await {
-                                            eprintln!("Background analysis failed: {}", e);
+                                            tracing::error!(error = %e, "Background analysis failed");
                                         }
                                     });
                                 }
@@ -535,7 +561,7 @@ impl App {
 
         // Add processing status if present
         if let Some(ref status) = self.state.processing_status {
-            key_hints = format!("{} | 🔄 {}", key_hints, status);
+            key_hints = format!("{} | {}", key_hints, status);
         }
 
         let footer = Paragraph::new(key_hints)

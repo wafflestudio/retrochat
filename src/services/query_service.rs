@@ -1,4 +1,4 @@
-use crate::database::{ChatSessionRepository, DatabaseManager};
+use crate::database::{ChatSessionRepository, DatabaseManager, RetrospectionRepository};
 use crate::models::{ChatSession, Message};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -49,6 +49,7 @@ pub struct SessionSummary {
     pub message_count: i32,
     pub total_tokens: Option<i32>,
     pub first_message_preview: String,
+    pub has_retrospection: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -217,6 +218,7 @@ impl QueryService {
 
         // Convert to SessionSummary format with actual first message preview
         let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let retrospection_repo = RetrospectionRepository::new(self.db_manager.clone());
         let mut sessions = Vec::new();
 
         for session in paginated_sessions {
@@ -238,6 +240,13 @@ impl QueryService {
                 })
                 .unwrap_or_else(|| "No messages available".to_string());
 
+            // Check if session has retrospection results
+            let has_retrospection = retrospection_repo
+                .get_by_session_id(&session.id.to_string())
+                .await
+                .map(|retrospections| !retrospections.is_empty())
+                .unwrap_or(false);
+
             sessions.push(SessionSummary {
                 session_id: session.id.to_string(),
                 provider: session.provider.to_string(),
@@ -250,6 +259,7 @@ impl QueryService {
                 message_count: session.message_count as i32,
                 total_tokens: session.token_count.map(|t| t as i32),
                 first_message_preview,
+                has_retrospection,
             });
         }
 

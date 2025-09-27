@@ -145,7 +145,7 @@ impl GeminiParser {
                 Ok((session, messages)) => results.push((session, messages)),
                 Err(e) => {
                     // Log error but continue with other conversations
-                    eprintln!("Warning: Failed to parse conversation {index}: {e}");
+                    tracing::warn!(error = %e, index = index, "Failed to parse conversation");
                     continue;
                 }
             }

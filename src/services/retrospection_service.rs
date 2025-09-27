@@ -464,13 +464,13 @@ impl Drop for RetrospectionCleanupHandler {
         let _ = self.runtime.block_on(async move {
             match service.cancel_all_active_analyses().await {
                 Ok(count) if count > 0 => {
-                    eprintln!("Cancelled {} running retrospection requests due to CLI exit", count);
+                    tracing::info!(count = count, "Cancelled running retrospection requests due to CLI exit");
                 }
                 Ok(_) => {
                     // No active requests to cancel
                 }
                 Err(e) => {
-                    eprintln!("Warning: Failed to cancel active retrospection requests: {}", e);
+                    tracing::warn!(error = %e, "Failed to cancel active retrospection requests");
                 }
             }
         });
