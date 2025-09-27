@@ -80,9 +80,6 @@ impl RetrospectionService {
             OperationStatus::Completed => {
                 return Err("Request is already completed".into());
             }
-            OperationStatus::Cancelled => {
-                return Err("Request was cancelled".into());
-            }
             _ => {}
         }
 

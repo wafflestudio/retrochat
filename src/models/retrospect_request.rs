@@ -143,6 +143,13 @@ impl RetrospectRequest {
         self.completed_at = Some(Utc::now());
     }
 
+    pub fn mark_pending(&mut self) {
+        self.status = OperationStatus::Pending;
+        self.completed_at = None;
+        self.error_message = None;
+        self.started_at = Utc::now();
+    }
+
     pub fn duration(&self) -> Option<chrono::Duration> {
         self.completed_at
             .map(|completed| completed - self.started_at)

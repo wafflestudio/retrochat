@@ -25,8 +25,7 @@ pub struct RetrospectionProgress {
 }
 
 pub struct RetrospectionWidget {
-    active_requests: Vec<RetrospectRequest>,
-    completed_requests: Vec<RetrospectRequest>,
+    all_requests: Vec<RetrospectRequest>,
     selected_index: usize,
     show_details: bool,
     selected_session_id: Option<String>,
@@ -45,8 +44,7 @@ impl RetrospectionWidget {
         let (progress_sender, progress_receiver) = mpsc::unbounded_channel();
 
         Self {
-            active_requests: Vec::new(),
-            completed_requests: Vec::new(),
+            all_requests: Vec::new(),
             selected_index: 0,
             show_details: false,
             selected_session_id: None,
@@ -72,23 +70,28 @@ impl RetrospectionWidget {
         }
 
         // Load all requests from database
-        let all_requests = self.retrospection_service.list_analyses(None, Some(100)).await
+        self.all_requests = self.retrospection_service.list_analyses(None, Some(100)).await
             .map_err(|e| anyhow::anyhow!("Failed to load requests: {}", e))?;
 
-        // Separate active and completed requests
-        self.active_requests.clear();
-        self.completed_requests.clear();
-
-        for request in all_requests {
-            match request.status {
-                OperationStatus::Pending | OperationStatus::Running => {
-                    self.active_requests.push(request);
-                }
-                OperationStatus::Completed | OperationStatus::Failed | OperationStatus::Cancelled => {
-                    self.completed_requests.push(request);
-                }
-            }
-        }
+        // Sort requests: active first (pending, running), then completed/failed/cancelled
+        self.all_requests.sort_by(|a, b| {
+            use OperationStatus::*;
+            let a_priority = match a.status {
+                Pending => 0,
+                Running => 1,
+                Failed => 2,
+                Cancelled => 3,
+                Completed => 4,
+            };
+            let b_priority = match b.status {
+                Pending => 0,
+                Running => 1,
+                Failed => 2,
+                Cancelled => 3,
+                Completed => 4,
+            };
+            a_priority.cmp(&b_priority)
+        });
 
         Ok(())
     }
@@ -104,9 +107,6 @@ impl RetrospectionWidget {
             KeyCode::Enter => {
                 self.toggle_details().await?;
             }
-            KeyCode::Char('r') => {
-                self.refresh().await?;
-            }
             KeyCode::Char('c') => {
                 self.cancel_selected_request().await?;
             }
@@ -115,6 +115,9 @@ impl RetrospectionWidget {
             }
             KeyCode::Char('v') => {
                 self.view_retrospection_result().await?;
+            }
+            KeyCode::Char('r') => {
+                self.rerun_selected_request().await?;
             }
             _ => {}
         }
@@ -162,12 +165,14 @@ impl RetrospectionWidget {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let active_count = self.active_requests.len();
-        let completed_count = self.completed_requests.len();
+        let active_count = self.all_requests.iter()
+            .filter(|r| matches!(r.status, OperationStatus::Pending | OperationStatus::Running))
+            .count();
+        let completed_count = self.all_requests.len() - active_count;
 
         let header_text = format!(
-            "Retrospection Status - Active: {} | Completed: {} | Press 'd' for details",
-            active_count, completed_count
+            "Retrospection Status - Active: {} | Completed: {} | Total: {} | Press 'd' for details",
+            active_count, completed_count, self.all_requests.len()
         );
 
         let header = Paragraph::new(header_text)
@@ -182,23 +187,9 @@ impl RetrospectionWidget {
     }
 
     fn render_request_list(&mut self, f: &mut Frame, area: Rect) {
-        // Split area into two sections: active and completed
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(50), // Active requests
-                Constraint::Percentage(50), // Completed requests
-            ])
-            .split(area);
-
-        self.render_active_requests(f, chunks[0]);
-        self.render_completed_requests(f, chunks[1]);
-    }
-
-    fn render_active_requests(&mut self, f: &mut Frame, area: Rect) {
-        if self.active_requests.is_empty() {
-            let empty_msg = Paragraph::new("No active retrospection requests\n\nPress 'r' to refresh")
-                .block(Block::default().borders(Borders::ALL).title("Active Requests"))
+        if self.all_requests.is_empty() {
+            let empty_msg = Paragraph::new("No retrospection requests\n\n(Auto-refreshes every 2 seconds)")
+                .block(Block::default().borders(Borders::ALL).title("Retrospection Requests"))
                 .style(Style::default().fg(Color::Gray))
                 .wrap(Wrap { trim: true });
 
@@ -206,7 +197,7 @@ impl RetrospectionWidget {
             return;
         }
 
-        let items: Vec<ListItem> = self.active_requests
+        let items: Vec<ListItem> = self.all_requests
             .iter()
             .map(|request| {
                 let status_color = match request.status {
@@ -231,83 +222,23 @@ impl RetrospectionWidget {
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Active Requests"))
+            .block(Block::default().borders(Borders::ALL).title("Retrospection Requests"))
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
                     .add_modifier(Modifier::BOLD),
             );
 
-        // Only highlight if we're in the active section
-        let total_requests = self.active_requests.len() + self.completed_requests.len();
-        if self.selected_index < self.active_requests.len() && total_requests > 0 {
-            let mut list_state = ListState::default();
+        let mut list_state = ListState::default();
+        if !self.all_requests.is_empty() && self.selected_index < self.all_requests.len() {
             list_state.select(Some(self.selected_index));
-            f.render_stateful_widget(list, area, &mut list_state);
-        } else {
-            f.render_widget(list, area);
         }
+        f.render_stateful_widget(list, area, &mut list_state);
     }
 
-    fn render_completed_requests(&mut self, f: &mut Frame, area: Rect) {
-        if self.completed_requests.is_empty() {
-            let empty_msg = Paragraph::new("No completed retrospection requests")
-                .block(Block::default().borders(Borders::ALL).title("Completed Requests"))
-                .style(Style::default().fg(Color::Gray))
-                .wrap(Wrap { trim: true });
-
-            f.render_widget(empty_msg, area);
-            return;
-        }
-
-        let items: Vec<ListItem> = self.completed_requests
-            .iter()
-            .map(|request| {
-                let status_color = match request.status {
-                    OperationStatus::Completed => Color::Green,
-                    OperationStatus::Failed => Color::Red,
-                    OperationStatus::Cancelled => Color::Gray,
-                    _ => Color::White,
-                };
-
-                let content = format!(
-                    "{} | {} | {}",
-                    request.session_id.chars().take(8).collect::<String>(),
-                    request.analysis_type,
-                    request.status
-                );
-
-                ListItem::new(Line::from(vec![
-                    Span::styled(content, Style::default().fg(status_color)),
-                ]))
-            })
-            .collect();
-
-        let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Completed Requests"))
-            .highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            );
-
-        // Only highlight if we're in the completed section
-        let active_count = self.active_requests.len();
-        if self.selected_index >= active_count && self.selected_index < active_count + self.completed_requests.len() {
-            let mut list_state = ListState::default();
-            list_state.select(Some(self.selected_index - active_count));
-            f.render_stateful_widget(list, area, &mut list_state);
-        } else {
-            f.render_widget(list, area);
-        }
-    }
 
     fn render_request_details(&self, f: &mut Frame, area: Rect) {
-        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
-            .chain(self.completed_requests.iter())
-            .collect();
-
-        if let Some(request) = all_requests.get(self.selected_index) {
+        if let Some(request) = self.all_requests.get(self.selected_index) {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -411,7 +342,7 @@ impl RetrospectionWidget {
     }
 
     fn render_footer(&self, f: &mut Frame, area: Rect) {
-        let controls = "↑/↓: Navigate | Enter/d: Toggle Details | v: View Results | r: Refresh | c: Cancel Selected | Esc: Back";
+        let controls = "↑/↓: Navigate | Enter/d: Toggle Details | v: View Results | c: Cancel | r: Rerun | Esc: Back | Auto-refreshes every 2s";
 
         let footer = Paragraph::new(controls)
             .block(Block::default().borders(Borders::ALL))
@@ -427,8 +358,7 @@ impl RetrospectionWidget {
     }
 
     fn move_selection_down(&mut self) {
-        let total_requests = self.active_requests.len() + self.completed_requests.len();
-        if self.selected_index < total_requests.saturating_sub(1) {
+        if self.selected_index < self.all_requests.len().saturating_sub(1) {
             self.selected_index += 1;
         }
     }
@@ -445,11 +375,7 @@ impl RetrospectionWidget {
     }
 
     async fn view_retrospection_result(&mut self) -> Result<()> {
-        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
-            .chain(self.completed_requests.iter())
-            .collect();
-
-        if let Some(request) = all_requests.get(self.selected_index) {
+        if let Some(request) = self.all_requests.get(self.selected_index) {
             if matches!(request.status, OperationStatus::Completed) {
                 // Load the retrospection result
                 match self.retrospection_service.get_analysis_result(request.id.clone()).await
@@ -469,11 +395,7 @@ impl RetrospectionWidget {
     }
 
     async fn cancel_selected_request(&mut self) -> Result<()> {
-        let all_requests: Vec<&RetrospectRequest> = self.active_requests.iter()
-            .chain(self.completed_requests.iter())
-            .collect();
-
-        if let Some(request) = all_requests.get(self.selected_index) {
+        if let Some(request) = self.all_requests.get(self.selected_index) {
             if matches!(request.status, OperationStatus::Pending | OperationStatus::Running) {
                 // Use the service to cancel the request
                 if let Err(e) = self.retrospection_service.cancel_analysis(request.id.clone()).await {
@@ -482,6 +404,24 @@ impl RetrospectionWidget {
                 } else {
                     // Refresh to update the UI
                     self.refresh().await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn rerun_selected_request(&mut self) -> Result<()> {
+        if let Some(request) = self.all_requests.get(self.selected_index) {
+            if matches!(request.status, OperationStatus::Failed | OperationStatus::Cancelled | OperationStatus::Pending) {
+                // Execute the existing request (this will restart it)
+                match self.retrospection_service.execute_analysis(request.id.clone()).await {
+                    Ok(_) => {
+                        // Refresh to update the UI
+                        self.refresh().await?;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to rerun analysis: {}", e);
+                    }
                 }
             }
         }

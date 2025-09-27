@@ -137,9 +137,6 @@ impl SessionListWidget {
             KeyCode::End => {
                 self.last_session();
             }
-            KeyCode::Char('r') => {
-                self.refresh().await?;
-            }
             KeyCode::Char('s') => {
                 self.cycle_sort_by().await?;
             }

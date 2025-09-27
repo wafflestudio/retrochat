@@ -183,8 +183,14 @@ impl App {
                 break;
             }
 
-            // Auto-refresh data periodically
-            if self.state.last_updated.elapsed() > Duration::from_secs(30) {
+            // Auto-refresh data periodically - frequent refresh for active views
+            let refresh_interval = match self.state.mode {
+                AppMode::Retrospection => Duration::from_secs(2), // Refresh every 2 seconds in retrospection view
+                AppMode::SessionList | AppMode::SessionDetail => Duration::from_secs(5), // Refresh every 5 seconds for session views
+                _ => Duration::from_secs(30), // Normal 30 second refresh for other views
+            };
+
+            if self.state.last_updated.elapsed() > refresh_interval {
                 self.refresh_current_view().await?;
             }
         }
@@ -458,13 +464,13 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View | a: Analyze | r: Refresh | Tab: Switch | ?: Help | q: Quit"
+                "↑/↓: Navigate | Enter: View | a: Analyze | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::SessionDetail => {
-                "↑/↓: Scroll | t: Toggle Retrospection | w: Wrap | r: Refresh | Esc: Back | ?: Help | q: Quit"
+                "↑/↓: Scroll | t: Toggle Retrospection | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
-            AppMode::Retrospection => "↑/↓: Navigate | Enter/d: Details | r: Refresh | c: Cancel | ?: Help | q: Quit",
+            AppMode::Retrospection => "↑/↓: Navigate | Enter/d: Details | c: Cancel | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
         };
 
@@ -494,7 +500,7 @@ impl App {
             Line::from("  ↑/↓            - Navigate sessions"),
             Line::from("  Enter          - View session details"),
             Line::from("  a              - Start retrospection analysis"),
-            Line::from("  r              - Refresh session list"),
+            Line::from("  (Auto-refreshes every 5 seconds)"),
             Line::from(""),
             Line::from("Session Detail:"),
             Line::from("  ↑/↓            - Scroll messages"),
@@ -502,6 +508,7 @@ impl App {
             Line::from("  Home/End       - Jump to start/end"),
             Line::from("  t              - Toggle retrospection panel"),
             Line::from("  w              - Toggle word wrap"),
+            Line::from("  (Auto-refreshes every 5 seconds)"),
             Line::from(""),
             Line::from("Analytics:"),
             Line::from("  ↑/↓            - Navigate insights"),
@@ -510,8 +517,8 @@ impl App {
             Line::from("Retrospection:"),
             Line::from("  ↑/↓            - Navigate requests"),
             Line::from("  Enter/d        - Toggle details view"),
-            Line::from("  r              - Refresh status"),
             Line::from("  c              - Cancel selected request"),
+            Line::from("  (Auto-refreshes every 2 seconds)"),
             Line::from(""),
             Line::from("Press any key to close this help screen"),
         ];

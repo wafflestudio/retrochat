@@ -112,10 +112,8 @@ impl SessionDetailWidget {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     // Ctrl+R: Toggle retrospection view
                     self.toggle_retrospection();
-                } else {
-                    // R: Refresh
-                    self.refresh().await?;
                 }
+                // Removed manual refresh - auto-refresh is now handled by the app
             }
             KeyCode::Char('t') => {
                 // T: Toggle retrospection view
