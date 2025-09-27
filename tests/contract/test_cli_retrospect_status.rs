@@ -46,7 +46,7 @@ async fn test_retrospect_status_active_only() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -76,7 +76,7 @@ async fn test_retrospect_status_history() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -106,7 +106,7 @@ async fn test_retrospect_status_watch_mode() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();

@@ -39,7 +39,7 @@ async fn test_retrospect_cancel_specific_operations() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -68,7 +68,7 @@ async fn test_retrospect_cancel_all_operations() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -97,7 +97,7 @@ async fn test_retrospect_cancel_validation() {
     match result {
         Ok(()) => {
             // Command succeeded
-        }, // Command succeeded (may have listed available requests)
+        } // Command succeeded (may have listed available requests)
         Err(e) => {
             // Should be a meaningful error about validation
             let error_msg = e.to_string();

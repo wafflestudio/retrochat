@@ -48,8 +48,8 @@ async fn test_retrospect_show_all_formats() {
         // The command should execute
         match result {
             Ok(()) => {
-            // Command succeeded
-        },
+                // Command succeeded
+            }
             Err(e) => {
                 // Should be a meaningful error message
                 let error_msg = e.to_string();
@@ -81,7 +81,7 @@ async fn test_retrospect_show_filtering() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -112,7 +112,7 @@ async fn test_retrospect_show_specific_session() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();

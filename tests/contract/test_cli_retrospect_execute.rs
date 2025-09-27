@@ -53,7 +53,7 @@ async fn test_retrospect_execute_all_sessions() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -87,7 +87,7 @@ async fn test_retrospect_execute_custom_analysis() {
     match result {
         Ok(()) => {
             // Command succeeded
-        },
+        }
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -120,7 +120,7 @@ async fn test_retrospect_execute_validation() {
     match result {
         Ok(()) => {
             // Command succeeded
-        }, // Command may handle this gracefully
+        } // Command may handle this gracefully
         Err(e) => {
             // Should be a meaningful error about validation
             let error_msg = e.to_string();

@@ -528,12 +528,7 @@ impl SessionDetailWidget {
                     .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(
-                retrospection
-                    .reflection
-                    .lines()
-                    .map(Line::from),
-            );
+            content_lines.extend(retrospection.reflection.lines().map(Line::from));
             content_lines.push(Line::from(""));
 
             // Add recommendations section
@@ -544,12 +539,7 @@ impl SessionDetailWidget {
                     .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(
-                retrospection
-                    .recommendations
-                    .lines()
-                    .map(Line::from),
-            );
+            content_lines.extend(retrospection.recommendations.lines().map(Line::from));
 
             let all_lines = [lines, content_lines].concat();
 

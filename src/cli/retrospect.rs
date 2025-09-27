@@ -224,12 +224,8 @@ async fn show_session_results(
         .map_err(|e| anyhow::anyhow!("Failed to list analyses: {e}"))?;
 
     if requests.is_empty() {
-        println!(
-            "No retrospection analysis found for session: {session_id}"
-        );
-        println!(
-            "Run 'retrochat retrospect execute {session_id}' to analyze this session"
-        );
+        println!("No retrospection analysis found for session: {session_id}");
+        println!("Run 'retrochat retrospect execute {session_id}' to analyze this session");
         return Ok(());
     }
 
