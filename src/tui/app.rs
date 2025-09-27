@@ -292,6 +292,11 @@ impl App {
                                     self.state.start_retrospection(request.id.clone());
                                     self.retrospection.start_analysis(session_id, RetrospectionAnalysisType::UserInteractionAnalysis);
                                     self.state.set_mode(AppMode::Retrospection);
+
+                                    // Execute the analysis immediately after creating the request
+                                    if let Err(e) = service.execute_analysis(request.id.clone()).await {
+                                        self.state.show_error(format!("Failed to execute analysis: {e}"));
+                                    }
                                 }
                                 Err(e) => {
                                     self.state.show_error(format!("Failed to start analysis: {e}"));
