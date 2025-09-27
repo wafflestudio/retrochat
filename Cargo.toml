@@ -24,7 +24,9 @@ tracing-subscriber = "0.3"
 futures = "0.3"
 async-trait = "0.1"
 flate2 = "1.0"
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", features = ["json"] }
+backoff = "0.4"
+tokio-util = "0.7"
 atty = "0.2"
 
 [dev-dependencies]
@@ -66,6 +68,26 @@ name = "test_analytics_export"
 path = "tests/contract/test_analytics_export.rs"
 
 [[test]]
+name = "test_google_ai_api"
+path = "tests/contract/test_google_ai_api.rs"
+
+[[test]]
+name = "test_cli_retrospect_execute"
+path = "tests/contract/test_cli_retrospect_execute.rs"
+
+[[test]]
+name = "test_cli_retrospect_show"
+path = "tests/contract/test_cli_retrospect_show.rs"
+
+[[test]]
+name = "test_cli_retrospect_status"
+path = "tests/contract/test_cli_retrospect_status.rs"
+
+[[test]]
+name = "test_cli_retrospect_cancel"
+path = "tests/contract/test_cli_retrospect_cancel.rs"
+
+[[test]]
 name = "test_first_time_setup"
 path = "tests/integration/test_first_time_setup.rs"
 
@@ -77,6 +99,22 @@ path = "tests/integration/test_session_detail.rs"
 [[test]]
 name = "test_export_reporting"
 path = "tests/integration/test_export_reporting.rs"
+
+[[test]]
+name = "test_single_session_analysis"
+path = "tests/integration/test_single_session_analysis.rs"
+
+[[test]]
+name = "test_background_operations"
+path = "tests/integration/test_background_operations.rs"
+
+[[test]]
+name = "test_error_handling"
+path = "tests/integration/test_error_handling.rs"
+
+[[test]]
+name = "test_tui_retrospection"
+path = "tests/integration/test_tui_retrospection.rs"
 
 [profile.release]
 lto = true
