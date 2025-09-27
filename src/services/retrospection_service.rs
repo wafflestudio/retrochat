@@ -38,6 +38,20 @@ impl RetrospectionService {
         created_by: Option<String>,
         custom_prompt: Option<String>,
     ) -> Result<RetrospectRequest, Box<dyn std::error::Error + Send + Sync>> {
+        // Check if there's already an active request for this session
+        let existing_requests = self.request_repo.find_by_session_id(&session_id).await?;
+        for existing_request in existing_requests {
+            match existing_request.status {
+                OperationStatus::Pending | OperationStatus::Running => {
+                    return Err(format!(
+                        "Session {} already has an active analysis request ({}). Please wait for it to complete or cancel it first.",
+                        session_id, existing_request.id
+                    ).into());
+                }
+                _ => {} // Allow creating new requests if existing ones are completed/failed/cancelled
+            }
+        }
+
         let request = RetrospectRequest::new(
             session_id,
             analysis_type,
@@ -195,46 +209,6 @@ impl RetrospectionService {
         let retrospection = self.create_retrospection_from_response(&response, request)?;
 
         Ok(retrospection)
-    }
-
-    fn generate_mock_analysis(
-        &self,
-        analysis_type: &RetrospectionAnalysisType,
-    ) -> Result<(String, String, String), Box<dyn std::error::Error + Send + Sync>> {
-        let (insights, reflection, recommendations) = match analysis_type {
-            RetrospectionAnalysisType::UserInteractionAnalysis => (
-                "User interaction patterns show consistent engagement with technical questions and requests for detailed explanations.".to_string(),
-                "The user demonstrates a preference for thorough, step-by-step guidance and appreciates when examples are provided.".to_string(),
-                "Continue providing detailed explanations with examples. Consider offering alternative approaches to problems.".to_string(),
-            ),
-            RetrospectionAnalysisType::CollaborationInsights => (
-                "Collaboration patterns indicate effective back-and-forth communication with clear problem identification.".to_string(),
-                "The working relationship shows good technical communication and mutual understanding of goals.".to_string(),
-                "Maintain current communication style. Consider suggesting more proactive approaches to anticipating needs.".to_string(),
-            ),
-            RetrospectionAnalysisType::QuestionQuality => (
-                "Questions are generally well-structured and provide sufficient context for meaningful responses.".to_string(),
-                "There's a good balance between specific technical questions and broader conceptual inquiries.".to_string(),
-                "Encourage continued specificity in technical questions. Consider asking for examples when concepts are unclear.".to_string(),
-            ),
-            RetrospectionAnalysisType::TaskBreakdown => (
-                "Task decomposition shows logical progression from high-level goals to specific implementation steps.".to_string(),
-                "Complex problems are being broken down effectively into manageable components.".to_string(),
-                "Continue breaking down complex tasks. Consider documenting decision points and rationale.".to_string(),
-            ),
-            RetrospectionAnalysisType::FollowUpPatterns => (
-                "Several topics presented opportunities for deeper exploration or follow-up questions.".to_string(),
-                "Some conversations ended at a surface level when deeper investigation might have been beneficial.".to_string(),
-                "Consider asking follow-up questions about implementation details or alternative approaches.".to_string(),
-            ),
-            RetrospectionAnalysisType::Custom(_) => (
-                "Custom analysis completed based on provided criteria.".to_string(),
-                "Analysis tailored to specific requirements and context.".to_string(),
-                "Review results against custom criteria and adjust approach as needed.".to_string(),
-            ),
-        };
-
-        Ok((insights, reflection, recommendations))
     }
 
     async fn gather_analysis_data(
@@ -469,19 +443,36 @@ mod tests {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
+        // Create a test project first (required for foreign key constraint)
+        let project_repo = crate::database::ProjectRepository::new(&database.manager);
+        let test_project = crate::models::Project::new("test_project".to_string());
+        project_repo.create(&test_project).await.unwrap();
+
+        // Create a test session
+        let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
+        let test_session = crate::models::ChatSession::new(
+            crate::models::LlmProvider::ClaudeCode,
+            "/test/chat.jsonl".to_string(),
+            "test_hash".to_string(),
+            chrono::Utc::now(),
+        )
+        .with_project("test_project".to_string());
+        session_repo.create(&test_session).await.unwrap();
+
         let service = RetrospectionService::new(
             Arc::new(database.manager),
-            GoogleAiClient::new(GoogleAiConfig::default()).unwrap(),
+            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
         );
 
+        let session_id = test_session.id.to_string();
         let request = service.create_analysis_request(
-            "session-123".to_string(),
+            session_id.clone(),
             RetrospectionAnalysisType::UserInteractionAnalysis,
             Some("test_user".to_string()),
             None,
         ).await.unwrap();
 
-        assert_eq!(request.session_id, "session-123");
+        assert_eq!(request.session_id, session_id);
         assert_eq!(request.analysis_type, RetrospectionAnalysisType::UserInteractionAnalysis);
         assert_eq!(request.status, OperationStatus::Pending);
     }
@@ -491,13 +482,30 @@ mod tests {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
+        // Create a test project first (required for foreign key constraint)
+        let project_repo = crate::database::ProjectRepository::new(&database.manager);
+        let test_project = crate::models::Project::new("test_project2".to_string());
+        project_repo.create(&test_project).await.unwrap();
+
+        // Create a test session
+        let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
+        let test_session = crate::models::ChatSession::new(
+            crate::models::LlmProvider::ClaudeCode,
+            "/test/chat2.jsonl".to_string(),
+            "test_hash2".to_string(),
+            chrono::Utc::now(),
+        )
+        .with_project("test_project2".to_string());
+        session_repo.create(&test_session).await.unwrap();
+
         let service = RetrospectionService::new(
             Arc::new(database.manager),
-            GoogleAiClient::new(GoogleAiConfig::default()).unwrap(),
+            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
         );
 
+        let session_id = test_session.id.to_string();
         let request = service.create_analysis_request(
-            "session-456".to_string(),
+            session_id,
             RetrospectionAnalysisType::CollaborationInsights,
             Some("test_user".to_string()),
             None,

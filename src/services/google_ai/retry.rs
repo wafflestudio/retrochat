@@ -130,7 +130,7 @@ impl RetryHandler {
 
                     // For the last attempt, don't wait
                     if self.attempts >= self.config.max_attempts {
-                        return Err(RetryError::NonRetryable { source: error });
+                        return Err(RetryError::MaxAttemptsExceeded);
                     }
 
                     // Calculate delay

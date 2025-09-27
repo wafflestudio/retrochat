@@ -494,17 +494,28 @@ impl RetrospectRequestRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
+    use crate::database::{Database, ChatSessionRepository};
+    use crate::models::{ChatSession, LlmProvider};
 
     #[tokio::test]
     async fn test_create_and_find_request() {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
+        // Create a chat session first (required for foreign key constraint)
+        let session_repo = ChatSessionRepository::new(&database.manager);
+        let session = ChatSession::new(
+            LlmProvider::ClaudeCode,
+            "/test/path".to_string(),
+            "test-hash".to_string(),
+            Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
         let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
 
         let request = RetrospectRequest::new(
-            "session-123".to_string(),
+            session.id.to_string(),
             RetrospectionAnalysisType::UserInteractionAnalysis,
             Some("test_user".to_string()),
             None,
@@ -526,10 +537,20 @@ mod tests {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
+        // Create a chat session first (required for foreign key constraint)
+        let session_repo = ChatSessionRepository::new(&database.manager);
+        let session = ChatSession::new(
+            LlmProvider::ClaudeCode,
+            "/test/path".to_string(),
+            "test-hash".to_string(),
+            Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
         let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
 
         let mut request = RetrospectRequest::new(
-            "session-456".to_string(),
+            session.id.to_string(),
             RetrospectionAnalysisType::CollaborationInsights,
             Some("test_user".to_string()),
             None,
@@ -550,9 +571,19 @@ mod tests {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
+        // Create a chat session first (required for foreign key constraint)
+        let session_repo = ChatSessionRepository::new(&database.manager);
+        let session = ChatSession::new(
+            LlmProvider::ClaudeCode,
+            "/test/path".to_string(),
+            "test-hash".to_string(),
+            Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
         let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
 
-        let session_id = "session-789".to_string();
+        let session_id = session.id.to_string();
 
         let request1 = RetrospectRequest::new(
             session_id.clone(),

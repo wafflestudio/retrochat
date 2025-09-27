@@ -1,7 +1,7 @@
 use retrochat::services::{RetrospectionService};
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::database::DatabaseManager;
-use retrochat::models::{RetrospectionAnalysisType, OperationStatus, RetrospectionRequest};
+use retrochat::models::RetrospectionAnalysisType;
 use std::sync::Arc;
 use std::time::Duration;
 

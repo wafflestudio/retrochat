@@ -271,6 +271,47 @@ impl RetrospectionRepository {
         Ok(row.count as u64)
     }
 
+    pub async fn get_by_session_id(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<Retrospection>, Box<dyn std::error::Error + Send + Sync>> {
+        let pool = self.db_manager.pool();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT r.* FROM retrospections r
+            JOIN retrospect_requests rr ON r.retrospect_request_id = rr.id
+            WHERE rr.session_id = ?
+            ORDER BY r.created_at DESC
+            "#,
+            session_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let mut retrospections = Vec::new();
+        for row in rows {
+            let created_at = DateTime::parse_from_rfc3339(&row.created_at)?
+                .with_timezone(&Utc);
+
+            let (insights, reflection, recommendations) = self.parse_response_text(&row.response_text);
+
+            retrospections.push(Retrospection {
+                id: row.id.unwrap_or_else(|| "unknown".to_string()),
+                request_id: row.retrospect_request_id,
+                insights,
+                reflection,
+                recommendations,
+                metadata: row.metadata,
+                created_at,
+                token_usage: row.token_usage.map(|t| t as u32),
+                response_time: row.response_time_ms.map(|ms| std::time::Duration::from_millis(ms as u64)),
+            });
+        }
+
+        Ok(retrospections)
+    }
+
     fn parse_response_text(&self, response_text: &str) -> (String, String, String) {
         // Default values in case parsing fails
         let mut insights = "".to_string();
@@ -292,44 +333,46 @@ impl RetrospectionRepository {
 
         (insights, reflection, recommendations)
     }
-
-    fn row_to_retrospection(&self, row: &sqlx::sqlite::SqliteRow) -> Result<Retrospection, Box<dyn std::error::Error + Send + Sync>> {
-        use sqlx::Row;
-
-        let created_at = DateTime::parse_from_rfc3339(&row.try_get::<String, _>("created_at")?)?
-            .with_timezone(&Utc);
-
-        let response_text: String = row.try_get("response_text")?;
-        let (insights, reflection, recommendations) = self.parse_response_text(&response_text);
-
-        Ok(Retrospection {
-            id: row.try_get::<Option<String>, _>("id")?.unwrap_or_else(|| "unknown".to_string()),
-            request_id: row.try_get::<Option<String>, _>("retrospect_request_id")?.unwrap_or_else(|| "unknown".to_string()),
-            insights,
-            reflection,
-            recommendations,
-            metadata: row.try_get("metadata").ok(),
-            created_at,
-            token_usage: row.try_get::<Option<i32>, _>("token_usage").ok().flatten().map(|t| t as u32),
-            response_time: row.try_get::<Option<i32>, _>("response_time_ms").ok().flatten().map(|ms| std::time::Duration::from_millis(ms as u64)),
-        })
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
+    use crate::database::{Database, ChatSessionRepository, RetrospectRequestRepository};
+    use crate::models::{ChatSession, LlmProvider, RetrospectRequest, RetrospectionAnalysisType};
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_create_and_find_retrospection() {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
-        let repo = RetrospectionRepository::new(Arc::new(database.manager));
+        let db_manager = Arc::new(database.manager);
+        
+        // Create a chat session first (required for foreign key constraint)
+        let session_repo = ChatSessionRepository::new(&db_manager);
+        let session = ChatSession::new(
+            LlmProvider::ClaudeCode,
+            "/test/path".to_string(),
+            "test-hash".to_string(),
+            Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
+        // Create a retrospect request (required for foreign key constraint)
+        let request_repo = RetrospectRequestRepository::new(db_manager.clone());
+        let request = RetrospectRequest::new(
+            session.id.to_string(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        );
+        request_repo.create(&request).await.unwrap();
+
+        let repo = RetrospectionRepository::new(db_manager);
 
         let retrospection = Retrospection::new(
-            "request-123".to_string(),
+            request.id.clone(),
             "Some insights".to_string(),
             "Some reflection".to_string(),
             "Some recommendations".to_string(),
@@ -353,9 +396,31 @@ mod tests {
         let database = Database::new_in_memory().await.unwrap();
         database.initialize().await.unwrap();
 
-        let repo = RetrospectionRepository::new(Arc::new(database.manager));
+        let db_manager = Arc::new(database.manager);
+        
+        // Create a chat session first (required for foreign key constraint)
+        let session_repo = ChatSessionRepository::new(&db_manager);
+        let session = ChatSession::new(
+            LlmProvider::ClaudeCode,
+            "/test/path".to_string(),
+            "test-hash".to_string(),
+            Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
 
-        let request_id = "request-456".to_string();
+        // Create a retrospect request (required for foreign key constraint)
+        let request_repo = RetrospectRequestRepository::new(db_manager.clone());
+        let request = RetrospectRequest::new(
+            session.id.to_string(),
+            RetrospectionAnalysisType::UserInteractionAnalysis,
+            Some("test_user".to_string()),
+            None,
+        );
+        request_repo.create(&request).await.unwrap();
+
+        let repo = RetrospectionRepository::new(db_manager);
+
+        let request_id = request.id.clone();
 
         let retrospection1 = Retrospection::new(
             request_id.clone(),

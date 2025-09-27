@@ -1,5 +1,5 @@
 use retrochat::services::google_ai::{
-    GoogleAiClient, GoogleAiConfig, GenerateContentRequest, GenerateContentResponse,
+    GoogleAiClient, GoogleAiConfig, GenerateContentRequest,
     Content, Part, GenerationConfig
 };
 use retrochat::models::RetrospectionAnalysisType;

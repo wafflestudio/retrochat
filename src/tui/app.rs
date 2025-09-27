@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
 use crate::database::DatabaseManager;
-use crate::services::{AnalyticsService, QueryService};
+use crate::services::{AnalyticsService, QueryService, RetrospectionService};
+use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 
 use super::{
-    analytics::AnalyticsWidget, session_detail::SessionDetailWidget,
+    analytics::AnalyticsWidget, retrospection::RetrospectionWidget, session_detail::SessionDetailWidget,
     session_list::SessionListWidget,
 };
 
@@ -24,6 +25,7 @@ pub enum AppMode {
     SessionList,
     SessionDetail,
     Analytics,
+    Retrospection,
     Help,
 }
 
@@ -34,6 +36,9 @@ pub struct AppState {
     pub should_quit: bool,
     pub show_help: bool,
     pub last_updated: Instant,
+    pub retrospection_active: bool,
+    pub active_analysis_requests: Vec<String>, // Track active request IDs
+    pub error_dialog: Option<String>, // Error message to display in dialog
 }
 
 impl AppState {
@@ -44,6 +49,9 @@ impl AppState {
             should_quit: false,
             show_help: false,
             last_updated: Instant::now(),
+            retrospection_active: false,
+            active_analysis_requests: Vec::new(),
+            error_dialog: None,
         }
     }
 
@@ -69,6 +77,31 @@ impl AppState {
         self.selected_session_id = None;
         self.set_mode(AppMode::SessionList);
     }
+
+    pub fn start_retrospection(&mut self, request_id: String) {
+        self.retrospection_active = true;
+        self.active_analysis_requests.push(request_id);
+    }
+
+    pub fn complete_retrospection(&mut self, request_id: &str) {
+        self.active_analysis_requests.retain(|id| id != request_id);
+        if self.active_analysis_requests.is_empty() {
+            self.retrospection_active = false;
+        }
+    }
+
+    pub fn cancel_all_retrospections(&mut self) {
+        self.active_analysis_requests.clear();
+        self.retrospection_active = false;
+    }
+
+    pub fn show_error(&mut self, message: String) {
+        self.error_dialog = Some(message);
+    }
+
+    pub fn dismiss_error(&mut self) {
+        self.error_dialog = None;
+    }
 }
 
 impl Default for AppState {
@@ -82,8 +115,10 @@ pub struct App {
     pub session_list: SessionListWidget,
     pub session_detail: SessionDetailWidget,
     pub analytics: AnalyticsWidget,
+    pub retrospection: RetrospectionWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
+    pub retrospection_service: Option<RetrospectionService>,
 }
 
 impl App {
@@ -91,13 +126,26 @@ impl App {
         let query_service = QueryService::with_database(db_manager.clone());
         let analytics_service = AnalyticsService::new((*db_manager).clone());
 
+        // Try to create retrospection service if Google AI API key is available
+        let retrospection_service = if let Ok(_) = std::env::var("GOOGLE_AI_API_KEY") {
+            let config = GoogleAiConfig::default();
+            match GoogleAiClient::new(config) {
+                Ok(client) => Some(RetrospectionService::new(db_manager.clone(), client)),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
             state: AppState::new(),
             session_list: SessionListWidget::new(db_manager.clone()),
             session_detail: SessionDetailWidget::new(db_manager.clone()),
-            analytics: AnalyticsWidget::new(db_manager),
+            analytics: AnalyticsWidget::new(db_manager.clone()),
+            retrospection: RetrospectionWidget::new(),
             query_service,
             analytics_service,
+            retrospection_service,
         })
     }
 
@@ -176,6 +224,7 @@ impl App {
                     match self.state.mode {
                         AppMode::SessionDetail => self.state.back_to_list(),
                         AppMode::Analytics => self.state.set_mode(AppMode::SessionList),
+                        AppMode::Retrospection => self.state.set_mode(AppMode::SessionList),
                         _ => {}
                     }
                 }
@@ -186,6 +235,12 @@ impl App {
 
         // Help screen - consume all other inputs
         if self.state.show_help {
+            return Ok(true);
+        }
+
+        // Error dialog - dismiss on any key
+        if self.state.error_dialog.is_some() {
+            self.state.dismiss_error();
             return Ok(true);
         }
 
@@ -205,11 +260,42 @@ impl App {
         // Mode-specific key bindings
         match self.state.mode {
             AppMode::SessionList => {
-                if let Some(selected_id) = self.session_list.handle_key(key).await? {
-                    self.state.select_session(selected_id);
-                    self.session_detail
-                        .set_session_id(self.state.selected_session_id.clone())
-                        .await?;
+                if let Some(action) = self.session_list.handle_key(key).await? {
+                    if action.starts_with("ANALYZE:") {
+                        // Extract session ID and start analysis
+                        let session_id = action.strip_prefix("ANALYZE:").unwrap().to_string();
+                        // TODO: Show analysis type selection dialog
+                        // For now, use default analysis type
+                        use crate::models::RetrospectionAnalysisType;
+
+                        if let Some(ref service) = self.retrospection_service {
+                            // Start actual analysis
+                            match service.create_analysis_request(
+                                session_id.clone(),
+                                RetrospectionAnalysisType::UserInteractionAnalysis,
+                                None,
+                                None,
+                            ).await {
+                                Ok(request) => {
+                                    self.state.start_retrospection(request.id.clone());
+                                    self.retrospection.start_analysis(session_id, RetrospectionAnalysisType::UserInteractionAnalysis);
+                                    self.state.set_mode(AppMode::Retrospection);
+                                }
+                                Err(e) => {
+                                    self.state.show_error(format!("Failed to start analysis: {e}"));
+                                }
+                            }
+                        } else {
+                            // Show message that Google AI API key is required
+                            self.state.show_error("Google AI API key not configured. Set GOOGLE_AI_API_KEY environment variable.".to_string());
+                        }
+                    } else {
+                        // Normal session selection
+                        self.state.select_session(action);
+                        self.session_detail
+                            .set_session_id(self.state.selected_session_id.clone())
+                            .await?;
+                    }
                 }
             }
             AppMode::SessionDetail => {
@@ -217,6 +303,9 @@ impl App {
             }
             AppMode::Analytics => {
                 self.analytics.handle_key(key).await?;
+            }
+            AppMode::Retrospection => {
+                self.retrospection.handle_key(key).await?;
             }
             AppMode::Help => {
                 // Help is handled above
@@ -229,7 +318,8 @@ impl App {
     fn next_tab(&mut self) {
         self.state.mode = match self.state.mode {
             AppMode::SessionList => AppMode::Analytics,
-            AppMode::Analytics => AppMode::SessionList,
+            AppMode::Analytics => AppMode::Retrospection,
+            AppMode::Retrospection => AppMode::SessionList,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
@@ -237,8 +327,9 @@ impl App {
 
     fn previous_tab(&mut self) {
         self.state.mode = match self.state.mode {
-            AppMode::SessionList => AppMode::Analytics,
+            AppMode::SessionList => AppMode::Retrospection,
             AppMode::Analytics => AppMode::SessionList,
+            AppMode::Retrospection => AppMode::Analytics,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
@@ -254,6 +345,9 @@ impl App {
             }
             AppMode::Analytics => {
                 self.analytics.refresh().await?;
+            }
+            AppMode::Retrospection => {
+                self.retrospection.refresh().await?;
             }
             AppMode::Help => {}
         }
@@ -288,10 +382,18 @@ impl App {
                 AppMode::Analytics => {
                     self.analytics.render(f, main_layout[1]);
                 }
+                AppMode::Retrospection => {
+                    self.retrospection.render(f, main_layout[1]);
+                }
                 AppMode::Help => {
                     self.render_help(f, main_layout[1]);
                 }
             }
+        }
+
+        // Render error dialog if present
+        if let Some(ref error_message) = self.state.error_dialog {
+            self.render_error_dialog(f, main_layout[1], error_message);
         }
 
         // Render footer
@@ -299,10 +401,11 @@ impl App {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let tab_titles = vec!["Sessions", "Analytics"];
+        let tab_titles = vec!["Sessions", "Analytics", "Retrospection"];
         let selected_tab = match self.state.mode {
             AppMode::SessionList | AppMode::SessionDetail => 0,
             AppMode::Analytics => 1,
+            AppMode::Retrospection => 2,
             AppMode::Help => 0,
         };
 
@@ -322,12 +425,13 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View Session | Tab: Switch Views | ?: Help | q: Quit"
+                "↑/↓: Navigate | Enter: View | a: Analyze | r: Refresh | Tab: Switch | ?: Help | q: Quit"
             }
             AppMode::SessionDetail => {
-                "↑/↓: Scroll | Esc: Back | Tab: Switch Views | ?: Help | q: Quit"
+                "↑/↓: Scroll | t: Toggle Retrospection | w: Wrap | r: Refresh | Esc: Back | ?: Help | q: Quit"
             }
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
+            AppMode::Retrospection => "↑/↓: Navigate | Enter/d: Details | r: Refresh | c: Cancel | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
         };
 
@@ -356,16 +460,25 @@ impl App {
             Line::from("Session List:"),
             Line::from("  ↑/↓            - Navigate sessions"),
             Line::from("  Enter          - View session details"),
+            Line::from("  a              - Start retrospection analysis"),
             Line::from("  r              - Refresh session list"),
             Line::from(""),
             Line::from("Session Detail:"),
             Line::from("  ↑/↓            - Scroll messages"),
             Line::from("  Page Up/Down   - Fast scroll"),
             Line::from("  Home/End       - Jump to start/end"),
+            Line::from("  t              - Toggle retrospection panel"),
+            Line::from("  w              - Toggle word wrap"),
             Line::from(""),
             Line::from("Analytics:"),
             Line::from("  ↑/↓            - Navigate insights"),
             Line::from("  r              - Refresh analytics"),
+            Line::from(""),
+            Line::from("Retrospection:"),
+            Line::from("  ↑/↓            - Navigate requests"),
+            Line::from("  Enter/d        - Toggle details view"),
+            Line::from("  r              - Refresh status"),
+            Line::from("  c              - Cancel selected request"),
             Line::from(""),
             Line::from("Press any key to close this help screen"),
         ];
@@ -383,6 +496,39 @@ impl App {
         let popup_area = self.centered_rect(80, 70, area);
         f.render_widget(Clear, popup_area);
         f.render_widget(help_paragraph, popup_area);
+    }
+
+    fn render_error_dialog(&self, f: &mut Frame, area: Rect, error_message: &str) {
+        let error_text = vec![
+            Line::from(vec![Span::styled(
+                "Error",
+                Style::default()
+                    .fg(Color::Red)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from(error_message),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Press any key to continue",
+                Style::default().fg(Color::Gray),
+            )]),
+        ];
+
+        let error_paragraph = Paragraph::new(error_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Error")
+                    .style(Style::default().fg(Color::Red)),
+            )
+            .style(Style::default().fg(Color::White))
+            .wrap(ratatui::widgets::Wrap { trim: true });
+
+        // Center the error dialog
+        let popup_area = self.centered_rect(60, 40, area);
+        f.render_widget(Clear, popup_area);
+        f.render_widget(error_paragraph, popup_area);
     }
 
     fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {

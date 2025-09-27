@@ -146,6 +146,16 @@ impl SessionListWidget {
             KeyCode::Char('o') => {
                 self.toggle_sort_order().await?;
             }
+            KeyCode::Char('a') => {
+                // Start retrospection analysis for selected session
+                if let Some(selected) = self.list_state.selected() {
+                    if let Some(session) = self.sessions.get(selected) {
+                        // Return a special signal that we want to start analysis
+                        // This will be handled by the main app
+                        return Ok(Some(format!("ANALYZE:{}", session.session_id)));
+                    }
+                }
+            }
             KeyCode::Char('f') => {
                 // TODO: Implement filter dialog
             }

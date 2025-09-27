@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -9,19 +9,23 @@ use ratatui::{
 };
 use std::sync::Arc;
 
-use crate::database::DatabaseManager;
-use crate::models::{ChatSession, Message, MessageRole};
+use crate::database::{DatabaseManager, RetrospectionRepository};
+use crate::models::{ChatSession, Message, MessageRole, Retrospection};
 use crate::services::{QueryService, SessionDetailRequest};
 
 pub struct SessionDetailWidget {
     session: Option<ChatSession>,
     messages: Vec<Message>,
+    retrospections: Vec<Retrospection>,
     scroll_state: ScrollbarState,
     current_scroll: usize,
     query_service: QueryService,
+    retrospection_repo: RetrospectionRepository,
     session_id: Option<String>,
     loading: bool,
     message_wrap: bool,
+    show_retrospection: bool,
+    retrospection_scroll: usize,
 }
 
 impl SessionDetailWidget {
@@ -29,12 +33,16 @@ impl SessionDetailWidget {
         Self {
             session: None,
             messages: Vec::new(),
+            retrospections: Vec::new(),
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
-            query_service: QueryService::with_database(db_manager),
+            query_service: QueryService::with_database(db_manager.clone()),
+            retrospection_repo: RetrospectionRepository::new(db_manager),
             session_id: None,
             loading: false,
             message_wrap: true,
+            show_retrospection: false,
+            retrospection_scroll: 0,
         }
     }
 
@@ -63,6 +71,9 @@ impl SessionDetailWidget {
                     self.messages = response.messages;
                     self.current_scroll = 0;
                     self.update_scroll_state();
+
+                    // Load retrospection results for this session
+                    self.load_retrospections().await;
                 }
                 Err(e) => {
                     eprintln!("Failed to load session details: {e}");
@@ -98,7 +109,23 @@ impl SessionDetailWidget {
                 self.toggle_wrap();
             }
             KeyCode::Char('r') => {
-                self.refresh().await?;
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    // Ctrl+R: Toggle retrospection view
+                    self.toggle_retrospection();
+                } else {
+                    // R: Refresh
+                    self.refresh().await?;
+                }
+            }
+            KeyCode::Char('t') => {
+                // T: Toggle retrospection view
+                self.toggle_retrospection();
+            }
+            KeyCode::Char('a') => {
+                // A: Start retrospection analysis for current session
+                // This would require returning a signal to the app
+                // For now, just show a message that this functionality is available via CLI
+                // TODO: Implement analysis start from session detail
             }
             _ => {}
         }
@@ -110,15 +137,30 @@ impl SessionDetailWidget {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(4), // Session header
-                Constraint::Min(0),    // Messages
+                Constraint::Min(0),    // Main content
             ])
             .split(area);
 
         // Render session header
         self.render_session_header(f, chunks[0]);
 
-        // Render messages
-        self.render_messages(f, chunks[1]);
+        // Render main content area
+        if self.show_retrospection && !self.retrospections.is_empty() {
+            // Split horizontally for messages and retrospection
+            let main_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(60), // Messages
+                    Constraint::Percentage(40), // Retrospection
+                ])
+                .split(chunks[1]);
+
+            self.render_messages(f, main_chunks[0]);
+            self.render_retrospections(f, main_chunks[1]);
+        } else {
+            // Full width for messages
+            self.render_messages(f, chunks[1]);
+        }
     }
 
     fn render_session_header(&self, f: &mut Frame, area: Rect) {
@@ -133,14 +175,21 @@ impl SessionDetailWidget {
                 "Ongoing"
             };
 
+            let retrospection_info = if self.retrospections.is_empty() {
+                "No retrospections".to_string()
+            } else {
+                format!("{} retrospections", self.retrospections.len())
+            };
+
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Press 'w' to toggle word wrap",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Press 'w': wrap, 't': retrospection",
                 session.provider,
                 project_str,
                 session.message_count,
                 session.token_count.unwrap_or(0),
                 &session.start_time.format("%Y-%m-%d %H:%M").to_string(),
-                session.state
+                session.state,
+                retrospection_info
             )
         } else {
             "No session selected".to_string()
@@ -411,5 +460,115 @@ impl SessionDetailWidget {
         let total_lines = self.get_total_lines();
         self.scroll_state = self.scroll_state.content_length(total_lines);
         self.scroll_state = self.scroll_state.position(self.current_scroll);
+    }
+
+    async fn load_retrospections(&mut self) {
+        if let Some(session_id) = &self.session_id {
+            match self.retrospection_repo.get_by_session_id(session_id).await {
+                Ok(retrospections) => {
+                    self.retrospections = retrospections;
+                }
+                Err(e) => {
+                    eprintln!("Failed to load retrospections: {e}");
+                    self.retrospections.clear();
+                }
+            }
+        }
+    }
+
+    fn toggle_retrospection(&mut self) {
+        self.show_retrospection = !self.show_retrospection;
+    }
+
+    fn render_retrospections(&mut self, f: &mut Frame, area: Rect) {
+        if self.retrospections.is_empty() {
+            let empty_msg = Paragraph::new("No retrospection analysis available\n\nUse 'retrochat retrospect execute' to analyze this session")
+                .block(Block::default().borders(Borders::ALL).title("Retrospection"))
+                .style(Style::default().fg(Color::Gray))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(empty_msg, area);
+            return;
+        }
+
+        // For now, show the most recent retrospection
+        // TODO: Allow user to navigate between multiple retrospections
+        if let Some(retrospection) = self.retrospections.first() {
+            let lines = vec![
+                Line::from(vec![Span::styled(
+                    "Retrospection Analysis",
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(""),
+                Line::from(vec![Span::styled(
+                    "Insights:",
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(""),
+            ];
+
+            // Create content from retrospection fields
+            let mut content_lines = Vec::new();
+
+            // Add insights
+            content_lines.extend(retrospection.insights.lines().map(|line| Line::from(line)));
+            content_lines.push(Line::from(""));
+
+            // Add reflection section
+            content_lines.push(Line::from(vec![Span::styled(
+                "Reflection:",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )]));
+            content_lines.push(Line::from(""));
+            content_lines.extend(retrospection.reflection.lines().map(|line| Line::from(line)));
+            content_lines.push(Line::from(""));
+
+            // Add recommendations section
+            content_lines.push(Line::from(vec![Span::styled(
+                "Recommendations:",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )]));
+            content_lines.push(Line::from(""));
+            content_lines.extend(retrospection.recommendations.lines().map(|line| Line::from(line)));
+
+            let all_lines = [lines, content_lines].concat();
+
+            // Handle scrolling for retrospection panel
+            let available_height = area.height.saturating_sub(2) as usize;
+            let visible_lines: Vec<Line> = all_lines
+                .into_iter()
+                .skip(self.retrospection_scroll)
+                .take(available_height)
+                .collect();
+
+            let retrospection_block = Paragraph::new(visible_lines)
+                .block(Block::default().borders(Borders::ALL).title("Retrospection Analysis"))
+                .wrap(Wrap { trim: true })
+                .scroll((0, 0));
+
+            f.render_widget(retrospection_block, area);
+
+            // Add metadata at bottom if space allows
+            if area.height > 10 {
+                let metadata_area = Rect {
+                    x: area.x,
+                    y: area.y + area.height - 3,
+                    width: area.width,
+                    height: 2,
+                };
+
+                let metadata_text = if let Some(tokens) = retrospection.token_usage {
+                    format!("Tokens: {} | Created: {}", tokens, retrospection.created_at.format("%Y-%m-%d %H:%M"))
+                } else {
+                    format!("Created: {}", retrospection.created_at.format("%Y-%m-%d %H:%M"))
+                };
+
+                let metadata = Paragraph::new(metadata_text)
+                    .style(Style::default().fg(Color::DarkGray))
+                    .wrap(Wrap { trim: true });
+
+                f.render_widget(metadata, metadata_area);
+            }
+        }
     }
 }
