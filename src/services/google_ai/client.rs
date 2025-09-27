@@ -328,7 +328,7 @@ Evaluate:
         Ok(super::models::AnalysisResponse {
             text,
             token_usage: response.get_token_usage(),
-            model_used: analysis_request.model.or_else(|| Some(self.config.model.clone())),
+            model_used: Some(self.config.model.clone()),
             finish_reason: response.get_finish_reason(),
         })
     }

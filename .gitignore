@@ -63,6 +63,8 @@ retrochat_export_*.csv
 .env.local
 .env.*.local
 
+.sqlx
+
 # Temporary files
 tmp/
 temp/

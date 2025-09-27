@@ -24,10 +24,14 @@ tracing-subscriber = "0.3"
 futures = "0.3"
 async-trait = "0.1"
 flate2 = "1.0"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"], optional = true }
 backoff = "0.4"
 tokio-util = "0.7"
 atty = "0.2"
+
+[features]
+default = ["reqwest"]
+reqwest = ["dep:reqwest"]
 
 [dev-dependencies]
 tempfile = "3.8"

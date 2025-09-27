@@ -149,7 +149,6 @@ pub struct AnalysisRequest {
     pub prompt: String,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
-    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
