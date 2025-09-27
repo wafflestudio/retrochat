@@ -18,4 +18,4 @@ pub use query_service::{
     SessionDetailResponse, SessionFilters, SessionSummary, SessionsQueryRequest,
     SessionsQueryResponse,
 };
-pub use retrospection_service::{RetrospectionService, AnalysisData, SessionMetrics};
+pub use retrospection_service::{RetrospectionService, RetrospectionCleanupHandler, AnalysisData, SessionMetrics};

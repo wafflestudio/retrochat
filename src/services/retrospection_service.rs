@@ -87,8 +87,7 @@ impl RetrospectionService {
         request.mark_running();
         self.request_repo.update(&request).await?;
 
-        // In a real implementation, this would be done in a background task
-        // For now, we'll do it synchronously but with proper error handling
+        // Perform the analysis synchronously (blocking for CLI, but TUI will handle async)
         match self.perform_analysis(&request).await {
             Ok(retrospection) => {
                 // Save the retrospection result
@@ -166,6 +165,21 @@ impl RetrospectionService {
         &self,
     ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
         self.request_repo.find_active_requests().await
+    }
+
+    pub async fn cancel_all_active_analyses(
+        &self,
+    ) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+        let active_requests = self.get_active_analyses().await?;
+        let mut cancelled_count = 0;
+
+        for request in active_requests {
+            if let Ok(()) = self.cancel_analysis(request.id).await {
+                cancelled_count += 1;
+            }
+        }
+
+        Ok(cancelled_count)
     }
 
     pub async fn cleanup_old_analyses(
@@ -428,6 +442,39 @@ pub struct SessionMetrics {
     pub avg_message_length: u32,
     pub duration_minutes: u32,
     pub conversation_turns: u32,
+}
+
+/// A cleanup handler that automatically cancels running retrospection requests when dropped.
+/// This is useful for ensuring cleanup when the CLI exits or crashes.
+pub struct RetrospectionCleanupHandler {
+    service: Arc<RetrospectionService>,
+    runtime: Arc<tokio::runtime::Runtime>,
+}
+
+impl RetrospectionCleanupHandler {
+    pub fn new(service: Arc<RetrospectionService>, runtime: Arc<tokio::runtime::Runtime>) -> Self {
+        Self { service, runtime }
+    }
+}
+
+impl Drop for RetrospectionCleanupHandler {
+    fn drop(&mut self) {
+        // Cancel all active retrospection requests when the handler is dropped
+        let service = self.service.clone();
+        let _ = self.runtime.block_on(async move {
+            match service.cancel_all_active_analyses().await {
+                Ok(count) if count > 0 => {
+                    eprintln!("Cancelled {} running retrospection requests due to CLI exit", count);
+                }
+                Ok(_) => {
+                    // No active requests to cancel
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to cancel active retrospection requests: {}", e);
+                }
+            }
+        });
+    }
 }
 
 #[cfg(test)]

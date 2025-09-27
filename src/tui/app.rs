@@ -11,6 +11,7 @@ use ratatui::{
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
+use tokio::task;
 
 use crate::database::DatabaseManager;
 use crate::services::{AnalyticsService, QueryService, RetrospectionService};
@@ -40,6 +41,7 @@ pub struct AppState {
     pub retrospection_active: bool,
     pub active_analysis_requests: Vec<String>, // Track active request IDs
     pub error_dialog: Option<String>, // Error message to display in dialog
+    pub processing_status: Option<String>, // Status message for background processing
 }
 
 impl AppState {
@@ -53,6 +55,7 @@ impl AppState {
             retrospection_active: false,
             active_analysis_requests: Vec::new(),
             error_dialog: None,
+            processing_status: None,
         }
     }
 
@@ -102,6 +105,26 @@ impl AppState {
 
     pub fn dismiss_error(&mut self) {
         self.error_dialog = None;
+    }
+
+    pub fn set_processing_status(&mut self, status: String) {
+        self.processing_status = Some(status);
+    }
+
+    pub fn clear_processing_status(&mut self) {
+        self.processing_status = None;
+    }
+
+    pub fn update_processing_status(&mut self) {
+        if self.active_analysis_requests.is_empty() {
+            self.processing_status = None;
+        } else {
+            let count = self.active_analysis_requests.len();
+            self.processing_status = Some(format!("{} request{} processing...",
+                count,
+                if count == 1 { "" } else { "s" }
+            ));
+        }
     }
 }
 
@@ -296,13 +319,19 @@ impl App {
                             ).await {
                                 Ok(request) => {
                                     self.state.start_retrospection(request.id.clone());
-                                    self.retrospection.start_analysis(session_id, RetrospectionAnalysisType::UserInteractionAnalysis);
-                                    self.state.set_mode(AppMode::Retrospection);
+                                    self.retrospection.start_analysis(session_id.clone(), RetrospectionAnalysisType::UserInteractionAnalysis);
 
-                                    // Execute the analysis immediately after creating the request
-                                    if let Err(e) = service.execute_analysis(request.id.clone()).await {
-                                        self.state.show_error(format!("Failed to execute analysis: {e}"));
-                                    }
+                                    // Update processing status with count (stay on current tab)
+                                    self.state.update_processing_status();
+
+                                    // Execute the analysis in background task
+                                    let service_clone = service.clone();
+                                    let request_id = request.id.clone();
+                                    task::spawn(async move {
+                                        if let Err(e) = service_clone.execute_analysis(request_id).await {
+                                            eprintln!("Background analysis failed: {}", e);
+                                        }
+                                    });
                                 }
                                 Err(e) => {
                                     self.state.show_error(format!("Failed to start analysis: {e}"));
@@ -387,10 +416,40 @@ impl App {
             }
             AppMode::Retrospection => {
                 self.retrospection.refresh().await?;
+                // Check if any active analysis requests have completed
+                self.check_analysis_completion().await?;
             }
             AppMode::Help => {}
         }
         self.state.last_updated = Instant::now();
+        Ok(())
+    }
+
+    async fn check_analysis_completion(&mut self) -> Result<()> {
+        if let Some(ref service) = self.retrospection_service {
+            let mut completed_requests = Vec::new();
+
+            for request_id in &self.state.active_analysis_requests {
+                if let Ok(request) = service.get_analysis_status(request_id.clone()).await {
+                    match request.status {
+                        crate::models::OperationStatus::Completed |
+                        crate::models::OperationStatus::Failed |
+                        crate::models::OperationStatus::Cancelled => {
+                            completed_requests.push(request_id.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Remove completed requests and update processing status
+            for request_id in completed_requests {
+                self.state.complete_retrospection(&request_id);
+            }
+
+            // Update processing status based on current active count
+            self.state.update_processing_status();
+        }
         Ok(())
     }
 
@@ -462,7 +521,7 @@ impl App {
     }
 
     fn render_footer(&self, f: &mut Frame, area: Rect) {
-        let key_hints = match self.state.mode {
+        let mut key_hints = match self.state.mode {
             AppMode::SessionList => {
                 "↑/↓: Navigate | Enter: View | a: Analyze | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
@@ -472,7 +531,12 @@ impl App {
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
             AppMode::Retrospection => "↑/↓: Navigate | Enter/d: Details | c: Cancel | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
-        };
+        }.to_string();
+
+        // Add processing status if present
+        if let Some(ref status) = self.state.processing_status {
+            key_hints = format!("{} | 🔄 {}", key_hints, status);
+        }
 
         let footer = Paragraph::new(key_hints)
             .block(Block::default().borders(Borders::ALL))

@@ -8,6 +8,7 @@ use ratatui::{
     Frame,
 };
 use tokio::sync::mpsc;
+use tokio::task;
 use std::sync::Arc;
 
 use crate::models::{RetrospectRequest, Retrospection, RetrospectionAnalysisType, OperationStatus};
@@ -171,7 +172,7 @@ impl RetrospectionWidget {
         let completed_count = self.all_requests.len() - active_count;
 
         let header_text = format!(
-            "Retrospection Status - Active: {} | Completed: {} | Total: {} | Press 'd' for details",
+            "Retrospection Status - Active: {} | Completed: {} | Total: {}",
             active_count, completed_count, self.all_requests.len()
         );
 
@@ -413,16 +414,15 @@ impl RetrospectionWidget {
     async fn rerun_selected_request(&mut self) -> Result<()> {
         if let Some(request) = self.all_requests.get(self.selected_index) {
             if matches!(request.status, OperationStatus::Failed | OperationStatus::Cancelled | OperationStatus::Pending) {
-                // Execute the existing request (this will restart it)
-                match self.retrospection_service.execute_analysis(request.id.clone()).await {
-                    Ok(_) => {
-                        // Refresh to update the UI
-                        self.refresh().await?;
+                // Execute the existing request in background (this will restart it)
+                let service_clone = self.retrospection_service.clone();
+                let request_id = request.id.clone();
+
+                task::spawn(async move {
+                    if let Err(e) = service_clone.execute_analysis(request_id).await {
+                        eprintln!("Background rerun analysis failed: {}", e);
                     }
-                    Err(e) => {
-                        eprintln!("Failed to rerun analysis: {}", e);
-                    }
-                }
+                });
             }
         }
         Ok(())
