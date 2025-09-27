@@ -2,10 +2,13 @@ pub mod analytics;
 pub mod import;
 pub mod init;
 pub mod query;
+pub mod retrospect;
 pub mod tui;
 
 use clap::{Parser, Subcommand};
 use tokio::runtime::Runtime;
+
+use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
 #[command(name = "retrochat")]
@@ -36,6 +39,11 @@ pub enum Commands {
     Query {
         #[command(subcommand)]
         command: QueryCommands,
+    },
+    /// Retrospection analysis for chat sessions
+    Retrospect {
+        #[command(subcommand)]
+        command: RetrospectCommands,
     },
 }
 
@@ -149,6 +157,41 @@ impl Cli {
                     QueryCommands::Search { query, limit } => {
                         query::handle_search_command(query, limit).await
                     }
+                },
+                Commands::Retrospect { command } => match command {
+                    RetrospectCommands::Execute {
+                        session_id,
+                        analysis_type,
+                        custom_prompt,
+                        all,
+                        background,
+                    } => retrospect::handle_execute_command(
+                        session_id,
+                        analysis_type,
+                        custom_prompt,
+                        all,
+                        background,
+                    ).await,
+                    RetrospectCommands::Show {
+                        session_id,
+                        all,
+                        format,
+                        analysis_type,
+                    } => retrospect::handle_show_command(
+                        session_id,
+                        all,
+                        format,
+                        analysis_type,
+                    ).await,
+                    RetrospectCommands::Status {
+                        all,
+                        watch,
+                        history,
+                    } => retrospect::handle_status_command(all, watch, history).await,
+                    RetrospectCommands::Cancel {
+                        request_id,
+                        all,
+                    } => retrospect::handle_cancel_command(request_id, all).await,
                 },
             }
         })

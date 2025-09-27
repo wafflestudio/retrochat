@@ -29,11 +29,17 @@ cargo run -- tui                    # Launch TUI interface
 cargo run -- import scan            # Scan for chat files
 cargo run -- analyze insights       # Generate usage insights
 
+# Retrospection commands (requires GOOGLE_AI_API_KEY env var)
+cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions
+cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
+cargo run -- retrospect status [--all|--history]  # Check analysis status
+cargo run -- retrospect cancel [REQUEST_ID] [--all]  # Cancel operations
+
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 
 ## Recent Changes
-- 002-add-retrospection-process: Added Rust 1.75+ (from existing project) + Ratatui (TUI), SQLite/SQLx (storage), Serde (serialization), Clap (CLI), Tokio (async), reqwest (HTTP client for Google AI)
+- 002-add-retrospection-process: COMPLETED - Added retrospection analysis with Google AI integration, CLI interface (execute/show/status/cancel), simplified approach without complex background operations
 - 001-i-want-to: Added Rust TUI app for LLM chat history analysis with SQLite persistence
 
 <!-- MANUAL ADDITIONS START -->

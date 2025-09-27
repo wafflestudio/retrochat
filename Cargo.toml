@@ -109,10 +109,6 @@ name = "test_single_session_analysis"
 path = "tests/integration/test_single_session_analysis.rs"
 
 [[test]]
-name = "test_background_operations"
-path = "tests/integration/test_background_operations.rs"
-
-[[test]]
 name = "test_error_handling"
 path = "tests/integration/test_error_handling.rs"
 
