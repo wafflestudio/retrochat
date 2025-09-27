@@ -101,17 +101,16 @@ async fn test_google_ai_analysis_types() {
         assert!(text.contains(test_chat_data));
         // Each analysis type should have different prompts
         match analysis_type {
-                RetrospectionAnalysisType::UserInteractionAnalysis => assert!(
-                    text.contains("communication patterns")
-                        || text.contains("user's communication")
-                ),
-                RetrospectionAnalysisType::CollaborationInsights => {
-                    assert!(text.contains("collaboration"))
-                }
-                RetrospectionAnalysisType::QuestionQuality => assert!(text.contains("question")),
-                RetrospectionAnalysisType::TaskBreakdown => assert!(text.contains("task")),
-                RetrospectionAnalysisType::FollowUpPatterns => assert!(text.contains("follow-up")),
-                RetrospectionAnalysisType::Custom(prompt) => assert!(text.contains(&prompt)),
+            RetrospectionAnalysisType::UserInteractionAnalysis => assert!(
+                text.contains("communication patterns") || text.contains("user's communication")
+            ),
+            RetrospectionAnalysisType::CollaborationInsights => {
+                assert!(text.contains("collaboration"))
+            }
+            RetrospectionAnalysisType::QuestionQuality => assert!(text.contains("question")),
+            RetrospectionAnalysisType::TaskBreakdown => assert!(text.contains("task")),
+            RetrospectionAnalysisType::FollowUpPatterns => assert!(text.contains("follow-up")),
+            RetrospectionAnalysisType::Custom(prompt) => assert!(text.contains(&prompt)),
         }
     }
 }

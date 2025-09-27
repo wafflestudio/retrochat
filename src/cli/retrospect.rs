@@ -132,9 +132,7 @@ async fn execute_analysis_for_session(
     analysis_type: RetrospectionAnalysisType,
     background: bool,
 ) -> Result<()> {
-    println!(
-        "Starting retrospection analysis for session: {session_id}"
-    );
+    println!("Starting retrospection analysis for session: {session_id}");
 
     // Create analysis request
     let request = service
@@ -160,9 +158,7 @@ async fn execute_analysis_for_session(
     match service.execute_analysis(request.id.clone()).await {
         Ok(_) => {
             println!("✓ Analysis completed successfully");
-            println!(
-                "Use 'retrochat retrospect show {session_id}' to view results"
-            );
+            println!("Use 'retrochat retrospect show {session_id}' to view results");
         }
         Err(e) => {
             println!("✗ Analysis failed: {e}");
