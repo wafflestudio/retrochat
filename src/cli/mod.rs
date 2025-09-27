@@ -2,10 +2,14 @@ pub mod analytics;
 pub mod import;
 pub mod init;
 pub mod query;
+pub mod retrospect;
 pub mod tui;
 
 use clap::{Parser, Subcommand};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
+
+use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
 #[command(name = "retrochat")]
@@ -36,6 +40,11 @@ pub enum Commands {
     Query {
         #[command(subcommand)]
         command: QueryCommands,
+    },
+    /// Retrospection analysis for chat sessions
+    Retrospect {
+        #[command(subcommand)]
+        command: RetrospectCommands,
     },
 }
 
@@ -113,8 +122,16 @@ pub enum QueryCommands {
 impl Cli {
     pub fn run(self) -> anyhow::Result<()> {
         let rt = Runtime::new()?;
+        let rt_arc = Arc::new(rt);
 
-        rt.block_on(async {
+        // Create cleanup handler for retrospection commands
+        let _cleanup_guard = if matches!(self.command, Commands::Retrospect { .. }) {
+            Some(self.create_retrospection_cleanup_handler(rt_arc.clone())?)
+        } else {
+            None
+        };
+
+        rt_arc.block_on(async {
             match self.command {
                 Commands::Init => init::handle_init_command().await,
                 Commands::Tui => tui::handle_tui_command().await,
@@ -150,7 +167,71 @@ impl Cli {
                         query::handle_search_command(query, limit).await
                     }
                 },
+                Commands::Retrospect { command } => match command {
+                    RetrospectCommands::Execute {
+                        session_id,
+                        analysis_type,
+                        custom_prompt,
+                        all,
+                        background,
+                    } => {
+                        retrospect::handle_execute_command(
+                            session_id,
+                            analysis_type,
+                            custom_prompt,
+                            all,
+                            background,
+                        )
+                        .await
+                    }
+                    RetrospectCommands::Show {
+                        session_id,
+                        all,
+                        format,
+                        analysis_type,
+                    } => {
+                        retrospect::handle_show_command(session_id, all, format, analysis_type)
+                            .await
+                    }
+                    RetrospectCommands::Status {
+                        all,
+                        watch,
+                        history,
+                    } => retrospect::handle_status_command(all, watch, history).await,
+                    RetrospectCommands::Cancel { request_id, all } => {
+                        retrospect::handle_cancel_command(request_id, all).await
+                    }
+                },
             }
         })
+    }
+
+    fn create_retrospection_cleanup_handler(
+        &self,
+        rt: Arc<Runtime>,
+    ) -> anyhow::Result<crate::services::RetrospectionCleanupHandler> {
+        use crate::database::DatabaseManager;
+        use crate::services::{
+            google_ai::{GoogleAiClient, GoogleAiConfig},
+            RetrospectionCleanupHandler, RetrospectionService,
+        };
+
+        // Create the necessary components synchronously
+        let db_manager = rt.block_on(async { DatabaseManager::new("retrochat.db").await })?;
+
+        let api_key = std::env::var("GOOGLE_AI_API_KEY").unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
+
+        let google_ai_config = if api_key.is_empty() {
+            GoogleAiConfig::default()
+        } else {
+            GoogleAiConfig::new(api_key)
+        };
+        let google_ai_client = GoogleAiClient::new(google_ai_config)?;
+        let service = Arc::new(RetrospectionService::new(
+            Arc::new(db_manager),
+            google_ai_client,
+        ));
+
+        Ok(RetrospectionCleanupHandler::new(service, rt))
     }
 }

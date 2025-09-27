@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO retrospections (\n                id, retrospect_request_id, response_text, token_usage,\n                response_time_ms, model_used, metadata, created_at\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "796244fda57412d88681b0bcf2d3798c446f8a4e8f1f8195ad4a4c4164fd37e5"
+}

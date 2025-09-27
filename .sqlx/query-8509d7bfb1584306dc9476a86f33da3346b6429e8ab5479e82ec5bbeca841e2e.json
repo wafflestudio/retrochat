@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM retrospect_requests WHERE completed_at IS NOT NULL AND completed_at < ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8509d7bfb1584306dc9476a86f33da3346b6429e8ab5479e82ec5bbeca841e2e"
+}

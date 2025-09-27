@@ -181,7 +181,7 @@ impl AnalyticsWidget {
                 });
             }
             Err(e) => {
-                eprintln!("Failed to load usage analytics: {e}");
+                tracing::error!(error = %e, "Failed to load usage analytics");
             }
         }
 

@@ -63,6 +63,9 @@ retrochat_export_*.csv
 .env.local
 .env.*.local
 
+# .sqlx - Commented out to enable offline mode for CI
+# .sqlx
+
 # Temporary files
 tmp/
 temp/

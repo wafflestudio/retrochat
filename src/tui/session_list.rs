@@ -102,7 +102,7 @@ impl SessionListWidget {
                 }
             }
             Err(e) => {
-                eprintln!("Failed to load sessions: {e}");
+                tracing::error!(error = %e, "Failed to load sessions");
             }
         }
 
@@ -137,14 +137,21 @@ impl SessionListWidget {
             KeyCode::End => {
                 self.last_session();
             }
-            KeyCode::Char('r') => {
-                self.refresh().await?;
-            }
             KeyCode::Char('s') => {
                 self.cycle_sort_by().await?;
             }
             KeyCode::Char('o') => {
                 self.toggle_sort_order().await?;
+            }
+            KeyCode::Char('a') => {
+                // Start retrospection analysis for selected session
+                if let Some(selected) = self.list_state.selected() {
+                    if let Some(session) = self.sessions.get(selected) {
+                        // Return a special signal that we want to start analysis
+                        // This will be handled by the main app
+                        return Ok(Some(format!("ANALYZE:{}", session.session_id)));
+                    }
+                }
             }
             KeyCode::Char('f') => {
                 // TODO: Implement filter dialog
@@ -177,7 +184,7 @@ impl SessionListWidget {
             "Loading sessions...".to_string()
         } else {
             format!(
-                "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
+                "Sessions: {} | Page: {}/{} | Sort: {} {} | * = Has Retrospection | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
                 self.total_count,
                 self.page,
                 total_pages.max(1),
@@ -238,23 +245,49 @@ impl SessionListWidget {
             _ => Style::default().fg(Color::White),
         };
 
-        let project_text = session.project.as_deref().unwrap_or("No Project");
-        let start_time = if session.start_time.len() >= 16 {
-            &session.start_time[0..16]
+        // Use different colors based on retrospection status
+        let project_style = if session.has_retrospection {
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD)
         } else {
-            &session.start_time
+            Style::default().fg(Color::Yellow)
+        };
+
+        let preview_style = if session.has_retrospection {
+            Style::default().fg(Color::LightBlue)
+        } else {
+            Style::default().fg(Color::Gray)
+        };
+
+        let project_text = session.project.as_deref().unwrap_or("No Project");
+        let start_time = if session.start_time.chars().count() >= 16 {
+            let truncated: String = session.start_time.chars().take(16).collect();
+            truncated
+        } else {
+            session.start_time.clone()
+        };
+
+        // Add retrospection indicator
+        let retrospection_indicator = if session.has_retrospection {
+            Span::styled(
+                "* ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("  ")
         };
 
         Line::from(vec![
+            retrospection_indicator,
             Span::styled(
-                format!("{:12}", session.provider),
+                format!("{:11}", session.provider),
                 provider_style.add_modifier(Modifier::BOLD),
             ),
             Span::raw(" │ "),
-            Span::styled(
-                format!("{project_text:20}"),
-                Style::default().fg(Color::Yellow),
-            ),
+            Span::styled(format!("{project_text:20}"), project_style),
             Span::raw(" │ "),
             Span::styled(format!("{start_time:16}"), Style::default().fg(Color::Cyan)),
             Span::raw(" │ "),
@@ -265,7 +298,7 @@ impl SessionListWidget {
             Span::raw(" │ "),
             Span::styled(
                 Self::truncate_text(&session.first_message_preview, 40),
-                Style::default().fg(Color::Gray),
+                preview_style,
             ),
         ])
     }
