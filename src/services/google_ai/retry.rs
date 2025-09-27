@@ -1,5 +1,4 @@
 use std::time::Duration;
-use tokio::time::sleep;
 use backoff::{backoff::Backoff, ExponentialBackoff};
 
 use super::errors::{GoogleAiError, RetryError};
@@ -12,6 +11,7 @@ pub struct RetryConfig {
     pub multiplier: f64,
     pub jitter: bool,
     pub total_timeout: Duration,
+    pub ignore_server_retry_after: bool,
 }
 
 impl Default for RetryConfig {
@@ -23,6 +23,7 @@ impl Default for RetryConfig {
             multiplier: 2.0,
             jitter: true,
             total_timeout: Duration::from_secs(300), // 5 minutes total
+            ignore_server_retry_after: false,
         }
     }
 }
@@ -33,6 +34,11 @@ impl RetryConfig {
             max_attempts,
             ..Default::default()
         }
+    }
+
+    pub fn with_ignore_server_retry_after(mut self, ignore: bool) -> Self {
+        self.ignore_server_retry_after = ignore;
+        self
     }
 
     pub fn with_total_timeout(mut self, timeout: Duration) -> Self {
@@ -58,6 +64,7 @@ impl RetryConfig {
             multiplier: 1.5,
             jitter: true,
             total_timeout: Duration::from_secs(180),
+            ignore_server_retry_after: false,
         }
     }
 
@@ -69,6 +76,7 @@ impl RetryConfig {
             multiplier: 3.0,
             jitter: false,
             total_timeout: Duration::from_secs(600),
+            ignore_server_retry_after: false,
         }
     }
 }
@@ -134,9 +142,15 @@ impl RetryHandler {
                     }
 
                     // Calculate delay
-                    let delay = if let Some(retry_after) = error.retry_after_seconds() {
-                        // Use server-suggested delay if available
-                        Duration::from_secs(retry_after)
+                    let delay = if !self.config.ignore_server_retry_after {
+                        if let Some(retry_after) = error.retry_after_seconds() {
+                            // Use server-suggested delay if available and not ignored
+                            Duration::from_secs(retry_after)
+                        } else {
+                            // Use exponential backoff
+                            self.backoff.next_backoff()
+                                .unwrap_or(self.config.max_delay)
+                        }
                     } else {
                         // Use exponential backoff
                         self.backoff.next_backoff()
@@ -150,7 +164,7 @@ impl RetryHandler {
                         delay
                     );
 
-                    sleep(delay).await;
+                    tokio::time::sleep(delay).await;
                 }
             }
         }
@@ -265,6 +279,7 @@ mod tests {
         let config = RetryConfig {
             max_attempts: 3,
             initial_delay: Duration::from_millis(10),
+            ignore_server_retry_after: true,
             ..Default::default()
         };
 
@@ -291,6 +306,7 @@ mod tests {
         let config = RetryConfig {
             max_attempts: 3,
             initial_delay: Duration::from_millis(10),
+            ignore_server_retry_after: true,
             ..Default::default()
         };
 
@@ -312,6 +328,7 @@ mod tests {
         let config = RetryConfig {
             max_attempts: 2,
             initial_delay: Duration::from_millis(10),
+            ignore_server_retry_after: true,
             ..Default::default()
         };
 
