@@ -124,7 +124,7 @@ impl GoogleAiError {
                 "Google AI service is temporarily unavailable. Please try again later.".to_string()
             }
             GoogleAiError::InvalidRequest { message } => {
-                format!("Invalid request: {}", message)
+                format!("Invalid request: {message}")
             }
             GoogleAiError::ParseError { .. } => {
                 "Error parsing Google AI response. Please try again.".to_string()
@@ -133,7 +133,7 @@ impl GoogleAiError {
                 "Received invalid response from Google AI. Please try again.".to_string()
             }
             GoogleAiError::ConfigurationError { message } => {
-                format!("Configuration error: {}", message)
+                format!("Configuration error: {message}")
             }
         }
     }

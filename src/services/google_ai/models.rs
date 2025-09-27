@@ -213,7 +213,7 @@ impl GenerateContentResponse {
                 "SAFETY" => Err("Response blocked by safety filters".to_string()),
                 "RECITATION" => Err("Response blocked due to recitation".to_string()),
                 "OTHER" => Err("Response generation stopped for unknown reason".to_string()),
-                reason => Err(format!("Unexpected finish reason: {}", reason)),
+                reason => Err(format!("Unexpected finish reason: {reason}")),
             }
         } else {
             Ok(())

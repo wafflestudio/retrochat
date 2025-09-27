@@ -174,7 +174,7 @@ impl GoogleAiClient {
 
             let parsed_response: GenerateContentResponse = serde_json::from_str(&response_text)
                 .map_err(|e| GoogleAiError::ParseError {
-                    message: format!("Failed to parse response: {}", e),
+                    message: format!("Failed to parse response: {e}"),
                 })?;
 
             parsed_response

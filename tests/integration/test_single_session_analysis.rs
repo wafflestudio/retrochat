@@ -34,7 +34,7 @@ async fn test_single_session_analysis_workflow() {
     let request = match request {
         Ok(req) => req,
         Err(e) => {
-            println!("Expected: Analysis request creation may fail: {:?}", e);
+            println!("Expected: Analysis request creation may fail: {e:?}");
             return;
         }
     };
@@ -55,13 +55,13 @@ async fn test_single_session_analysis_workflow() {
                     println!("Analysis executed but no result found");
                 }
                 Err(e) => {
-                    println!("Error getting analysis result: {:?}", e);
+                    println!("Error getting analysis result: {e:?}");
                 }
             }
         }
         Err(e) => {
             // Expected to fail until Google AI integration is implemented
-            println!("Expected failure until implementation: {:?}", e);
+            println!("Expected failure until implementation: {e:?}");
             let error_msg = e.to_string();
             assert!(
                 error_msg.contains("not implemented")
@@ -106,7 +106,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
             }
         }
         Err(e) => {
-            println!("Expected: Analysis request creation may fail: {:?}", e);
+            println!("Expected: Analysis request creation may fail: {e:?}");
             // This is acceptable as the test validates the interface
         }
     }
@@ -193,7 +193,6 @@ async fn test_single_session_analysis_cancellation() {
             match cancel_result {
                 Ok(()) => {
                     // Cancellation succeeded
-                    assert!(true);
                 }
                 Err(e) => {
                     // Cancellation may fail if operation doesn't exist or already completed
@@ -208,7 +207,7 @@ async fn test_single_session_analysis_cancellation() {
             }
         }
         Err(e) => {
-            println!("Expected: Analysis request creation may fail: {:?}", e);
+            println!("Expected: Analysis request creation may fail: {e:?}");
             // This is acceptable as the test validates the interface
         }
     }

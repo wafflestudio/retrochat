@@ -74,7 +74,7 @@ impl std::str::FromStr for OperationStatus {
             "completed" => Ok(OperationStatus::Completed),
             "failed" => Ok(OperationStatus::Failed),
             "cancelled" => Ok(OperationStatus::Cancelled),
-            _ => Err(format!("Invalid operation status: {}", s)),
+            _ => Err(format!("Invalid operation status: {s}")),
         }
     }
 }

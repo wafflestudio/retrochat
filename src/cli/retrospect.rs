@@ -143,7 +143,7 @@ async fn execute_analysis_for_session(
             None, // custom_prompt handled above
         )
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create analysis request: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create analysis request: {e}"))?;
 
     if background {
         println!("Analysis request created: {}", request.id);
@@ -221,16 +221,14 @@ async fn show_session_results(
     let requests = service
         .list_analyses(Some(session_id.to_string()), None)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to list analyses: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to list analyses: {e}"))?;
 
     if requests.is_empty() {
         println!(
-            "No retrospection analysis found for session: {}",
-            session_id
+            "No retrospection analysis found for session: {session_id}"
         );
         println!(
-            "Run 'retrochat retrospect execute {}' to analyze this session",
-            session_id
+            "Run 'retrochat retrospect execute {session_id}' to analyze this session"
         );
         return Ok(());
     }
@@ -267,7 +265,7 @@ async fn show_session_results(
                     println!("Status: {:?}", request.status);
                     println!("Created: {}", retrospection.created_at);
                     if let Some(token_usage) = retrospection.token_usage {
-                        println!("Token Usage: {}", token_usage);
+                        println!("Token Usage: {token_usage}");
                     }
                     println!();
                     println!("Insights:");
@@ -287,7 +285,7 @@ async fn show_session_results(
                     request.id, request.analysis_type, request.status
                 );
                 if let Some(error) = &request.error_message {
-                    println!("Error: {}", error);
+                    println!("Error: {error}");
                 }
                 println!();
             }
@@ -305,7 +303,7 @@ async fn show_all_results(
     let requests = service
         .list_analyses(None, Some(50))
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to list analyses: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to list analyses: {e}"))?;
 
     if requests.is_empty() {
         println!("No retrospection analyses found");
@@ -345,7 +343,7 @@ async fn show_all_results(
                     request.session_id, request.analysis_type, request.status
                 );
                 if let Some(error) = &request.error_message {
-                    println!("  Error: {}", error);
+                    println!("  Error: {error}");
                 }
                 println!();
             }
@@ -398,7 +396,7 @@ async fn show_current_status(service: &RetrospectionService) -> Result<()> {
         println!("  Status: {:?}", request.status);
         println!("  Started: {}", request.started_at);
         if let Some(error) = &request.error_message {
-            println!("  Error: {}", error);
+            println!("  Error: {error}");
         }
         println!();
     }
@@ -414,7 +412,7 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
     let all_requests = service
         .list_analyses(None, Some(100))
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to get historical analyses: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to get historical analyses: {e}"))?;
 
     println!("=== Retrospection History ===");
     println!();
@@ -426,10 +424,10 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
         );
         println!("  Started: {}", request.started_at);
         if let Some(completed_at) = request.completed_at {
-            println!("  Completed: {}", completed_at);
+            println!("  Completed: {completed_at}");
         }
         if let Some(error) = &request.error_message {
-            println!("  Error: {}", error);
+            println!("  Error: {error}");
         }
         println!();
     }
@@ -456,7 +454,7 @@ pub async fn handle_cancel_command(request_id: Option<String>, all: bool) -> Res
 async fn cancel_single_request(service: &RetrospectionService, request_id: &str) -> Result<()> {
     match service.cancel_analysis(request_id.to_string()).await {
         Ok(()) => {
-            println!("✓ Successfully cancelled analysis request: {}", request_id);
+            println!("✓ Successfully cancelled analysis request: {request_id}");
         }
         Err(e) => {
             println!("✗ Failed to cancel request: {e}");
@@ -497,7 +495,7 @@ async fn cancel_all_requests(service: &RetrospectionService) -> Result<()> {
     }
 
     println!();
-    println!("Summary: {} cancelled, {} failed", cancelled, failed);
+    println!("Summary: {cancelled} cancelled, {failed} failed");
 
     Ok(())
 }

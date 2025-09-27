@@ -231,7 +231,7 @@ impl QueryService {
                     messages.first().map(|msg| {
                         let preview = if msg.content.chars().count() > 100 {
                             let truncated: String = msg.content.chars().take(97).collect();
-                            format!("{}...", truncated)
+                            format!("{truncated}...")
                         } else {
                             msg.content.clone()
                         };
@@ -330,7 +330,7 @@ impl QueryService {
             // Create content snippet
             let content_snippet = if message.content.chars().count() > 200 {
                 let truncated: String = message.content.chars().take(197).collect();
-                format!("...{}...", truncated)
+                format!("...{truncated}...")
             } else {
                 message.content.clone()
             };

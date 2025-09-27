@@ -75,7 +75,7 @@ impl RetrospectionWidget {
             .retrospection_service
             .list_analyses(None, Some(100))
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to load requests: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to load requests: {e}"))?;
 
         // Sort requests: active first (pending, running), then by creation time (newest first)
         self.all_requests.sort_by(|a, b| {
@@ -500,7 +500,7 @@ impl RetrospectionWidget {
                     .retrospection_service
                     .get_analysis_result(request.id.clone())
                     .await
-                    .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {e}"))?
                 {
                     Some(retrospection) => {
                         self.selected_retrospection = Some(retrospection);

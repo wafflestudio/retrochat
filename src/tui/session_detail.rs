@@ -402,7 +402,7 @@ impl SessionDetailWidget {
         } else {
             let truncate_len = max_len.saturating_sub(3);
             let truncated: String = text.chars().take(truncate_len).collect();
-            format!("{}...", truncated)
+            format!("{truncated}...")
         }
     }
 
@@ -517,7 +517,7 @@ impl SessionDetailWidget {
             let mut content_lines = Vec::new();
 
             // Add insights
-            content_lines.extend(retrospection.insights.lines().map(|line| Line::from(line)));
+            content_lines.extend(retrospection.insights.lines().map(Line::from));
             content_lines.push(Line::from(""));
 
             // Add reflection section
@@ -532,7 +532,7 @@ impl SessionDetailWidget {
                 retrospection
                     .reflection
                     .lines()
-                    .map(|line| Line::from(line)),
+                    .map(Line::from),
             );
             content_lines.push(Line::from(""));
 
@@ -548,7 +548,7 @@ impl SessionDetailWidget {
                 retrospection
                     .recommendations
                     .lines()
-                    .map(|line| Line::from(line)),
+                    .map(Line::from),
             );
 
             let all_lines = [lines, content_lines].concat();

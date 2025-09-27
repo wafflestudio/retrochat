@@ -46,13 +46,13 @@ async fn test_google_ai_api_error_recovery() {
                     // Should be a meaningful error about API key or connection
                     let error_msg = e.to_string();
                     assert!(!error_msg.is_empty());
-                    println!("Expected API error: {}", error_msg);
+                    println!("Expected API error: {error_msg}");
                 }
             }
         }
         Err(e) => {
             // Expected to fail if validation catches the invalid config
-            println!("Expected failure during request creation: {:?}", e);
+            println!("Expected failure during request creation: {e:?}");
         }
     }
 }
@@ -87,10 +87,12 @@ async fn test_service_creation_with_invalid_config() {
 
     // Request creation should succeed
     match result {
-        Ok(_) => assert!(true),
+        Ok(_) => {
+            // Request creation succeeded
+        }
         Err(e) => {
             // May fail due to database issues or validation
-            println!("Request creation failed (acceptable): {:?}", e);
+            println!("Request creation failed (acceptable): {e:?}");
         }
     }
 }
@@ -135,13 +137,13 @@ async fn test_analysis_execution_error_handling() {
                     // Expected failure due to timeout or other issues
                     let error_msg = e.to_string();
                     assert!(!error_msg.is_empty());
-                    println!("Expected timeout/error: {}", error_msg);
+                    println!("Expected timeout/error: {error_msg}");
                 }
             }
         }
         Err(e) => {
             // May fail during request creation
-            println!("Request creation failed: {:?}", e);
+            println!("Request creation failed: {e:?}");
         }
     }
 }
@@ -237,12 +239,14 @@ async fn test_database_error_handling() {
 
         // All these should succeed or fail gracefully
         match result {
-            Ok(_) => assert!(true),
+            Ok(_) => {
+                // Operation succeeded
+            }
             Err(e) => {
                 // Should be a meaningful error message
                 let error_msg = e.to_string();
                 assert!(!error_msg.is_empty());
-                println!("Database operation error (acceptable): {}", error_msg);
+                println!("Database operation error (acceptable): {error_msg}");
             }
         }
     }

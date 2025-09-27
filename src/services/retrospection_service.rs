@@ -22,8 +22,8 @@ impl RetrospectionService {
     pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
         let retrospection_repo = RetrospectionRepository::new(db_manager.clone());
-        let session_repo = ChatSessionRepository::new(&*db_manager);
-        let message_repo = MessageRepository::new(&*db_manager);
+        let session_repo = ChatSessionRepository::new(&db_manager);
+        let message_repo = MessageRepository::new(&db_manager);
 
         Self {
             google_ai_client,
@@ -267,13 +267,11 @@ impl RetrospectionService {
 
         let prompt = if let Some(custom_prompt) = &request.custom_prompt {
             format!(
-                "{}\n\nCustom Instructions: {}\n\nContext:\n{}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields.",
-                base_prompt, custom_prompt, context
+                "{base_prompt}\n\nCustom Instructions: {custom_prompt}\n\nContext:\n{context}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields."
             )
         } else {
             format!(
-                "{}\n\nContext:\n{}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields.",
-                base_prompt, context
+                "{base_prompt}\n\nContext:\n{context}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields."
             )
         };
 
@@ -356,7 +354,7 @@ impl RetrospectionService {
             };
             let content_preview = if message.content.len() > 200 {
                 let truncated: String = message.content.chars().take(200).collect();
-                format!("{}...", truncated)
+                format!("{truncated}...")
             } else {
                 message.content.clone()
             };
@@ -485,7 +483,7 @@ impl Drop for RetrospectionCleanupHandler {
     fn drop(&mut self) {
         // Cancel all active retrospection requests when the handler is dropped
         let service = self.service.clone();
-        let _ = self.runtime.block_on(async move {
+        self.runtime.block_on(async move {
             match service.cancel_all_active_analyses().await {
                 Ok(count) if count > 0 => {
                     tracing::info!(

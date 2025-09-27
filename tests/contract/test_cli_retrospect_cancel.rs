@@ -17,7 +17,6 @@ async fn test_retrospect_cancel_command_structure() {
     match result {
         Ok(()) => {
             // Command succeeded - this is fine
-            assert!(true);
         }
         Err(e) => {
             // Command failed - should be a proper error with message
@@ -38,7 +37,9 @@ async fn test_retrospect_cancel_specific_operations() {
     // The command should execute without panicking
     // Result can be success or failure based on whether request exists
     match result {
-        Ok(()) => assert!(true),
+        Ok(()) => {
+            // Command succeeded
+        },
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -65,7 +66,9 @@ async fn test_retrospect_cancel_all_operations() {
 
     // The command should execute
     match result {
-        Ok(()) => assert!(true),
+        Ok(()) => {
+            // Command succeeded
+        },
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -92,7 +95,9 @@ async fn test_retrospect_cancel_validation() {
 
     // Should handle this case - may list available requests or show error
     match result {
-        Ok(()) => assert!(true), // Command succeeded (may have listed available requests)
+        Ok(()) => {
+            // Command succeeded
+        }, // Command succeeded (may have listed available requests)
         Err(e) => {
             // Should be a meaningful error about validation
             let error_msg = e.to_string();
@@ -110,7 +115,6 @@ async fn test_retrospect_cancel_nonexistent_operations() {
     match result {
         Ok(()) => {
             // Command may succeed if it handles nonexistent IDs gracefully
-            assert!(true);
         }
         Err(e) => {
             // Should be a meaningful error

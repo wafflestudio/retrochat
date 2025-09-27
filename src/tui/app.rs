@@ -172,7 +172,7 @@ impl App {
         let analytics_service = AnalyticsService::new((*db_manager).clone());
 
         // Try to create retrospection service if Google AI API key is available
-        let retrospection_service = if let Ok(_) = std::env::var("GOOGLE_AI_API_KEY") {
+        let retrospection_service = if std::env::var("GOOGLE_AI_API_KEY").is_ok() {
             let config = GoogleAiConfig::default();
             match GoogleAiClient::new(config) {
                 Ok(client) => Some(Arc::new(RetrospectionService::new(
@@ -574,7 +574,7 @@ impl App {
 
         // Add processing status if present
         if let Some(ref status) = self.state.processing_status {
-            key_hints = format!("{} | {}", key_hints, status);
+            key_hints = format!("{key_hints} | {status}");
         }
 
         let footer = Paragraph::new(key_hints)

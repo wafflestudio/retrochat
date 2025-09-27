@@ -19,7 +19,6 @@ async fn test_retrospect_execute_command_structure() {
     match result {
         Ok(()) => {
             // Command succeeded
-            assert!(true);
         }
         Err(e) => {
             // Command failed - should be a proper error with message
@@ -52,7 +51,9 @@ async fn test_retrospect_execute_all_sessions() {
 
     // The command should execute
     match result {
-        Ok(()) => assert!(true),
+        Ok(()) => {
+            // Command succeeded
+        },
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -84,7 +85,9 @@ async fn test_retrospect_execute_custom_analysis() {
 
     // The command should execute
     match result {
-        Ok(()) => assert!(true),
+        Ok(()) => {
+            // Command succeeded
+        },
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
@@ -115,7 +118,9 @@ async fn test_retrospect_execute_validation() {
 
     // Should handle this case - may succeed or show meaningful error
     match result {
-        Ok(()) => assert!(true), // Command may handle this gracefully
+        Ok(()) => {
+            // Command succeeded
+        }, // Command may handle this gracefully
         Err(e) => {
             // Should be a meaningful error about validation
             let error_msg = e.to_string();
@@ -144,7 +149,6 @@ async fn test_retrospect_execute_validation() {
         Ok(()) => {
             // If it succeeds, that might be unexpected for missing prompt
             // but let's allow it since error handling may vary
-            assert!(true);
         }
         Err(e) => {
             let error_msg = e.to_string();
