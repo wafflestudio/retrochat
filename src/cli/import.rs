@@ -7,6 +7,10 @@ use crate::database::DatabaseManager;
 use crate::services::ImportService;
 
 pub async fn scan_directory(directory: Option<String>) -> Result<()> {
+    scan_directory_with_db(directory, "retrochat.db").await
+}
+
+pub async fn scan_directory_with_db(directory: Option<String>, db_path: &str) -> Result<()> {
     let scan_path = directory.unwrap_or_else(|| ".".to_string());
     let path = Path::new(&scan_path);
 
@@ -16,7 +20,7 @@ pub async fn scan_directory(directory: Option<String>) -> Result<()> {
 
     println!("Scanning directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new(db_path).await?);
     let import_service = ImportService::new(db_manager);
 
     let scan_request = crate::services::ScanRequest {
@@ -378,10 +382,19 @@ mod tests {
             r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","chat_messages":[]}"#,
         )
         .unwrap();
-        eprintln!("before scan, ls: {:?}", std::fs::read_dir(temp_dir.path()).unwrap()
-        .map(|e| e.unwrap().path()).collect::<Vec<_>>());
+        eprintln!(
+            "before scan, ls: {:?}",
+            std::fs::read_dir(temp_dir.path())
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect::<Vec<_>>()
+        );
 
-        let result = scan_directory(Some(temp_dir.path().to_string_lossy().to_string())).await;
+        let result = scan_directory_with_db(
+            Some(temp_dir.path().to_string_lossy().to_string()),
+            ":memory:",
+        )
+        .await;
         eprintln!("result: {:?}", result);
         assert!(result.is_ok());
     }
