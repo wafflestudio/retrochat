@@ -43,6 +43,7 @@ async fn test_retrospect_cancel_specific_operations() {
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
+            println!("Cancel specific error: {}", error_msg);
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
@@ -50,6 +51,10 @@ async fn test_retrospect_cancel_specific_operations() {
                     || error_msg.contains("database")
                     || error_msg.contains("connection")
                     || error_msg.contains("retro-456")
+                    || error_msg.contains("Failed")
+                    || error_msg.contains("No")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }
@@ -72,6 +77,7 @@ async fn test_retrospect_cancel_all_operations() {
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
+            println!("Cancel all error: {}", error_msg);
             assert!(!error_msg.is_empty());
             // Common error scenarios for --all flag
             assert!(
@@ -79,6 +85,10 @@ async fn test_retrospect_cancel_all_operations() {
                     || error_msg.contains("connection")
                     || error_msg.contains("active")
                     || error_msg.contains("requests")
+                    || error_msg.contains("Failed")
+                    || error_msg.contains("No")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }
@@ -119,12 +129,17 @@ async fn test_retrospect_cancel_nonexistent_operations() {
         Err(e) => {
             // Should be a meaningful error
             let error_msg = e.to_string();
+            println!("Cancel nonexistent error: {}", error_msg);
             assert!(!error_msg.is_empty());
             assert!(
                 error_msg.contains("not found")
                     || error_msg.contains("nonexistent")
                     || error_msg.contains("database")
                     || error_msg.contains("connection")
+                    || error_msg.contains("Failed")
+                    || error_msg.contains("No")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }

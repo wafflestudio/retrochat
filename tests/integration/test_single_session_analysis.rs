@@ -17,7 +17,7 @@ async fn test_single_session_analysis_workflow() {
     let session_id = "test-session-123".to_string();
 
     // Create service with mock Google AI client
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -82,7 +82,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
     let custom_prompt = "Focus on code quality and best practices in this session".to_string();
 
     // Create service
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -118,7 +118,7 @@ async fn test_single_session_analysis_error_handling() {
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
 
     // Create service
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -172,7 +172,7 @@ async fn test_single_session_analysis_cancellation() {
     let session_id = "test-session-cancel".to_string();
 
     // Create service
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
