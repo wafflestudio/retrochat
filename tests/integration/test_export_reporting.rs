@@ -4,7 +4,7 @@ use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_export_reporting_workflow() {
-    let _temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     // Setup database
     let database = Database::new_in_memory().await.unwrap();
@@ -32,16 +32,14 @@ async fn test_export_reporting_workflow() {
         }),
     };
 
+    let csv_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        csv_export_request.date_range.as_ref().unwrap().start_date,
+        csv_export_request.date_range.as_ref().unwrap().end_date,
+        csv_export_request.format
+    ));
     let csv_result = analytics_service
-        .export_data(
-            &csv_export_request.format,
-            csv_export_request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, csv_export_request.format
-                )
-            }),
-        )
+        .export_data(&csv_export_request.format, &csv_path)
         .await;
     assert!(csv_result.is_ok());
 
@@ -66,16 +64,14 @@ async fn test_export_reporting_workflow() {
         }),
     };
 
+    let json_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        json_export_request.date_range.as_ref().unwrap().start_date,
+        json_export_request.date_range.as_ref().unwrap().end_date,
+        json_export_request.format
+    ));
     let json_result = analytics_service
-        .export_data(
-            &json_export_request.format,
-            json_export_request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, json_export_request.format
-                )
-            }),
-        )
+        .export_data(&json_export_request.format, &json_path)
         .await;
     assert!(json_result.is_ok());
 
@@ -87,6 +83,7 @@ async fn test_export_reporting_workflow() {
 
 #[tokio::test]
 async fn test_export_different_formats() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
@@ -108,16 +105,14 @@ async fn test_export_different_formats() {
             filters: None,
         };
 
+        let export_path = temp_dir.path().join(format!(
+            "export_{}_{}.{}",
+            export_request.date_range.as_ref().unwrap().start_date,
+            export_request.date_range.as_ref().unwrap().end_date,
+            export_request.format
+        ));
         let result = analytics_service
-            .export_data(
-                &export_request.format,
-                export_request.date_range.map(|dr| {
-                    format!(
-                        "export_{}_{}.{}",
-                        dr.start_date, dr.end_date, export_request.format
-                    )
-                }),
-            )
+            .export_data(&export_request.format, &export_path)
             .await;
         assert!(result.is_ok());
 
@@ -131,6 +126,7 @@ async fn test_export_different_formats() {
 
 #[tokio::test]
 async fn test_export_with_comprehensive_filters() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
@@ -159,16 +155,14 @@ async fn test_export_with_comprehensive_filters() {
         }),
     };
 
+    let export_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        comprehensive_export.date_range.as_ref().unwrap().start_date,
+        comprehensive_export.date_range.as_ref().unwrap().end_date,
+        comprehensive_export.format
+    ));
     let result = analytics_service
-        .export_data(
-            &comprehensive_export.format,
-            comprehensive_export.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, comprehensive_export.format
-                )
-            }),
-        )
+        .export_data(&comprehensive_export.format, &export_path)
         .await;
     assert!(result.is_ok());
 
@@ -181,6 +175,7 @@ async fn test_export_with_comprehensive_filters() {
 
 #[tokio::test]
 async fn test_export_performance() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
@@ -201,16 +196,14 @@ async fn test_export_performance() {
         filters: None, // No filters for maximum data
     };
 
+    let export_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        large_export_request.date_range.as_ref().unwrap().start_date,
+        large_export_request.date_range.as_ref().unwrap().end_date,
+        large_export_request.format
+    ));
     let result = analytics_service
-        .export_data(
-            &large_export_request.format,
-            large_export_request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, large_export_request.format
-                )
-            }),
-        )
+        .export_data(&large_export_request.format, &export_path)
         .await;
     let duration = start_time.elapsed();
 
@@ -224,6 +217,7 @@ async fn test_export_performance() {
 
 #[tokio::test]
 async fn test_export_edge_cases() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
@@ -239,16 +233,9 @@ async fn test_export_edge_cases() {
         filters: None,
     };
 
+    let export_path = temp_dir.path().join("export_all_data.csv");
     let result = analytics_service
-        .export_data(
-            &no_date_export.format,
-            no_date_export.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, no_date_export.format
-                )
-            }),
-        )
+        .export_data(&no_date_export.format, &export_path)
         .await;
     assert!(result.is_ok());
 
@@ -268,16 +255,14 @@ async fn test_export_edge_cases() {
         }),
     };
 
+    let restrictive_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        restrictive_export.date_range.as_ref().unwrap().start_date,
+        restrictive_export.date_range.as_ref().unwrap().end_date,
+        restrictive_export.format
+    ));
     let restrictive_result = analytics_service
-        .export_data(
-            &restrictive_export.format,
-            restrictive_export.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, restrictive_export.format
-                )
-            }),
-        )
+        .export_data(&restrictive_export.format, &restrictive_path)
         .await;
     assert!(restrictive_result.is_ok());
 
@@ -287,6 +272,7 @@ async fn test_export_edge_cases() {
 
 #[tokio::test]
 async fn test_export_file_validation() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let database = Database::new_in_memory().await.unwrap();
     database
         .initialize()
@@ -304,16 +290,14 @@ async fn test_export_file_validation() {
         filters: None,
     };
 
+    let export_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        export_request.date_range.as_ref().unwrap().start_date,
+        export_request.date_range.as_ref().unwrap().end_date,
+        export_request.format
+    ));
     let result = analytics_service
-        .export_data(
-            &export_request.format,
-            export_request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, export_request.format
-                )
-            }),
-        )
+        .export_data(&export_request.format, &export_path)
         .await;
     assert!(result.is_ok());
 

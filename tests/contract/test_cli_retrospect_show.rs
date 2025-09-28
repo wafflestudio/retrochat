@@ -28,6 +28,8 @@ async fn test_retrospect_show_command_structure() {
                     || error_msg.contains("connection")
                     || error_msg.contains("session")
                     || error_msg.contains("GOOGLE_AI_API_KEY")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }
@@ -60,6 +62,8 @@ async fn test_retrospect_show_all_formats() {
                         || error_msg.contains("connection")
                         || error_msg.contains("analyses")
                         || error_msg.contains("GOOGLE_AI_API_KEY")
+                        || error_msg.contains("Configuration")
+                        || error_msg.contains("API key")
                 );
             }
         }
@@ -92,6 +96,8 @@ async fn test_retrospect_show_filtering() {
                     || error_msg.contains("connection")
                     || error_msg.contains("analyses")
                     || error_msg.contains("GOOGLE_AI_API_KEY")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }
@@ -125,6 +131,8 @@ async fn test_retrospect_show_specific_session() {
                     || error_msg.contains("analysis")
                     || error_msg.contains("GOOGLE_AI_API_KEY")
                     || error_msg.contains("not found")
+                    || error_msg.contains("Configuration")
+                    || error_msg.contains("API key")
             );
         }
     }

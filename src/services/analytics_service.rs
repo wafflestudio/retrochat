@@ -373,31 +373,23 @@ impl AnalyticsService {
     pub async fn export_data(
         &self,
         format: &str,
-        output_path: Option<String>,
+        output_path: &std::path::Path,
     ) -> Result<ExportResponse> {
         let insights = self.generate_insights().await?;
-
-        let output_file = output_path.unwrap_or_else(|| {
-            format!(
-                "retrochat_export_{}.{}",
-                Utc::now().format("%Y%m%d_%H%M%S"),
-                format
-            )
-        });
 
         let start_time = std::time::Instant::now();
 
         let records_exported = match format.to_lowercase().as_str() {
             "json" => {
-                self.export_json(&insights, &output_file).await?;
+                self.export_json(&insights, output_path).await?;
                 insights.daily_activity.len() as i32
             }
             "csv" => {
-                self.export_csv(&insights, &output_file).await?;
+                self.export_csv(&insights, output_path).await?;
                 insights.daily_activity.len() as i32
             }
             "txt" | "text" => {
-                self.export_text(&insights, &output_file).await?;
+                self.export_text(&insights, output_path).await?;
                 insights.daily_activity.len() as i32
             }
             _ => {
@@ -407,16 +399,17 @@ impl AnalyticsService {
             }
         };
 
-        let file_metadata = fs::metadata(&output_file)?;
+        let file_metadata = fs::metadata(output_path)?;
         let file_size = file_metadata.len() as i64;
         let export_duration = start_time.elapsed().as_millis() as i32;
 
-        tracing::info!(output_file = %output_file, "Exported data successfully");
+        let output_file_str = output_path.to_string_lossy().to_string();
+        tracing::info!(output_file = %output_file_str, "Exported data successfully");
 
         Ok(ExportResponse {
             export_id: format!("export_{}", Utc::now().timestamp()),
             format: format.to_string(),
-            file_path: output_file,
+            file_path: output_file_str,
             file_size_bytes: file_size,
             export_duration_ms: export_duration,
             records_exported,
@@ -424,17 +417,25 @@ impl AnalyticsService {
         })
     }
 
-    async fn export_json(&self, insights: &UsageInsights, output_file: &str) -> Result<()> {
+    async fn export_json(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let json_content = serde_json::to_string_pretty(insights)
             .with_context(|| "Failed to serialize insights to JSON")?;
 
         fs::write(output_file, json_content)
-            .with_context(|| format!("Failed to write JSON file: {output_file}"))?;
+            .with_context(|| format!("Failed to write JSON file: {}", output_file.display()))?;
 
         Ok(())
     }
 
-    async fn export_csv(&self, insights: &UsageInsights, output_file: &str) -> Result<()> {
+    async fn export_csv(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let mut csv_content = String::new();
 
         // Summary section
@@ -464,12 +465,16 @@ impl AnalyticsService {
         }
 
         fs::write(output_file, csv_content)
-            .with_context(|| format!("Failed to write CSV file: {output_file}"))?;
+            .with_context(|| format!("Failed to write CSV file: {}", output_file.display()))?;
 
         Ok(())
     }
 
-    async fn export_text(&self, insights: &UsageInsights, output_file: &str) -> Result<()> {
+    async fn export_text(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let mut content = String::new();
 
         content.push_str("RetroChat Usage Insights Report\n");
@@ -548,7 +553,7 @@ impl AnalyticsService {
         ));
 
         fs::write(output_file, content)
-            .with_context(|| format!("Failed to write text file: {output_file}"))?;
+            .with_context(|| format!("Failed to write text file: {}", output_file.display()))?;
 
         Ok(())
     }

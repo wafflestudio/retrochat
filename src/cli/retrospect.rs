@@ -199,7 +199,9 @@ pub async fn handle_show_command(
 ) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
-    let config = GoogleAiConfig::default();
+    // For show command, we don't need Google AI - just create a dummy client
+    // since we're only reading from database
+    let config = GoogleAiConfig::new("dummy-key-for-read-only".to_string());
     let google_ai_client = GoogleAiClient::new(config)?;
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -352,7 +354,9 @@ async fn show_all_results(
 pub async fn handle_status_command(all: bool, watch: bool, history: bool) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
-    let config = GoogleAiConfig::default();
+    // For status command, we don't need Google AI - just create a dummy client
+    // since we're only reading from database
+    let config = GoogleAiConfig::new("dummy-key-for-read-only".to_string());
     let google_ai_client = GoogleAiClient::new(config)?;
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -434,7 +438,9 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
 pub async fn handle_cancel_command(request_id: Option<String>, all: bool) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
-    let config = GoogleAiConfig::default();
+    // For cancel command, we don't need Google AI - just create a dummy client
+    // since we're only updating database status
+    let config = GoogleAiConfig::new("dummy-key-for-cancel".to_string());
     let google_ai_client = GoogleAiClient::new(config)?;
     let service = RetrospectionService::new(db_manager, google_ai_client);
 

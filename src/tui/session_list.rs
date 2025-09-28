@@ -241,7 +241,11 @@ impl SessionListWidget {
         f.render_stateful_widget(list, area, &mut self.list_state);
     }
 
-    fn format_session_line_with_spinner(session: &SessionSummary, _index: usize, spinner_char: char) -> Line<'_> {
+    fn format_session_line_with_spinner(
+        session: &SessionSummary,
+        _index: usize,
+        spinner_char: char,
+    ) -> Line<'_> {
         let provider_style = match session.provider.as_str() {
             "ClaudeCode" => Style::default().fg(Color::Blue),
             "Gemini" => Style::default().fg(Color::Green),

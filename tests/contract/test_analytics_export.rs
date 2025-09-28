@@ -1,8 +1,10 @@
 use retrochat::database::connection::DatabaseManager;
 use retrochat::services::{AnalyticsService, DateRange, ExportFilters, ExportRequest};
+use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_export_csv_basic() {
+    let temp_dir = TempDir::new().unwrap();
     let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
@@ -15,27 +17,25 @@ async fn test_export_csv_basic() {
         filters: None,
     };
 
-    let result = service
-        .export_data(
-            &request.format,
-            request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, request.format
-                )
-            }),
-        )
-        .await;
+    let output_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        "2024-01-01", "2024-01-31", &request.format
+    ));
+
+    let result = service.export_data(&request.format, &output_path).await;
     assert!(result.is_ok());
 
     let response = result.unwrap();
     assert_eq!(response.format, "csv");
-    assert!(!response.file_path.is_empty());
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
 }
 
 #[tokio::test]
 async fn test_export_json_with_filters() {
+    let temp_dir = TempDir::new().unwrap();
     let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
@@ -53,28 +53,26 @@ async fn test_export_json_with_filters() {
         }),
     };
 
-    let result = service
-        .export_data(
-            &request.format,
-            request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, request.format
-                )
-            }),
-        )
-        .await;
+    let output_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        "2024-01-01", "2024-12-31", &request.format
+    ));
+
+    let result = service.export_data(&request.format, &output_path).await;
     assert!(result.is_ok());
 
     let response = result.unwrap();
     assert_eq!(response.format, "json");
-    assert!(!response.file_path.is_empty());
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
     assert!(response.records_exported >= 0);
 }
 
 #[tokio::test]
 async fn test_export_multiple_data_types() {
+    let temp_dir = TempDir::new().unwrap();
     let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
@@ -89,28 +87,23 @@ async fn test_export_multiple_data_types() {
         filters: None,
     };
 
-    let result = service
-        .export_data(
-            &request.format,
-            request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, request.format
-                )
-            }),
-        )
-        .await;
+    let output_path = temp_dir.path().join("export_all.json");
+
+    let result = service.export_data(&request.format, &output_path).await;
     assert!(result.is_ok());
 
     let response = result.unwrap();
     assert_eq!(response.format, "json");
-    assert!(!response.file_path.is_empty());
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
     assert!(response.records_exported >= 0);
 }
 
 #[tokio::test]
 async fn test_export_parquet_format() {
+    let temp_dir = TempDir::new().unwrap();
     let db_manager = DatabaseManager::new(":memory:").await.unwrap();
     let service = AnalyticsService::new(db_manager);
     let request = ExportRequest {
@@ -128,21 +121,18 @@ async fn test_export_parquet_format() {
         }),
     };
 
-    let result = service
-        .export_data(
-            &request.format,
-            request.date_range.map(|dr| {
-                format!(
-                    "export_{}_{}.{}",
-                    dr.start_date, dr.end_date, request.format
-                )
-            }),
-        )
-        .await;
+    let output_path = temp_dir.path().join(format!(
+        "export_{}_{}.{}",
+        "2024-01-01", "2024-06-30", &request.format
+    ));
+
+    let result = service.export_data(&request.format, &output_path).await;
     assert!(result.is_ok());
 
     let response = result.unwrap();
     assert_eq!(response.format, "txt");
-    assert!(!response.file_path.is_empty());
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
 }

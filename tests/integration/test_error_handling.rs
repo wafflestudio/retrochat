@@ -153,7 +153,7 @@ async fn test_nonexistent_session_handling() {
     // Test error handling for nonexistent sessions
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
 
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
@@ -207,7 +207,7 @@ async fn test_database_error_handling() {
     // but validates the error handling patterns
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
 
-    let config = GoogleAiConfig::default();
+    let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
