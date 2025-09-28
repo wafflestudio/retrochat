@@ -18,8 +18,8 @@ use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
 use super::{
-    analytics::AnalyticsWidget,
-    session_detail::SessionDetailWidget, session_list::SessionListWidget,
+    analytics::AnalyticsWidget, session_detail::SessionDetailWidget,
+    session_list::SessionListWidget,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,8 +126,6 @@ impl AppState {
             ));
         }
     }
-
-
 }
 
 impl Default for AppState {
@@ -402,7 +400,6 @@ impl App {
         self.state.last_updated = Instant::now();
         Ok(())
     }
-
 
     fn render(&mut self, f: &mut Frame) {
         let main_layout = Layout::default()

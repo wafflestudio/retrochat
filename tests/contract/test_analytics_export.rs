@@ -27,7 +27,9 @@ async fn test_export_csv_basic() {
 
     let response = result.unwrap();
     assert_eq!(response.format, "csv");
-    assert!(response.file_path.starts_with(temp_dir.path().to_str().unwrap()));
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
 }
 
@@ -61,7 +63,9 @@ async fn test_export_json_with_filters() {
 
     let response = result.unwrap();
     assert_eq!(response.format, "json");
-    assert!(response.file_path.starts_with(temp_dir.path().to_str().unwrap()));
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
     assert!(response.records_exported >= 0);
 }
@@ -90,7 +94,9 @@ async fn test_export_multiple_data_types() {
 
     let response = result.unwrap();
     assert_eq!(response.format, "json");
-    assert!(response.file_path.starts_with(temp_dir.path().to_str().unwrap()));
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
     assert!(response.records_exported >= 0);
 }
@@ -125,6 +131,8 @@ async fn test_export_parquet_format() {
 
     let response = result.unwrap();
     assert_eq!(response.format, "txt");
-    assert!(response.file_path.starts_with(temp_dir.path().to_str().unwrap()));
+    assert!(response
+        .file_path
+        .starts_with(temp_dir.path().to_str().unwrap()));
     assert!(response.file_size_bytes >= 0);
 }

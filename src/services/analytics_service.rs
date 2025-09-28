@@ -417,7 +417,11 @@ impl AnalyticsService {
         })
     }
 
-    async fn export_json(&self, insights: &UsageInsights, output_file: &std::path::Path) -> Result<()> {
+    async fn export_json(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let json_content = serde_json::to_string_pretty(insights)
             .with_context(|| "Failed to serialize insights to JSON")?;
 
@@ -427,7 +431,11 @@ impl AnalyticsService {
         Ok(())
     }
 
-    async fn export_csv(&self, insights: &UsageInsights, output_file: &std::path::Path) -> Result<()> {
+    async fn export_csv(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let mut csv_content = String::new();
 
         // Summary section
@@ -462,7 +470,11 @@ impl AnalyticsService {
         Ok(())
     }
 
-    async fn export_text(&self, insights: &UsageInsights, output_file: &std::path::Path) -> Result<()> {
+    async fn export_text(
+        &self,
+        insights: &UsageInsights,
+        output_file: &std::path::Path,
+    ) -> Result<()> {
         let mut content = String::new();
 
         content.push_str("RetroChat Usage Insights Report\n");

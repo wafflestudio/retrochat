@@ -1,4 +1,6 @@
-use crate::database::{ChatSessionRepository, DatabaseManager, RetrospectRequestRepository, RetrospectionRepository};
+use crate::database::{
+    ChatSessionRepository, DatabaseManager, RetrospectRequestRepository, RetrospectionRepository,
+};
 use crate::models::{ChatSession, Message, OperationStatus};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -256,7 +258,8 @@ impl QueryService {
                 .ok()
                 .and_then(|requests| {
                     // Find the most recent request
-                    requests.into_iter()
+                    requests
+                        .into_iter()
                         .max_by(|a, b| a.started_at.cmp(&b.started_at))
                         .map(|request| request.status)
                 });
