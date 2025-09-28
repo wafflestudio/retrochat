@@ -15,9 +15,17 @@ impl DatabaseManager {
 
         // Ensure parent directory exists
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create database directory: {}", parent.display())
-            })?;
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create database directory: {}", parent.display())
+                })?;
+            }
+        }
+
+        // Ensure the database file can be created/opened
+        if !db_path.exists() {
+            std::fs::File::create(&db_path)
+                .with_context(|| format!("Failed to create database file: {}", db_path.display()))?;
         }
 
         // Create SQLite connection string

@@ -4,8 +4,6 @@ use std::path::Path;
 use crate::database::DatabaseManager;
 
 pub async fn handle_init_command() -> Result<()> {
-    println!("Initializing RetroChat database...");
-
     let db_path = "retrochat.db";
 
     // Check if database already exists
@@ -14,6 +12,8 @@ pub async fn handle_init_command() -> Result<()> {
         println!("  Use 'retrochat tui' to launch the interface");
         return Ok(());
     }
+
+    println!("Initializing RetroChat database...");
 
     // Initialize database
     let _db_manager = DatabaseManager::new(db_path)
