@@ -1,7 +1,19 @@
 use retrochat::cli::retrospect::{handle_execute_command, AnalysisTypeArg};
+use std::sync::Once;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_retrospect_execute_command_structure() {
+    ensure_env_loaded();
+
     // Test CLI command structure for retrospect execute
     // This test validates the CLI interface
 
@@ -39,6 +51,8 @@ async fn test_retrospect_execute_command_structure() {
 
 #[tokio::test]
 async fn test_retrospect_execute_all_sessions() {
+    ensure_env_loaded();
+
     // Test executing retrospection on all sessions
     let result = handle_execute_command(
         None,                                 // session_id (None when using --all)
@@ -71,6 +85,8 @@ async fn test_retrospect_execute_all_sessions() {
 
 #[tokio::test]
 async fn test_retrospect_execute_custom_analysis() {
+    ensure_env_loaded();
+
     // Test custom analysis type with prompt
     let custom_prompt = "Analyze the coding patterns and provide specific feedback".to_string();
 
@@ -106,6 +122,8 @@ async fn test_retrospect_execute_custom_analysis() {
 
 #[tokio::test]
 async fn test_retrospect_execute_validation() {
+    ensure_env_loaded();
+
     // Test argument validation - neither session_id nor all flag
     let result = handle_execute_command(
         None,                                   // session_id

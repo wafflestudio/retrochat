@@ -1,7 +1,18 @@
 use retrochat::cli::retrospect::handle_cancel_command;
+use std::sync::Once;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_retrospect_cancel_command_structure() {
+    ensure_env_loaded();
     // Test CLI command structure for retrospect cancel
     // This test MUST FAIL until the retrospect CLI module is implemented
 
@@ -27,6 +38,8 @@ async fn test_retrospect_cancel_command_structure() {
 
 #[tokio::test]
 async fn test_retrospect_cancel_specific_operations() {
+    ensure_env_loaded();
+
     // Test cancelling specific operations
     let result = handle_cancel_command(
         Some("retro-456".to_string()), // request_id
@@ -57,6 +70,8 @@ async fn test_retrospect_cancel_specific_operations() {
 
 #[tokio::test]
 async fn test_retrospect_cancel_all_operations() {
+    ensure_env_loaded();
+
     // Test cancelling all active operations
     let result = handle_cancel_command(
         None, // request_id (None when using --all)
@@ -86,6 +101,8 @@ async fn test_retrospect_cancel_all_operations() {
 
 #[tokio::test]
 async fn test_retrospect_cancel_validation() {
+    ensure_env_loaded();
+
     // Test argument validation - neither request_id nor all flag
     let result = handle_cancel_command(
         None,  // request_id
@@ -108,6 +125,8 @@ async fn test_retrospect_cancel_validation() {
 
 #[tokio::test]
 async fn test_retrospect_cancel_nonexistent_operations() {
+    ensure_env_loaded();
+
     // Test cancelling operations that don't exist
     let result = handle_cancel_command(Some("nonexistent-op-12345".to_string()), false).await;
 

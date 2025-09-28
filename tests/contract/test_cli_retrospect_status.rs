@@ -1,7 +1,19 @@
 use retrochat::cli::retrospect::handle_status_command;
+use std::sync::Once;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_retrospect_status_command_structure() {
+    ensure_env_loaded();
+
     // Test CLI command structure for retrospect status
 
     // Test command execution
@@ -34,6 +46,8 @@ async fn test_retrospect_status_command_structure() {
 
 #[tokio::test]
 async fn test_retrospect_status_active_only() {
+    ensure_env_loaded();
+
     // Test showing only active operations (same as --all in current implementation)
     let result = handle_status_command(
         true,  // all (shows active operations)
@@ -64,6 +78,8 @@ async fn test_retrospect_status_active_only() {
 
 #[tokio::test]
 async fn test_retrospect_status_history() {
+    ensure_env_loaded();
+
     // Test showing operation history
     let result = handle_status_command(
         false, // all
@@ -94,6 +110,8 @@ async fn test_retrospect_status_history() {
 
 #[tokio::test]
 async fn test_retrospect_status_watch_mode() {
+    ensure_env_loaded();
+
     // Test watch mode (current implementation just shows status once)
     let result = handle_status_command(
         false, // all

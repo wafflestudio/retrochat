@@ -3,7 +3,17 @@ use retrochat::models::RetrospectionAnalysisType;
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::services::RetrospectionService;
 use std::sync::Arc;
+use std::sync::Once;
 use std::time::Duration;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_google_ai_api_error_recovery() {
@@ -150,6 +160,7 @@ async fn test_analysis_execution_error_handling() {
 
 #[tokio::test]
 async fn test_nonexistent_session_handling() {
+    ensure_env_loaded();
     // Test error handling for nonexistent sessions
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
 
@@ -202,6 +213,7 @@ async fn test_nonexistent_session_handling() {
 
 #[tokio::test]
 async fn test_database_error_handling() {
+    ensure_env_loaded();
     // Test error handling for database issues
     // This test uses an in-memory database which should work fine
     // but validates the error handling patterns

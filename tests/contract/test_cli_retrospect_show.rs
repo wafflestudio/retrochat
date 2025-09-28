@@ -1,7 +1,19 @@
 use retrochat::cli::retrospect::{handle_show_command, AnalysisTypeArg};
+use std::sync::Once;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_retrospect_show_command_structure() {
+    ensure_env_loaded();
+
     // Test CLI command structure for retrospect show
 
     // Test command execution with session ID
@@ -35,6 +47,8 @@ async fn test_retrospect_show_command_structure() {
 
 #[tokio::test]
 async fn test_retrospect_show_all_formats() {
+    ensure_env_loaded();
+
     // Test all output formats
     for format in ["text", "json", "markdown"] {
         let result = handle_show_command(
@@ -68,6 +82,8 @@ async fn test_retrospect_show_all_formats() {
 
 #[tokio::test]
 async fn test_retrospect_show_filtering() {
+    ensure_env_loaded();
+
     // Test filtering by analysis type
     let result = handle_show_command(
         None,                                 // session_id
@@ -99,6 +115,8 @@ async fn test_retrospect_show_filtering() {
 
 #[tokio::test]
 async fn test_retrospect_show_specific_session() {
+    ensure_env_loaded();
+
     // Test showing results for a specific session
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id

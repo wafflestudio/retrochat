@@ -3,10 +3,21 @@ use retrochat::models::RetrospectionAnalysisType;
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::services::RetrospectionService;
 use std::sync::Arc;
+use std::sync::Once;
 use tempfile::TempDir;
+
+// Global setup that runs only once
+static INIT: Once = Once::new();
+
+fn ensure_env_loaded() {
+    INIT.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
 
 #[tokio::test]
 async fn test_single_session_analysis_workflow() {
+    ensure_env_loaded();
     // Integration test for complete single session analysis workflow
     // This test MUST FAIL until the retrospection service is implemented
 
@@ -76,6 +87,7 @@ async fn test_single_session_analysis_workflow() {
 
 #[tokio::test]
 async fn test_single_session_analysis_with_custom_prompt() {
+    ensure_env_loaded();
     // Test analysis with custom prompt
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
     let session_id = "test-session-custom".to_string();
@@ -114,6 +126,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
 
 #[tokio::test]
 async fn test_single_session_analysis_error_handling() {
+    ensure_env_loaded();
     // Test error handling for invalid session
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
 
@@ -167,6 +180,7 @@ async fn test_single_session_analysis_error_handling() {
 
 #[tokio::test]
 async fn test_single_session_analysis_cancellation() {
+    ensure_env_loaded();
     // Test cancelling an analysis operation
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
     let session_id = "test-session-cancel".to_string();
