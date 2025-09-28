@@ -7,10 +7,6 @@ use crate::database::DatabaseManager;
 use crate::services::ImportService;
 
 pub async fn scan_directory(directory: Option<String>) -> Result<()> {
-    scan_directory_with_db(directory, "retrochat.db").await
-}
-
-pub async fn scan_directory_with_db(directory: Option<String>, db_path: &str) -> Result<()> {
     let scan_path = directory.unwrap_or_else(|| ".".to_string());
     let path = Path::new(&scan_path);
 
@@ -20,7 +16,7 @@ pub async fn scan_directory_with_db(directory: Option<String>, db_path: &str) ->
 
     println!("Scanning directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new(db_path).await?);
+    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let scan_request = crate::services::ScanRequest {
@@ -76,7 +72,7 @@ pub async fn import_file(file_path: String) -> Result<()> {
 
     println!("Importing file: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     // Detect provider
@@ -126,7 +122,7 @@ pub async fn import_batch(directory: String) -> Result<()> {
 
     println!("Batch importing from directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let batch_request = crate::services::BatchImportRequest {
@@ -390,11 +386,8 @@ mod tests {
                 .collect::<Vec<_>>()
         );
 
-        let result = scan_directory_with_db(
-            Some(temp_dir.path().to_string_lossy().to_string()),
-            ":memory:",
-        )
-        .await;
+        let result = scan_directory(Some(temp_dir.path().to_string_lossy().to_string())).await;
+
         eprintln!("result: {:?}", result);
         assert!(result.is_ok());
     }

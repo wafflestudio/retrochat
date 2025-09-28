@@ -558,8 +558,9 @@ impl Default for AnalyticsService {
     fn default() -> Self {
         // Use a blocking approach for Default implementation
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { Self::new(DatabaseManager::new("retrochat.db").await.unwrap()) })
+            tokio::runtime::Handle::current().block_on(async {
+                Self::new(DatabaseManager::new("./retrochat.db").await.unwrap())
+            })
         })
     }
 }
