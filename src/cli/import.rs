@@ -16,7 +16,7 @@ pub async fn scan_directory(directory: Option<String>) -> Result<()> {
 
     println!("Scanning directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let scan_request = crate::services::ScanRequest {
@@ -72,7 +72,7 @@ pub async fn import_file(file_path: String) -> Result<()> {
 
     println!("Importing file: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     // Detect provider
@@ -122,7 +122,7 @@ pub async fn import_batch(directory: String) -> Result<()> {
 
     println!("Batch importing from directory: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
     let batch_request = crate::services::BatchImportRequest {
@@ -369,7 +369,6 @@ mod tests {
     #[tokio::test]
     async fn test_scan_directory() {
         let temp_dir = TempDir::new().unwrap();
-        eprintln!("temp dir: {}", temp_dir.path().display());
 
         // Create test files
         let claude_file = temp_dir.path().join("claude.jsonl");
@@ -378,17 +377,8 @@ mod tests {
             r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","chat_messages":[]}"#,
         )
         .unwrap();
-        eprintln!(
-            "before scan, ls: {:?}",
-            std::fs::read_dir(temp_dir.path())
-                .unwrap()
-                .map(|e| e.unwrap().path())
-                .collect::<Vec<_>>()
-        );
 
         let result = scan_directory(Some(temp_dir.path().to_string_lossy().to_string())).await;
-
-        eprintln!("result: {:?}", result);
         assert!(result.is_ok());
     }
 }

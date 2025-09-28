@@ -6,7 +6,7 @@ use crate::database::DatabaseManager;
 pub async fn handle_init_command() -> Result<()> {
     println!("Initializing RetroChat database...");
 
-    let db_path = "./retrochat.db";
+    let db_path = "retrochat.db";
 
     // Check if database already exists
     if Path::new(db_path).exists() {

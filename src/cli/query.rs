@@ -9,7 +9,7 @@ pub async fn handle_sessions_command(
     provider: Option<String>,
     project: Option<String>,
 ) -> Result<()> {
-    let db_manager = DatabaseManager::new("./retrochat.db").await?;
+    let db_manager = DatabaseManager::new("retrochat.db").await?;
     let query_service = QueryService::with_database(Arc::new(db_manager));
 
     let request = SessionsQueryRequest {
@@ -53,7 +53,7 @@ pub async fn handle_sessions_command(
 }
 
 pub async fn handle_session_detail_command(session_id: String) -> Result<()> {
-    let db_manager = DatabaseManager::new("./retrochat.db").await?;
+    let db_manager = DatabaseManager::new("retrochat.db").await?;
     let query_service = QueryService::with_database(Arc::new(db_manager));
 
     let request = SessionDetailRequest {
@@ -101,7 +101,7 @@ pub async fn handle_session_detail_command(session_id: String) -> Result<()> {
 }
 
 pub async fn handle_search_command(query: String, limit: Option<i32>) -> Result<()> {
-    let db_manager = DatabaseManager::new("./retrochat.db").await?;
+    let db_manager = DatabaseManager::new("retrochat.db").await?;
     let query_service = QueryService::with_database(Arc::new(db_manager));
 
     let request = SearchRequest {

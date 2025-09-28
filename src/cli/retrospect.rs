@@ -94,7 +94,7 @@ pub async fn handle_execute_command(
     all: bool,
     background: bool,
 ) -> Result<()> {
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     // Initialize Google AI client
     let api_key = std::env::var("GOOGLE_AI_API_KEY")
@@ -197,7 +197,7 @@ pub async fn handle_show_command(
     format: String,
     analysis_type: Option<AnalysisTypeArg>,
 ) -> Result<()> {
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     let config = GoogleAiConfig::default();
     let google_ai_client = GoogleAiClient::new(config)?;
@@ -350,7 +350,7 @@ async fn show_all_results(
 }
 
 pub async fn handle_status_command(all: bool, watch: bool, history: bool) -> Result<()> {
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     let config = GoogleAiConfig::default();
     let google_ai_client = GoogleAiClient::new(config)?;
@@ -432,7 +432,7 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
 }
 
 pub async fn handle_cancel_command(request_id: Option<String>, all: bool) -> Result<()> {
-    let db_manager = Arc::new(DatabaseManager::new("./retrochat.db").await?);
+    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
 
     let config = GoogleAiConfig::default();
     let google_ai_client = GoogleAiClient::new(config)?;
