@@ -369,6 +369,7 @@ mod tests {
     #[tokio::test]
     async fn test_scan_directory() {
         let temp_dir = TempDir::new().unwrap();
+        eprintln!("temp dir: {}", temp_dir.path().display());
 
         // Create test files
         let claude_file = temp_dir.path().join("claude.jsonl");
@@ -377,8 +378,11 @@ mod tests {
             r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","chat_messages":[]}"#,
         )
         .unwrap();
+        eprintln!("before scan, ls: {:?}", std::fs::read_dir(temp_dir.path()).unwrap()
+        .map(|e| e.unwrap().path()).collect::<Vec<_>>());
 
         let result = scan_directory(Some(temp_dir.path().to_string_lossy().to_string())).await;
+        eprintln!("result: {:?}", result);
         assert!(result.is_ok());
     }
 }
