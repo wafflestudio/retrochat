@@ -1,5 +1,5 @@
-use crate::database::{ChatSessionRepository, DatabaseManager, RetrospectionRepository};
-use crate::models::{ChatSession, Message};
+use crate::database::{ChatSessionRepository, DatabaseManager, RetrospectRequestRepository, RetrospectionRepository};
+use crate::models::{ChatSession, Message, OperationStatus};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,7 @@ pub struct SessionSummary {
     pub total_tokens: Option<i32>,
     pub first_message_preview: String,
     pub has_retrospection: bool,
+    pub retrospection_status: Option<OperationStatus>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -219,6 +220,7 @@ impl QueryService {
         // Convert to SessionSummary format with actual first message preview
         let message_repo = crate::database::MessageRepository::new(&self.db_manager);
         let retrospection_repo = RetrospectionRepository::new(self.db_manager.clone());
+        let retrospect_request_repo = RetrospectRequestRepository::new(self.db_manager.clone());
         let mut sessions = Vec::new();
 
         for session in paginated_sessions {
@@ -247,6 +249,18 @@ impl QueryService {
                 .map(|retrospections| !retrospections.is_empty())
                 .unwrap_or(false);
 
+            // Check for active retrospection requests to determine status
+            let retrospection_status = retrospect_request_repo
+                .find_by_session_id(&session.id.to_string())
+                .await
+                .ok()
+                .and_then(|requests| {
+                    // Find the most recent request
+                    requests.into_iter()
+                        .max_by(|a, b| a.started_at.cmp(&b.started_at))
+                        .map(|request| request.status)
+                });
+
             sessions.push(SessionSummary {
                 session_id: session.id.to_string(),
                 provider: session.provider.to_string(),
@@ -260,6 +274,7 @@ impl QueryService {
                 total_tokens: session.token_count.map(|t| t as i32),
                 first_message_preview,
                 has_retrospection,
+                retrospection_status,
             });
         }
 

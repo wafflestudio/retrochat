@@ -18,7 +18,7 @@ use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
 use super::{
-    analytics::AnalyticsWidget, retrospection::RetrospectionWidget,
+    analytics::AnalyticsWidget,
     session_detail::SessionDetailWidget, session_list::SessionListWidget,
 };
 
@@ -27,7 +27,6 @@ pub enum AppMode {
     SessionList,
     SessionDetail,
     Analytics,
-    Retrospection,
     Help,
 }
 
@@ -42,8 +41,6 @@ pub struct AppState {
     pub active_analysis_requests: Vec<String>, // Track active request IDs
     pub error_dialog: Option<String>,          // Error message to display in dialog
     pub processing_status: Option<String>,     // Status message for background processing
-    pub spinner_frame: usize,                  // Current frame of the spinner animation
-    pub last_spinner_update: Instant,          // Last time the spinner was updated
 }
 
 impl AppState {
@@ -58,8 +55,6 @@ impl AppState {
             active_analysis_requests: Vec::new(),
             error_dialog: None,
             processing_status: None,
-            spinner_frame: 0,
-            last_spinner_update: Instant::now(),
         }
     }
 
@@ -124,29 +119,15 @@ impl AppState {
             self.processing_status = None;
         } else {
             let count = self.active_analysis_requests.len();
-            let spinner = self.get_spinner_char();
             self.processing_status = Some(format!(
-                "{} {} request{} processing...",
-                spinner,
+                "{} request{} processing...",
                 count,
                 if count == 1 { "" } else { "s" }
             ));
         }
     }
 
-    pub fn advance_spinner(&mut self) {
-        self.spinner_frame = (self.spinner_frame + 1) % 8;
-        self.last_spinner_update = Instant::now();
-    }
 
-    pub fn should_update_spinner(&self) -> bool {
-        self.last_spinner_update.elapsed() >= Duration::from_millis(150)
-    }
-
-    fn get_spinner_char(&self) -> char {
-        const SPINNER_CHARS: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-        SPINNER_CHARS[self.spinner_frame]
-    }
 }
 
 impl Default for AppState {
@@ -160,7 +141,6 @@ pub struct App {
     pub session_list: SessionListWidget,
     pub session_detail: SessionDetailWidget,
     pub analytics: AnalyticsWidget,
-    pub retrospection: RetrospectionWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
     pub retrospection_service: Option<Arc<RetrospectionService>>,
@@ -185,23 +165,11 @@ impl App {
             None
         };
 
-        // Create the retrospection widget with service
-        let service_for_widget = if let Some(service) = &retrospection_service {
-            service.clone()
-        } else {
-            // Create a fallback service with default config
-            let config = GoogleAiConfig::default();
-            let client = GoogleAiClient::new(config).expect("Failed to create Google AI client");
-            Arc::new(RetrospectionService::new(db_manager.clone(), client))
-        };
-        let retrospection_widget = RetrospectionWidget::new(service_for_widget);
-
         Ok(Self {
             state: AppState::new(),
             session_list: SessionListWidget::new(db_manager.clone()),
             session_detail: SessionDetailWidget::new(db_manager.clone()),
             analytics: AnalyticsWidget::new(db_manager.clone()),
-            retrospection: retrospection_widget,
             query_service,
             analytics_service,
             retrospection_service,
@@ -230,16 +198,12 @@ impl App {
                 break;
             }
 
-            // Advance spinner animation for processing status (throttled to ~6.7 FPS)
-            if self.state.processing_status.is_some() && self.state.should_update_spinner() {
-                self.state.advance_spinner();
-                self.state.update_processing_status();
-            }
+            // Processing status updates removed
 
             // Auto-refresh data periodically - frequent refresh for active views
             let refresh_interval = match self.state.mode {
-                AppMode::Retrospection => Duration::from_secs(2), // Refresh every 2 seconds in retrospection view
-                AppMode::SessionList | AppMode::SessionDetail => Duration::from_secs(5), // Refresh every 5 seconds for session views
+                AppMode::SessionList => Duration::from_secs(3), // Refresh every 3 seconds for session list to catch status changes
+                AppMode::SessionDetail => Duration::from_secs(5), // Refresh every 5 seconds for session detail
                 _ => Duration::from_secs(30), // Normal 30 second refresh for other views
             };
 
@@ -295,7 +259,6 @@ impl App {
                     match self.state.mode {
                         AppMode::SessionDetail => self.state.back_to_list(),
                         AppMode::Analytics => self.state.set_mode(AppMode::SessionList),
-                        AppMode::Retrospection => self.state.set_mode(AppMode::SessionList),
                         _ => {}
                     }
                 }
@@ -352,13 +315,11 @@ impl App {
                             {
                                 Ok(request) => {
                                     self.state.start_retrospection(request.id.clone());
-                                    self.retrospection.start_analysis(
-                                        session_id.clone(),
-                                        RetrospectionAnalysisType::UserInteractionAnalysis,
-                                    );
 
-                                    // Update processing status with count (stay on current tab)
-                                    self.state.update_processing_status();
+                                    // Immediately refresh UI to show user acknowledgment
+                                    if let Err(e) = self.session_list.refresh().await {
+                                        tracing::error!(error = %e, "Failed to refresh session list after analysis start");
+                                    }
 
                                     // Execute the analysis in background task
                                     let service_clone = service.clone();
@@ -395,9 +356,6 @@ impl App {
             AppMode::Analytics => {
                 self.analytics.handle_key(key).await?;
             }
-            AppMode::Retrospection => {
-                self.retrospection.handle_key(key).await?;
-            }
             AppMode::Help => {
                 // Help is handled above
             }
@@ -407,37 +365,23 @@ impl App {
     }
 
     async fn next_tab(&mut self) -> Result<()> {
-        let old_mode = self.state.mode.clone();
         self.state.mode = match self.state.mode {
             AppMode::SessionList => AppMode::Analytics,
-            AppMode::Analytics => AppMode::Retrospection,
-            AppMode::Retrospection => AppMode::SessionList,
+            AppMode::Analytics => AppMode::SessionList,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
-
-        // Trigger refresh when entering retrospection tab
-        if self.state.mode == AppMode::Retrospection && old_mode != AppMode::Retrospection {
-            self.retrospection.refresh().await?;
-        }
 
         Ok(())
     }
 
     async fn previous_tab(&mut self) -> Result<()> {
-        let old_mode = self.state.mode.clone();
         self.state.mode = match self.state.mode {
-            AppMode::SessionList => AppMode::Retrospection,
+            AppMode::SessionList => AppMode::Analytics,
             AppMode::Analytics => AppMode::SessionList,
-            AppMode::Retrospection => AppMode::Analytics,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
         };
-
-        // Trigger refresh when entering retrospection tab
-        if self.state.mode == AppMode::Retrospection && old_mode != AppMode::Retrospection {
-            self.retrospection.refresh().await?;
-        }
 
         Ok(())
     }
@@ -453,44 +397,12 @@ impl App {
             AppMode::Analytics => {
                 self.analytics.refresh().await?;
             }
-            AppMode::Retrospection => {
-                self.retrospection.refresh().await?;
-                // Check if any active analysis requests have completed
-                self.check_analysis_completion().await?;
-            }
             AppMode::Help => {}
         }
         self.state.last_updated = Instant::now();
         Ok(())
     }
 
-    async fn check_analysis_completion(&mut self) -> Result<()> {
-        if let Some(ref service) = self.retrospection_service {
-            let mut completed_requests = Vec::new();
-
-            for request_id in &self.state.active_analysis_requests {
-                if let Ok(request) = service.get_analysis_status(request_id.clone()).await {
-                    match request.status {
-                        crate::models::OperationStatus::Completed
-                        | crate::models::OperationStatus::Failed
-                        | crate::models::OperationStatus::Cancelled => {
-                            completed_requests.push(request_id.clone());
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            // Remove completed requests and update processing status
-            for request_id in completed_requests {
-                self.state.complete_retrospection(&request_id);
-            }
-
-            // Update processing status based on current active count
-            self.state.update_processing_status();
-        }
-        Ok(())
-    }
 
     fn render(&mut self, f: &mut Frame) {
         let main_layout = Layout::default()
@@ -519,9 +431,6 @@ impl App {
                 AppMode::Analytics => {
                     self.analytics.render(f, main_layout[1]);
                 }
-                AppMode::Retrospection => {
-                    self.retrospection.render(f, main_layout[1]);
-                }
                 AppMode::Help => {
                     self.render_help(f, main_layout[1]);
                 }
@@ -538,11 +447,10 @@ impl App {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let tab_titles = vec!["Sessions", "Analytics", "Retrospection"];
+        let tab_titles = vec!["Sessions", "Analytics"];
         let selected_tab = match self.state.mode {
             AppMode::SessionList | AppMode::SessionDetail => 0,
             AppMode::Analytics => 1,
-            AppMode::Retrospection => 2,
             AppMode::Help => 0,
         };
 
@@ -560,7 +468,7 @@ impl App {
     }
 
     fn render_footer(&self, f: &mut Frame, area: Rect) {
-        let mut key_hints = match self.state.mode {
+        let key_hints = match self.state.mode {
             AppMode::SessionList => {
                 "↑/↓: Navigate | Enter: View | a: Analyze | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
@@ -568,14 +476,10 @@ impl App {
                 "↑/↓: Scroll | t: Toggle Retrospection | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
-            AppMode::Retrospection => "↑/↓: Navigate | Enter/d: Details | c: Cancel | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
         }.to_string();
 
-        // Add processing status if present
-        if let Some(ref status) = self.state.processing_status {
-            key_hints = format!("{key_hints} | {status}");
-        }
+        // Processing status removed from bottom area
 
         let footer = Paragraph::new(key_hints)
             .block(Block::default().borders(Borders::ALL))

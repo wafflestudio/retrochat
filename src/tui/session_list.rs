@@ -8,8 +8,10 @@ use ratatui::{
     Frame,
 };
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::database::DatabaseManager;
+use crate::models::OperationStatus;
 use crate::services::{
     DateRange, QueryService, SessionFilters, SessionSummary, SessionsQueryRequest,
 };
@@ -184,7 +186,7 @@ impl SessionListWidget {
             "Loading sessions...".to_string()
         } else {
             format!(
-                "Sessions: {} | Page: {}/{} | Sort: {} {} | * = Has Retrospection | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
+                "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
                 self.total_count,
                 self.page,
                 total_pages.max(1),
@@ -216,12 +218,13 @@ impl SessionListWidget {
             return;
         }
 
+        let spinner_char = self.get_spinner_char();
         let items: Vec<ListItem> = self
             .sessions
             .iter()
             .enumerate()
             .map(|(i, session)| {
-                let line = Self::format_session_line(session, i);
+                let line = Self::format_session_line_with_spinner(session, i, spinner_char);
                 ListItem::new(line)
             })
             .collect();
@@ -238,7 +241,7 @@ impl SessionListWidget {
         f.render_stateful_widget(list, area, &mut self.list_state);
     }
 
-    fn format_session_line(session: &SessionSummary, _index: usize) -> Line<'_> {
+    fn format_session_line_with_spinner(session: &SessionSummary, _index: usize, spinner_char: char) -> Line<'_> {
         let provider_style = match session.provider.as_str() {
             "ClaudeCode" => Style::default().fg(Color::Blue),
             "Gemini" => Style::default().fg(Color::Green),
@@ -268,16 +271,50 @@ impl SessionListWidget {
             session.start_time.clone()
         };
 
-        // Add retrospection indicator
-        let retrospection_indicator = if session.has_retrospection {
-            Span::styled(
-                "* ",
+        // Add retrospection status indicator
+        let retrospection_indicator = match &session.retrospection_status {
+            Some(OperationStatus::Completed) => Span::styled(
+                "✓ ",
                 Style::default()
                     .fg(Color::LightGreen)
                     .add_modifier(Modifier::BOLD),
-            )
-        } else {
-            Span::raw("  ")
+            ),
+            Some(OperationStatus::Running) => Span::styled(
+                format!("{spinner_char} "),
+                Style::default()
+                    .fg(Color::LightBlue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Some(OperationStatus::Pending) => Span::styled(
+                "⋯ ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Some(OperationStatus::Failed) => Span::styled(
+                "✗ ",
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Some(OperationStatus::Cancelled) => Span::styled(
+                "⊘ ",
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            None => {
+                if session.has_retrospection {
+                    Span::styled(
+                        "✓ ",
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                } else {
+                    Span::raw("  ")
+                }
+            }
         };
 
         Line::from(vec![
@@ -415,5 +452,15 @@ impl SessionListWidget {
             SortOrder::Ascending => "asc".to_string(),
             SortOrder::Descending => "desc".to_string(),
         }
+    }
+
+    fn get_spinner_char(&self) -> char {
+        const SPINNER_CHARS: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+        let now_millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let frame = (now_millis / 100) % 8; // Change frame every 100ms
+        SPINNER_CHARS[frame as usize]
     }
 }
