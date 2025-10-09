@@ -97,7 +97,7 @@ retrochat import --claude --cursor --overwrite
 
 #### Environment Configuration
 
-Configure default directories for each provider:
+Configure default directories for each provider (optional):
 
 ```bash
 # Claude Code directories (default: ~/.claude/projects)
@@ -106,18 +106,14 @@ export RETROCHAT_CLAUDE_DIRS="~/.claude/projects:/another/path"
 # Cursor directories (default: ~/.cursor/chats)
 export RETROCHAT_CURSOR_DIRS="~/.cursor/chats"
 
-# Gemini directories (no default)
+# Gemini directories (default: ~/.gemini/tmp)
 export RETROCHAT_GEMINI_DIRS="/path/to/gemini/chats"
 
-# Codex directories (no default)
+# Codex directories (no default, must be configured)
 export RETROCHAT_CODEX_DIRS="/path/to/codex/chats"
-
-# Enable/disable specific providers
-export RETROCHAT_ENABLE_CLAUDE=true
-export RETROCHAT_ENABLE_CURSOR=true
-export RETROCHAT_ENABLE_GEMINI=true
-export RETROCHAT_ENABLE_CODEX=false
 ```
+
+**Note**: Use colon (`:`) to separate multiple directories, e.g., `"/path1:/path2"`
 
 ### Analytics Commands
 

@@ -243,25 +243,3 @@ async fn test_cursor_parser_with_project_inference() -> Result<()> {
 
     Ok(())
 }
-
-#[tokio::test]
-async fn test_cursor_environment_variable_disable() -> Result<()> {
-    let temp_dir = TempDir::new().unwrap();
-    let chats_dir = create_cursor_test_structure(temp_dir.path());
-
-    let store_db = chats_dir
-        .join("53460df9022de1a66445a5b78b067dd9")
-        .join("557abc41-6f00-41e7-bf7b-696c80d4ee94")
-        .join("store.db");
-
-    // Disable Cursor support
-    std::env::set_var("RETROCHAT_ENABLE_CURSOR", "false");
-
-    let detected_provider = ParserRegistry::detect_provider(&store_db);
-    assert_eq!(detected_provider, None);
-
-    // Re-enable for other tests
-    std::env::set_var("RETROCHAT_ENABLE_CURSOR", "true");
-
-    Ok(())
-}

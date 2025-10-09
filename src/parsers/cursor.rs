@@ -269,8 +269,7 @@ impl CursorParser {
                                             if !full_content.is_empty() {
                                                 full_content.push_str("\n\n");
                                             }
-                                            full_content
-                                                .push_str(&format!("[Tool: {tool_name}]"));
+                                            full_content.push_str(&format!("[Tool: {tool_name}]"));
 
                                             // Extract tool arguments
                                             if let Some(args) = item.get("args") {

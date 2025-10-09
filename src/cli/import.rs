@@ -214,16 +214,6 @@ async fn import_batch(directory: String, overwrite: bool) -> Result<()> {
 }
 
 async fn import_claude_directories(overwrite: bool) -> Result<()> {
-    let claude_enabled = env::var("RETROCHAT_ENABLE_CLAUDE")
-        .unwrap_or_else(|_| "true".to_string())
-        .parse::<bool>()
-        .unwrap_or(true);
-
-    if !claude_enabled {
-        println!("Claude import is disabled. Set RETROCHAT_ENABLE_CLAUDE=true to enable.");
-        return Ok(());
-    }
-
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let claude_dirs =
         env::var("RETROCHAT_CLAUDE_DIRS").unwrap_or_else(|_| format!("{home}/.claude/projects"));
@@ -262,17 +252,9 @@ async fn import_claude_directories(overwrite: bool) -> Result<()> {
 }
 
 async fn import_gemini_directories(overwrite: bool) -> Result<()> {
-    let gemini_enabled = env::var("RETROCHAT_ENABLE_GEMINI")
-        .unwrap_or_else(|_| "true".to_string())
-        .parse::<bool>()
-        .unwrap_or(true);
-
-    if !gemini_enabled {
-        println!("Gemini import is disabled. Set RETROCHAT_ENABLE_GEMINI=true to enable.");
-        return Ok(());
-    }
-
-    let gemini_dirs = env::var("RETROCHAT_GEMINI_DIRS").unwrap_or_else(|_| "".to_string());
+    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let gemini_dirs =
+        env::var("RETROCHAT_GEMINI_DIRS").unwrap_or_else(|_| format!("{home}/.gemini/tmp"));
 
     if gemini_dirs.trim().is_empty() {
         println!(
@@ -316,16 +298,6 @@ async fn import_gemini_directories(overwrite: bool) -> Result<()> {
 }
 
 async fn import_codex_directories(overwrite: bool) -> Result<()> {
-    let codex_enabled = env::var("RETROCHAT_ENABLE_CODEX")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false);
-
-    if !codex_enabled {
-        println!("Codex import is disabled. Set RETROCHAT_ENABLE_CODEX=true to enable.");
-        return Ok(());
-    }
-
     let codex_dirs = env::var("RETROCHAT_CODEX_DIRS").unwrap_or_else(|_| "".to_string());
 
     if codex_dirs.trim().is_empty() {
@@ -370,16 +342,6 @@ async fn import_codex_directories(overwrite: bool) -> Result<()> {
 }
 
 async fn import_cursor_directories(overwrite: bool) -> Result<()> {
-    let cursor_enabled = env::var("RETROCHAT_ENABLE_CURSOR")
-        .unwrap_or_else(|_| "true".to_string())
-        .parse::<bool>()
-        .unwrap_or(true);
-
-    if !cursor_enabled {
-        println!("Cursor import is disabled. Set RETROCHAT_ENABLE_CURSOR=true to enable.");
-        return Ok(());
-    }
-
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let cursor_dirs =
         env::var("RETROCHAT_CURSOR_DIRS").unwrap_or_else(|_| format!("{home}/.cursor/chats"));
