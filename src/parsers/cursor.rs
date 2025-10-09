@@ -9,8 +9,6 @@ use uuid::Uuid;
 use crate::models::chat_session::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
 
-use super::project_inference::ProjectInference;
-
 mod blob_decoder {
     use super::*;
 
