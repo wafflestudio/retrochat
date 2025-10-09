@@ -231,7 +231,7 @@ impl ImportService {
             // Check if session already exists
             let existing_session = session_repo.get_by_id(&session.id).await.ok().flatten();
 
-            if let Some(_) = existing_session {
+            if existing_session.is_some() {
                 if request.overwrite_existing.unwrap_or(false) {
                     // Delete existing session and its messages
                     if let Err(e) = message_repo.delete_by_session(&session.id).await {

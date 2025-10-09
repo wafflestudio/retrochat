@@ -1,6 +1,5 @@
 use anyhow::Result;
 use retrochat::models::chat_session::LlmProvider;
-use retrochat::models::MessageRole;
 use retrochat::parsers::CursorParser;
 use std::fs;
 use tempfile::TempDir;
@@ -109,7 +108,7 @@ async fn test_cursor_parser_parse_streaming() -> Result<()> {
     let mut message_count = 0;
 
     parser
-        .parse_streaming(|session, message| {
+        .parse_streaming(|session, _message| {
             session_count += 1;
             message_count += 1;
 

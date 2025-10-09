@@ -250,7 +250,9 @@ impl CursorParser {
                                     match block_type {
                                         Some("text") => {
                                             // Extract text content
-                                            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                                            if let Some(text) =
+                                                item.get("text").and_then(|t| t.as_str())
+                                            {
                                                 if !full_content.is_empty() {
                                                     full_content.push_str("\n\n");
                                                 }
@@ -259,14 +261,15 @@ impl CursorParser {
                                         }
                                         Some("tool-call") => {
                                             // Extract tool call information
-                                            let tool_name = item.get("toolName")
+                                            let tool_name = item
+                                                .get("toolName")
                                                 .and_then(|t| t.as_str())
                                                 .unwrap_or("unknown_tool");
 
                                             if !full_content.is_empty() {
                                                 full_content.push_str("\n\n");
                                             }
-                                            full_content.push_str(&format!("[Tool: {}]", tool_name));
+                                            full_content.push_str(&format!("[Tool: {tool_name}]"));
 
                                             // Extract tool arguments
                                             if let Some(args) = item.get("args") {
@@ -275,15 +278,23 @@ impl CursorParser {
                                                     for (key, val) in args_obj {
                                                         match val {
                                                             serde_json::Value::String(s) => {
-                                                                full_content.push_str(&format!("  {}: {}\n", key, s));
+                                                                full_content.push_str(&format!(
+                                                                    "  {key}: {s}\n"
+                                                                ));
                                                             }
                                                             serde_json::Value::Array(arr) => {
                                                                 if !arr.is_empty() {
-                                                                    full_content.push_str(&format!("  {}: {:?}\n", key, arr));
+                                                                    full_content.push_str(
+                                                                        &format!(
+                                                                            "  {key}: {arr:?}\n"
+                                                                        ),
+                                                                    );
                                                                 }
                                                             }
                                                             _ => {
-                                                                full_content.push_str(&format!("  {}: {}\n", key, val));
+                                                                full_content.push_str(&format!(
+                                                                    "  {key}: {val}\n"
+                                                                ));
                                                             }
                                                         }
                                                     }
@@ -292,7 +303,9 @@ impl CursorParser {
                                         }
                                         _ => {
                                             // Unknown block type, try to extract as text
-                                            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                                            if let Some(text) =
+                                                item.get("text").and_then(|t| t.as_str())
+                                            {
                                                 if !full_content.is_empty() {
                                                     full_content.push_str("\n\n");
                                                 }

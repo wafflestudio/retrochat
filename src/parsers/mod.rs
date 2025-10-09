@@ -4,7 +4,6 @@ pub mod gemini;
 pub mod project_inference;
 
 use anyhow::{anyhow, Result};
-use std::env;
 use std::path::Path;
 
 use crate::models::chat_session::LlmProvider;
@@ -61,37 +60,16 @@ impl ParserRegistry {
     pub fn detect_provider(file_path: impl AsRef<Path>) -> Option<LlmProvider> {
         let path = file_path.as_ref();
 
-        // Check if providers are enabled via environment variables
-        let claude_enabled = env::var("RETROCHAT_ENABLE_CLAUDE")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse::<bool>()
-            .unwrap_or(true);
-
-        let gemini_enabled = env::var("RETROCHAT_ENABLE_GEMINI")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse::<bool>()
-            .unwrap_or(true);
-
-        let cursor_enabled = env::var("RETROCHAT_ENABLE_CURSOR")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse::<bool>()
-            .unwrap_or(true);
-
-        let codex_enabled = env::var("RETROCHAT_ENABLE_CODEX")
-            .unwrap_or_else(|_| "false".to_string())
-            .parse::<bool>()
-            .unwrap_or(false);
-
         // First check by file extension and content
-        if claude_enabled && ClaudeCodeParser::is_valid_file(path) {
+        if ClaudeCodeParser::is_valid_file(path) {
             return Some(LlmProvider::ClaudeCode);
         }
 
-        if cursor_enabled && CursorParser::is_valid_file(path) {
+        if CursorParser::is_valid_file(path) {
             return Some(LlmProvider::Cursor);
         }
 
-        if gemini_enabled && GeminiParser::is_valid_file(path) {
+        if GeminiParser::is_valid_file(path) {
             return Some(LlmProvider::Gemini);
         }
 
@@ -102,26 +80,24 @@ impl ParserRegistry {
             .unwrap_or("")
             .to_lowercase();
 
-        if claude_enabled && (file_name.contains("claude") || file_name.contains("anthropic")) {
+        if file_name.contains("claude") || file_name.contains("anthropic") {
             return Some(LlmProvider::ClaudeCode);
         }
 
-        if cursor_enabled && file_name.contains("cursor") {
+        if file_name.contains("cursor") {
             return Some(LlmProvider::Cursor);
         }
 
-        if gemini_enabled
-            && (file_name.contains("gemini")
-                || file_name.contains("bard")
-                || file_name.contains("google"))
+        if file_name.contains("gemini")
+            || file_name.contains("bard")
+            || file_name.contains("google")
         {
             return Some(LlmProvider::Gemini);
         }
 
-        if codex_enabled
-            && (file_name.contains("codex")
-                || file_name.contains("github")
-                || file_name.contains("copilot"))
+        if file_name.contains("codex")
+            || file_name.contains("github")
+            || file_name.contains("copilot")
         {
             return Some(LlmProvider::Other("codex".to_string()));
         }
@@ -129,8 +105,8 @@ impl ParserRegistry {
         // Check by file extension as last resort
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             match extension.to_lowercase().as_str() {
-                "jsonl" if claude_enabled => Some(LlmProvider::ClaudeCode), // Default JSONL to Claude
-                "json" if gemini_enabled => Some(LlmProvider::Gemini), // Default JSON to Gemini
+                "jsonl" => Some(LlmProvider::ClaudeCode), // Default JSONL to Claude
+                "json" => Some(LlmProvider::Gemini),      // Default JSON to Gemini
                 _ => None,
             }
         } else {

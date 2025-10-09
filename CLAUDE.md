@@ -25,15 +25,16 @@ tests/
 ## Commands
 # Build and test commands
 cargo check && cargo test && cargo clippy
-cargo run -- tui                    # Launch TUI interface
-cargo run -- import scan            # Scan for chat files
-cargo run -- analyze insights       # Generate usage insights
+cargo run -- tui                                      # Launch TUI interface
+cargo run -- import --claude --cursor                  # Import from provider directories
+cargo run -- import --path /path/to/files             # Import from specific path
+cargo run -- analyze insights                         # Generate usage insights
 
 # Retrospection commands (requires GOOGLE_AI_API_KEY env var)
 cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions
 cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
-cargo run -- retrospect status [--all|--history]  # Check analysis status
-cargo run -- retrospect cancel [REQUEST_ID] [--all]  # Cancel operations
+cargo run -- retrospect status [--all|--history]      # Check analysis status
+cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
 
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
