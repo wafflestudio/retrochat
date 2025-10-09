@@ -240,17 +240,68 @@ impl CursorParser {
                             if let Some(content_str) = content.as_str() {
                                 return Some(content_str.to_string());
                             }
-                            // Handle array of content blocks
+                            // Handle array of content blocks (Cursor format)
                             if let Some(content_array) = content.as_array() {
                                 let mut full_content = String::new();
+
                                 for item in content_array {
-                                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                                        if !full_content.is_empty() {
-                                            full_content.push('\n');
+                                    let block_type = item.get("type").and_then(|t| t.as_str());
+
+                                    match block_type {
+                                        Some("text") => {
+                                            // Extract text content
+                                            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                                                if !full_content.is_empty() {
+                                                    full_content.push_str("\n\n");
+                                                }
+                                                full_content.push_str(text);
+                                            }
                                         }
-                                        full_content.push_str(text);
+                                        Some("tool-call") => {
+                                            // Extract tool call information
+                                            let tool_name = item.get("toolName")
+                                                .and_then(|t| t.as_str())
+                                                .unwrap_or("unknown_tool");
+
+                                            if !full_content.is_empty() {
+                                                full_content.push_str("\n\n");
+                                            }
+                                            full_content.push_str(&format!("[Tool: {}]", tool_name));
+
+                                            // Extract tool arguments
+                                            if let Some(args) = item.get("args") {
+                                                if let Some(args_obj) = args.as_object() {
+                                                    full_content.push('\n');
+                                                    for (key, val) in args_obj {
+                                                        match val {
+                                                            serde_json::Value::String(s) => {
+                                                                full_content.push_str(&format!("  {}: {}\n", key, s));
+                                                            }
+                                                            serde_json::Value::Array(arr) => {
+                                                                if !arr.is_empty() {
+                                                                    full_content.push_str(&format!("  {}: {:?}\n", key, arr));
+                                                                }
+                                                            }
+                                                            _ => {
+                                                                full_content.push_str(&format!("  {}: {}\n", key, val));
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            // Unknown block type, try to extract as text
+                                            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                                                if !full_content.is_empty() {
+                                                    full_content.push_str("\n\n");
+                                                }
+                                                full_content.push_str(text);
+                                            }
+                                        }
                                     }
                                 }
+
                                 if !full_content.is_empty() {
                                     return Some(full_content);
                                 }
