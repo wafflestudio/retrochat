@@ -270,7 +270,7 @@ impl CursorParser {
                                                 full_content.push_str("\n\n");
                                             }
                                             full_content
-                                                .push_str(&format!("[Tool: {}]", tool_name));
+                                                .push_str(&format!("[Tool: {tool_name}]"));
 
                                             // Extract tool arguments
                                             if let Some(args) = item.get("args") {
@@ -280,24 +280,21 @@ impl CursorParser {
                                                         match val {
                                                             serde_json::Value::String(s) => {
                                                                 full_content.push_str(&format!(
-                                                                    "  {}: {}\n",
-                                                                    key, s
+                                                                    "  {key}: {s}\n"
                                                                 ));
                                                             }
                                                             serde_json::Value::Array(arr) => {
                                                                 if !arr.is_empty() {
                                                                     full_content.push_str(
                                                                         &format!(
-                                                                            "  {}: {:?}\n",
-                                                                            key, arr
+                                                                            "  {key}: {arr:?}\n"
                                                                         ),
                                                                     );
                                                                 }
                                                             }
                                                             _ => {
                                                                 full_content.push_str(&format!(
-                                                                    "  {}: {}\n",
-                                                                    key, val
+                                                                    "  {key}: {val}\n"
                                                                 ));
                                                             }
                                                         }
