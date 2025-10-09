@@ -57,10 +57,14 @@ fn create_test_database(db_path: &std::path::Path, name: &str, agent_id: &str) {
     )
     .unwrap();
 
-    // Add some test blob data
+    // Add test blob data with valid protobuf
+    // Field 1 (0x0a): length-delimited string containing the name
+    let mut blob_data = vec![0x0a, name.len() as u8]; // Field 1, length
+    blob_data.extend_from_slice(name.as_bytes());
+
     conn.execute(
         "INSERT INTO blobs (id, data) VALUES ('test_blob', ?)",
-        [&[0x0a, 0x20, 0xad, 0x7f, 0xf0, 0xa6]],
+        [&blob_data],
     )
     .unwrap();
 }

@@ -34,10 +34,15 @@ fn create_cursor_test_database(base_path: &std::path::Path) -> std::path::PathBu
     )
     .unwrap();
 
-    // Insert some test blob data (binary format not fully decoded yet)
+    // Insert test blob with valid protobuf data
+    // Field 1 (0x0a): length-delimited string "Hello from test"
+    let test_message = b"Hello from test";
+    let mut blob_data = vec![0x0a, test_message.len() as u8]; // Field 1, length
+    blob_data.extend_from_slice(test_message);
+
     conn.execute(
         "INSERT INTO blobs (id, data) VALUES ('test_blob_id', ?)",
-        [&[0x0a, 0x20, 0xad, 0x7f, 0xf0, 0xa6]], // Sample binary data
+        [&blob_data],
     )
     .unwrap();
 
@@ -86,11 +91,9 @@ async fn test_cursor_parser_parse() -> Result<()> {
     );
     assert_eq!(session.message_count, 1);
 
-    // Verify we have a placeholder message
+    // Verify we have the parsed message
     assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].role, MessageRole::System);
-    assert!(messages[0].content.contains("Test Chat Session"));
-    assert!(messages[0].content.contains("Binary data not yet decoded"));
+    assert!(messages[0].content.contains("Hello from test"));
 
     Ok(())
 }
@@ -111,7 +114,7 @@ async fn test_cursor_parser_parse_streaming() -> Result<()> {
             message_count += 1;
 
             assert_eq!(session.provider, LlmProvider::Cursor);
-            assert_eq!(message.role, MessageRole::System);
+            // Role can be User or Assistant based on heuristics
 
             Ok(())
         })

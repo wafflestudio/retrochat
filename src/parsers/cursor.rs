@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
+use bytes::{Buf, Bytes};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -8,6 +10,100 @@ use crate::models::chat_session::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
 
 use super::project_inference::ProjectInference;
+
+mod blob_decoder {
+    use super::*;
+
+    /// Decode a protobuf varint from bytes
+    pub fn decode_varint(buf: &mut impl Buf) -> Result<u64> {
+        let mut result = 0u64;
+        let mut shift = 0;
+
+        for _ in 0..10 {
+            // Max 10 bytes for varint
+            if !buf.has_remaining() {
+                return Err(anyhow!("Unexpected end of varint"));
+            }
+
+            let byte = buf.get_u8();
+            result |= ((byte & 0x7f) as u64) << shift;
+
+            if byte & 0x80 == 0 {
+                return Ok(result);
+            }
+
+            shift += 7;
+        }
+
+        Err(anyhow!("Varint too long"))
+    }
+
+    /// Parse a single protobuf field
+    pub fn parse_field(buf: &mut impl Buf) -> Result<Option<(u32, FieldValue)>> {
+        if !buf.has_remaining() {
+            return Ok(None);
+        }
+
+        // Read field key
+        let key = decode_varint(buf)?;
+        let field_number = (key >> 3) as u32;
+        let wire_type = (key & 0x07) as u8;
+
+        let value = match wire_type {
+            0 => {
+                // Varint
+                let val = decode_varint(buf)?;
+                FieldValue::Varint(val)
+            }
+            2 => {
+                // Length-delimited
+                let length = decode_varint(buf)? as usize;
+                if buf.remaining() < length {
+                    return Err(anyhow!("Not enough bytes for length-delimited field"));
+                }
+                let mut data = vec![0u8; length];
+                buf.copy_to_slice(&mut data);
+
+                // Try to decode as UTF-8 string
+                if let Ok(text) = String::from_utf8(data.clone()) {
+                    FieldValue::String(text)
+                } else {
+                    FieldValue::Bytes(data)
+                }
+            }
+            _ => {
+                return Err(anyhow!("Unsupported wire type: {wire_type}"));
+            }
+        };
+
+        Ok(Some((field_number, value)))
+    }
+
+    #[derive(Debug, Clone)]
+    #[allow(dead_code)]
+    pub enum FieldValue {
+        Varint(u64),
+        String(String),
+        Bytes(Vec<u8>),
+    }
+
+    /// Parse all fields from a protobuf message
+    pub fn parse_message(data: &[u8]) -> Result<HashMap<u32, Vec<FieldValue>>> {
+        let mut buf = Bytes::copy_from_slice(data);
+        let mut fields: HashMap<u32, Vec<FieldValue>> = HashMap::new();
+
+        while buf.has_remaining() {
+            match parse_field(&mut buf)? {
+                Some((field_number, value)) => {
+                    fields.entry(field_number).or_default().push(value);
+                }
+                None => break,
+            }
+        }
+
+        Ok(fields)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CursorChatMetadata {
@@ -64,23 +160,147 @@ impl CursorParser {
             chat_session = chat_session.with_project(name);
         }
 
-        // For now, we'll create a placeholder message since the blob format is binary
-        // In the future, this could be enhanced to decode the binary format
-        let placeholder_message = Message::new(
-            session_id,
-            MessageRole::System,
-            format!(
-                "Cursor chat session: {} (Binary data not yet decoded)",
-                metadata.name
-            ),
-            start_time,
-            1,
-        );
+        // Parse blobs to extract messages
+        let messages = self.read_blobs(session_id, start_time)?;
 
-        chat_session.message_count = 1;
+        chat_session.message_count = messages.len() as u32;
         chat_session.set_state(SessionState::Imported);
 
-        Ok((chat_session, vec![placeholder_message]))
+        Ok((chat_session, messages))
+    }
+
+    fn read_blobs(&self, session_id: Uuid, default_time: DateTime<Utc>) -> Result<Vec<Message>> {
+        let conn = rusqlite::Connection::open(&self.db_path)
+            .with_context(|| format!("Failed to open Cursor database: {}", self.db_path))?;
+
+        let mut stmt = conn.prepare("SELECT id, data FROM blobs")?;
+        let mut rows = stmt.query([])?;
+
+        let mut messages = Vec::new();
+        let mut message_index = 1;
+
+        while let Some(row) = rows.next()? {
+            let blob_id: String = row.get(0)?;
+            let blob_data: Vec<u8> = row.get(1)?;
+
+            // Parse the protobuf blob
+            match blob_decoder::parse_message(&blob_data) {
+                Ok(fields) => {
+                    // Try to extract message content
+                    if let Some(content) = self.extract_message_content(&fields) {
+                        let role = self.infer_message_role(&content, &fields);
+
+                        let message =
+                            Message::new(session_id, role, content, default_time, message_index);
+                        messages.push(message);
+                        message_index += 1;
+                    }
+                }
+                Err(e) => {
+                    // Log error but continue processing other blobs
+                    eprintln!("Failed to parse blob {blob_id}: {e}");
+                }
+            }
+        }
+
+        // If no messages were extracted, create a placeholder
+        if messages.is_empty() {
+            messages.push(Message::new(
+                session_id,
+                MessageRole::System,
+                "Cursor chat session (no messages could be decoded)".to_string(),
+                default_time,
+                1,
+            ));
+        }
+
+        Ok(messages)
+    }
+
+    fn extract_message_content(
+        &self,
+        fields: &HashMap<u32, Vec<blob_decoder::FieldValue>>,
+    ) -> Option<String> {
+        use blob_decoder::FieldValue;
+
+        // Try field 1 for simple message content
+        if let Some(values) = fields.get(&1) {
+            for value in values {
+                if let FieldValue::String(text) = value {
+                    // Skip if it looks like a blob ID (32 bytes hex or UUID)
+                    if text.len() != 32 && text.len() != 36 && !text.is_empty() {
+                        return Some(text.clone());
+                    }
+                }
+            }
+        }
+
+        // Try field 4 for JSON-encoded messages
+        if let Some(values) = fields.get(&4) {
+            for value in values {
+                if let FieldValue::String(text) = value {
+                    // Try to parse as JSON
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+                        if let Some(content) = json.get("content") {
+                            if let Some(content_str) = content.as_str() {
+                                return Some(content_str.to_string());
+                            }
+                            // Handle array of content blocks
+                            if let Some(content_array) = content.as_array() {
+                                let mut full_content = String::new();
+                                for item in content_array {
+                                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                                        if !full_content.is_empty() {
+                                            full_content.push('\n');
+                                        }
+                                        full_content.push_str(text);
+                                    }
+                                }
+                                if !full_content.is_empty() {
+                                    return Some(full_content);
+                                }
+                            }
+                        }
+                    }
+                    return Some(text.clone());
+                }
+            }
+        }
+
+        None
+    }
+
+    fn infer_message_role(
+        &self,
+        content: &str,
+        fields: &HashMap<u32, Vec<blob_decoder::FieldValue>>,
+    ) -> MessageRole {
+        use blob_decoder::FieldValue;
+
+        // Try to extract role from JSON in field 4
+        if let Some(values) = fields.get(&4) {
+            for value in values {
+                if let FieldValue::String(text) = value {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+                        if let Some(role_str) = json.get("role").and_then(|r| r.as_str()) {
+                            return match role_str {
+                                "user" => MessageRole::User,
+                                "assistant" => MessageRole::Assistant,
+                                "system" => MessageRole::System,
+                                _ => MessageRole::User,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        // Default heuristic: short messages are likely user messages
+        if content.len() < 200 {
+            MessageRole::User
+        } else {
+            MessageRole::Assistant
+        }
     }
 
     fn read_metadata(&self) -> Result<CursorChatMetadata> {
