@@ -151,10 +151,7 @@ impl CursorParser {
         chat_session.id = session_id;
 
         // Infer project name from database path
-        let project_name = {
-            let inference = ProjectInference::new(&self.db_path);
-            inference.infer_project_name()
-        };
+        let project_name = self.infer_project_name(&metadata);
 
         if let Some(name) = project_name {
             chat_session = chat_session.with_project(name);
@@ -301,6 +298,56 @@ impl CursorParser {
         } else {
             MessageRole::Assistant
         }
+    }
+
+    fn infer_project_name(&self, metadata: &CursorChatMetadata) -> Option<String> {
+        use std::path::PathBuf;
+
+        let path = PathBuf::from(&self.db_path);
+
+        // Try to find a meaningful project directory name
+        // Path structure: .../chats/{hash}/{uuid}/store.db
+        // We want to look beyond the Cursor-specific directories
+
+        if let Some(uuid_dir) = path.parent() {
+            if let Some(hash_dir) = uuid_dir.parent() {
+                if let Some(chats_dir) = hash_dir.parent() {
+                    // chats_dir is .cursor/chats
+                    if let Some(cursor_dir) = chats_dir.parent() {
+                        // cursor_dir is .cursor
+                        if let Some(project_dir) = cursor_dir.parent() {
+                            // This is the actual project directory
+                            if let Some(project_name) = project_dir.file_name() {
+                                let name = project_name.to_string_lossy().to_string();
+                                // Skip generic names like "Users", "home", etc.
+                                if !name.starts_with('.')
+                                    && name != "Users"
+                                    && name != "home"
+                                    && name.len() > 1
+                                {
+                                    return Some(name);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: Use metadata name if it's meaningful
+                if !metadata.name.is_empty() && metadata.name.len() > 3 {
+                    return Some(metadata.name.clone());
+                }
+
+                // Last resort: Use first 8 characters of hash directory
+                if let Some(hash_name) = hash_dir.file_name() {
+                    let hash_str = hash_name.to_string_lossy();
+                    if hash_str.len() >= 8 {
+                        return Some(format!("cursor-{}", &hash_str[..8]));
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     fn read_metadata(&self) -> Result<CursorChatMetadata> {

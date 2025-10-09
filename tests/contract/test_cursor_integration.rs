@@ -238,12 +238,8 @@ async fn test_cursor_parser_with_project_inference() -> Result<()> {
     let parser = CursorParser::new(&store_db);
     let (session, _) = parser.parse().await?;
 
-    // Note: Current project inference logic extracts the UUID directory name for Cursor files
-    // This is expected behavior as Cursor uses UUID directories, not project-based directories
-    assert_eq!(
-        session.project_name,
-        Some("557abc41-6f00-41e7-bf7b-696c80d4ee94".to_string())
-    );
+    // Should extract project name from parent directory
+    assert_eq!(session.project_name, Some("my-project".to_string()));
 
     Ok(())
 }
