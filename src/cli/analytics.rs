@@ -6,7 +6,8 @@ use crate::database::DatabaseManager;
 use crate::services::analytics_service::AnalyticsService;
 
 pub async fn handle_insights_command() -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db").await?;
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = DatabaseManager::new(&db_path).await?;
     let analytics_service = AnalyticsService::new(db_manager);
     print_insights_summary(&analytics_service).await
 }
@@ -41,7 +42,8 @@ async fn print_insights_summary(analytics_service: &AnalyticsService) -> Result<
 }
 
 pub async fn handle_export_command(format: String, output_path: Option<String>) -> Result<()> {
-    let db_manager = DatabaseManager::new("retrochat.db").await?;
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = DatabaseManager::new(&db_path).await?;
     let analytics_service = AnalyticsService::new(db_manager);
 
     let path = match output_path {

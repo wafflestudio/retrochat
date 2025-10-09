@@ -133,7 +133,7 @@ impl TuiLauncher {
 
 pub async fn handle_tui_command() -> Result<()> {
     // Check if database file exists, if not provide guidance
-    let db_path = Path::new("retrochat.db");
+    let db_path = crate::database::config::get_default_db_path()?;
     if !db_path.exists() {
         TuiLauncher::print_welcome_message();
         println!("No database found. Let's get you started!");
@@ -143,7 +143,7 @@ pub async fn handle_tui_command() -> Result<()> {
     }
 
     // Initialize database manager
-    let db_manager = DatabaseManager::new("retrochat.db")
+    let db_manager = DatabaseManager::new(&db_path)
         .await
         .with_context(|| "Failed to initialize database")?;
 

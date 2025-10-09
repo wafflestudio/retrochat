@@ -1,5 +1,6 @@
 pub mod analytics_repo;
 pub mod chat_session_repo;
+pub mod config;
 pub mod connection;
 pub mod message_repo;
 pub mod migrations;

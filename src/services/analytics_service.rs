@@ -563,8 +563,10 @@ impl Default for AnalyticsService {
     fn default() -> Self {
         // Use a blocking approach for Default implementation
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { Self::new(DatabaseManager::new("retrochat.db").await.unwrap()) })
+            tokio::runtime::Handle::current().block_on(async {
+                let db_path = crate::database::config::get_default_db_path().unwrap();
+                Self::new(DatabaseManager::new(&db_path).await.unwrap())
+            })
         })
     }
 }

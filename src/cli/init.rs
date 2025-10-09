@@ -1,26 +1,32 @@
 use anyhow::{Context, Result};
-use std::path::Path;
 
-use crate::database::DatabaseManager;
+use crate::database::{config, DatabaseManager};
 
 pub async fn handle_init_command() -> Result<()> {
-    let db_path = "retrochat.db";
+    // Ensure config directory exists
+    config::ensure_config_dir()?;
+
+    let db_path = config::get_default_db_path()?;
 
     // Check if database already exists
-    if Path::new(db_path).exists() {
-        println!("✓ Database already exists at: {db_path}");
+    if db_path.exists() {
+        println!("✓ Database already exists at: {}", db_path.display());
         println!("  Use 'retrochat tui' to launch the interface");
         return Ok(());
     }
 
     println!("Initializing RetroChat database...");
+    println!("  Creating database at: {}", db_path.display());
 
     // Initialize database
-    let _db_manager = DatabaseManager::new(db_path)
+    let _db_manager = DatabaseManager::new(&db_path)
         .await
         .with_context(|| "Failed to create database manager")?;
 
-    println!("✓ Database initialized successfully at: {db_path}");
+    println!(
+        "✓ Database initialized successfully at: {}",
+        db_path.display()
+    );
     println!();
     println!("Next steps:");
     println!("  1. Import your chat files:");

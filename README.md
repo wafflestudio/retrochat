@@ -41,6 +41,8 @@ If you have mise installed, it will automatically use the correct Rust version s
 
 RetroChat provides several command-line interfaces and a TUI for different use cases.
 
+**Note**: Before using RetroChat, make sure to initialize the database with `retrochat init`.
+
 ### Terminal User Interface (TUI)
 
 Launch the interactive terminal interface:
@@ -177,7 +179,20 @@ RetroChat currently supports importing from:
 
 ## Database
 
-RetroChat uses SQLite for data persistence. The database file (`retrochat.db`) is created in the current working directory on first use.
+RetroChat uses SQLite for data persistence. The database file (`retrochat.db`) is created in `~/.retrochat/` directory on first use.
+
+### Initialization
+
+Before using RetroChat, you need to initialize the database:
+
+```bash
+retrochat init
+```
+
+This command will:
+- Create the `~/.retrochat` configuration directory
+- Initialize the SQLite database with the proper schema
+- Run database migrations
 
 ### Data Structure
 
@@ -221,27 +236,39 @@ tests/
 
 ### Quick Start Workflow
 
-1. **Import your chat history:**
+1. **Initialize the database:**
    ```bash
-   # Import from provider default directories
-   retrochat import --claude --cursor
-
-   # Or import from a specific path
-   retrochat import --path ~/.claude/projects
-   retrochat import --path ~/Downloads/my-chats
+   retrochat init
    ```
 
-2. **Launch the TUI to explore:**
+2. **Import your chat history:**
+   ```bash
+   # Scan for existing chat files
+   retrochat import scan ~/.claude/projects
+   retrochat import scan ~/.gemini/tmp
+   
+   # Or scan any directory
+   retrochat import scan ~/Downloads
+   
+   # Import from common chat directories
+   retrochat import batch ~/.claude/projects
+   retrochat import batch ~/.gemini/tmp
+   
+   # Or import from any directory
+   retrochat import batch ~/Downloads
+   ```
+
+3. **Launch the TUI to explore:**
    ```bash
    retrochat tui
    ```
 
-3. **Generate analytics:**
+4. **Generate analytics:**
    ```bash
    retrochat analyze insights
    ```
 
-4. **Export detailed report:**
+5. **Export detailed report:**
    ```bash
    retrochat analyze export json --output my_chat_analysis.json
    ```

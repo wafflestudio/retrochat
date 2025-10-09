@@ -109,7 +109,8 @@ async fn import_file(file_path: String, overwrite: bool) -> Result<()> {
 
     println!("Importing file: {}", path.display());
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
     let import_service = ImportService::new(db_manager);
 
     // Detect provider
@@ -163,7 +164,8 @@ async fn import_batch(directory: String, overwrite: bool) -> Result<()> {
         println!("Overwrite mode: Will replace existing sessions");
     }
 
-    let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
     let import_service = ImportService::new(db_manager);
 
     let batch_request = crate::services::BatchImportRequest {

@@ -110,7 +110,8 @@ pub struct QueryService {
 impl QueryService {
     pub async fn new() -> Self {
         // For backward compatibility, use a shared database instance
-        let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await.unwrap());
+        let db_path = crate::database::config::get_default_db_path().unwrap();
+        let db_manager = Arc::new(DatabaseManager::new(&db_path).await.unwrap());
         Self { db_manager }
     }
 

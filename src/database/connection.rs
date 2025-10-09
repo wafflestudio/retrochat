@@ -3,6 +3,12 @@ use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
+/// Get the default database path in the user's home directory
+pub fn get_default_db_path() -> AnyhowResult<PathBuf> {
+    let home_dir = dirs::home_dir().context("Could not find home directory")?;
+    Ok(home_dir.join(".retrochat").join("retrochat.db"))
+}
+
 #[derive(Clone)]
 pub struct DatabaseManager {
     db_path: PathBuf,

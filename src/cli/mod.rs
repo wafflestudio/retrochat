@@ -207,7 +207,8 @@ impl Cli {
         };
 
         // Create the necessary components synchronously
-        let db_manager = rt.block_on(async { DatabaseManager::new("retrochat.db").await })?;
+        let db_path = crate::database::config::get_default_db_path()?;
+        let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
         let api_key = std::env::var("GOOGLE_AI_API_KEY").unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
 
