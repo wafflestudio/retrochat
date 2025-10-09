@@ -65,11 +65,17 @@ pub enum ImportCommands {
     File {
         /// Path to the chat file to import
         path: String,
+        /// Overwrite existing sessions if they already exist
+        #[arg(short, long)]
+        overwrite: bool,
     },
     /// Import batch of files from directory
     Batch {
         /// Directory containing chat files to import
         directory: String,
+        /// Overwrite existing sessions if they already exist
+        #[arg(short, long)]
+        overwrite: bool,
     },
 }
 
@@ -142,9 +148,9 @@ impl Cli {
                     ImportCommands::ScanClaude => import::scan_claude_directories().await,
                     ImportCommands::ScanGemini => import::scan_gemini_directories().await,
                     ImportCommands::ScanCodex => import::scan_codex_directories().await,
-                    ImportCommands::File { path } => import::handle_import_file_command(path).await,
-                    ImportCommands::Batch { directory } => {
-                        import::handle_import_batch_command(directory).await
+                    ImportCommands::File { path, overwrite } => import::handle_import_file_command(path, overwrite).await,
+                    ImportCommands::Batch { directory, overwrite } => {
+                        import::handle_import_batch_command(directory, overwrite).await
                     }
                 },
                 Commands::Analyze { command } => match command {
