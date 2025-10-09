@@ -134,7 +134,8 @@ impl Cli {
                     cursor,
                     overwrite,
                 } => {
-                    import::handle_import_command(path, claude, gemini, codex, cursor, overwrite).await
+                    import::handle_import_command(path, claude, gemini, codex, cursor, overwrite)
+                        .await
                 }
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,

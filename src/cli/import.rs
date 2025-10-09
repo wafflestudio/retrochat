@@ -42,7 +42,9 @@ async fn import_path(path_str: String, overwrite: bool) -> Result<()> {
     } else if path.is_dir() {
         import_batch(path_str, overwrite).await
     } else {
-        Err(anyhow::anyhow!("Path is neither a file nor a directory: {path_str}"))
+        Err(anyhow::anyhow!(
+            "Path is neither a file nor a directory: {path_str}"
+        ))
     }
 }
 
@@ -273,7 +275,9 @@ async fn import_gemini_directories(overwrite: bool) -> Result<()> {
     let gemini_dirs = env::var("RETROCHAT_GEMINI_DIRS").unwrap_or_else(|_| "".to_string());
 
     if gemini_dirs.trim().is_empty() {
-        println!("  No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable.");
+        println!(
+            "  No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable."
+        );
         return Ok(());
     }
 
@@ -325,7 +329,9 @@ async fn import_codex_directories(overwrite: bool) -> Result<()> {
     let codex_dirs = env::var("RETROCHAT_CODEX_DIRS").unwrap_or_else(|_| "".to_string());
 
     if codex_dirs.trim().is_empty() {
-        println!("  No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable.");
+        println!(
+            "  No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable."
+        );
         return Ok(());
     }
 
@@ -375,8 +381,8 @@ async fn import_cursor_directories(overwrite: bool) -> Result<()> {
     }
 
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let cursor_dirs = env::var("RETROCHAT_CURSOR_DIRS")
-        .unwrap_or_else(|_| format!("{home}/.cursor/chats"));
+    let cursor_dirs =
+        env::var("RETROCHAT_CURSOR_DIRS").unwrap_or_else(|_| format!("{home}/.cursor/chats"));
 
     let mut imported_any = false;
 
