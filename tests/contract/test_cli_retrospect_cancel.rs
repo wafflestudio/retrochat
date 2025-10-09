@@ -43,7 +43,7 @@ async fn test_retrospect_cancel_specific_operations() {
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
-            println!("Cancel specific error: {}", error_msg);
+            println!("Cancel specific error: {error_msg}");
             assert!(!error_msg.is_empty());
             // Common error scenarios
             assert!(
@@ -77,7 +77,7 @@ async fn test_retrospect_cancel_all_operations() {
         Err(e) => {
             // Should be a meaningful error message
             let error_msg = e.to_string();
-            println!("Cancel all error: {}", error_msg);
+            println!("Cancel all error: {error_msg}");
             assert!(!error_msg.is_empty());
             // Common error scenarios for --all flag
             assert!(
@@ -129,7 +129,7 @@ async fn test_retrospect_cancel_nonexistent_operations() {
         Err(e) => {
             // Should be a meaningful error
             let error_msg = e.to_string();
-            println!("Cancel nonexistent error: {}", error_msg);
+            println!("Cancel nonexistent error: {error_msg}");
             assert!(!error_msg.is_empty());
             assert!(
                 error_msg.contains("not found")

@@ -247,8 +247,10 @@ impl SessionListWidget {
         spinner_char: char,
     ) -> Line<'_> {
         let provider_style = match session.provider.as_str() {
-            "ClaudeCode" => Style::default().fg(Color::Blue),
-            "Gemini" => Style::default().fg(Color::Green),
+            "claude-code" => Style::default().fg(Color::Blue),
+            "gemini" => Style::default().fg(Color::Green),
+            "cursor" => Style::default().fg(Color::Magenta),
+            "chatgpt" => Style::default().fg(Color::Cyan),
             _ => Style::default().fg(Color::White),
         };
 

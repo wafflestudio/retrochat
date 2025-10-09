@@ -229,9 +229,32 @@ impl ImportService {
 
         for (session, messages) in sessions {
             // Check if session already exists
-            if let Ok(Some(_)) = session_repo.get_by_id(&session.id).await {
-                warnings.push(format!("Session {} already exists, skipping", session.id));
-                continue;
+            let existing_session = session_repo.get_by_id(&session.id).await.ok().flatten();
+
+            if let Some(_) = existing_session {
+                if request.overwrite_existing.unwrap_or(false) {
+                    // Delete existing session and its messages
+                    if let Err(e) = message_repo.delete_by_session(&session.id).await {
+                        warnings.push(format!(
+                            "Failed to delete existing messages for session {}: {}",
+                            session.id, e
+                        ));
+                        continue;
+                    }
+
+                    if let Err(e) = session_repo.delete(&session.id).await {
+                        warnings.push(format!(
+                            "Failed to delete existing session {}: {}",
+                            session.id, e
+                        ));
+                        continue;
+                    }
+
+                    warnings.push(format!("Session {} overwritten", session.id));
+                } else {
+                    warnings.push(format!("Session {} already exists, skipping", session.id));
+                    continue;
+                }
             }
 
             // Create project if it doesn't exist

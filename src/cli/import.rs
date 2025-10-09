@@ -63,7 +63,7 @@ pub async fn scan_directory(directory: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub async fn import_file(file_path: String) -> Result<()> {
+pub async fn import_file(file_path: String, overwrite: bool) -> Result<()> {
     let path = Path::new(&file_path);
 
     if !path.exists() {
@@ -81,11 +81,15 @@ pub async fn import_file(file_path: String) -> Result<()> {
 
     println!("Detected format: {provider}");
 
+    if overwrite {
+        println!("Overwrite mode: Will replace existing sessions");
+    }
+
     let import_request = crate::services::ImportFileRequest {
         file_path: file_path.clone(),
         provider: Some(provider.to_string()),
         project_name: None,
-        overwrite_existing: None,
+        overwrite_existing: Some(overwrite),
     };
 
     let import_response = import_service
@@ -113,7 +117,7 @@ pub async fn import_file(file_path: String) -> Result<()> {
     Ok(())
 }
 
-pub async fn import_batch(directory: String) -> Result<()> {
+pub async fn import_batch(directory: String, overwrite: bool) -> Result<()> {
     let path = Path::new(&directory);
 
     if !path.exists() {
@@ -122,6 +126,10 @@ pub async fn import_batch(directory: String) -> Result<()> {
 
     println!("Batch importing from directory: {}", path.display());
 
+    if overwrite {
+        println!("Overwrite mode: Will replace existing sessions");
+    }
+
     let db_manager = Arc::new(DatabaseManager::new("retrochat.db").await?);
     let import_service = ImportService::new(db_manager);
 
@@ -129,7 +137,7 @@ pub async fn import_batch(directory: String) -> Result<()> {
         directory_path: directory.clone(),
         providers: None,
         project_name: None,
-        overwrite_existing: None,
+        overwrite_existing: Some(overwrite),
         recursive: Some(true),
     };
 
@@ -225,12 +233,12 @@ async fn scan_enabled_providers() -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_import_file_command(file_path: String) -> Result<()> {
-    import_file(file_path).await
+pub async fn handle_import_file_command(file_path: String, overwrite: bool) -> Result<()> {
+    import_file(file_path, overwrite).await
 }
 
-pub async fn handle_import_batch_command(directory: String) -> Result<()> {
-    import_batch(directory).await
+pub async fn handle_import_batch_command(directory: String, overwrite: bool) -> Result<()> {
+    import_batch(directory, overwrite).await
 }
 
 pub async fn scan_claude_directories() -> Result<()> {
