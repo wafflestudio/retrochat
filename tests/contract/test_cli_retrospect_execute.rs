@@ -124,7 +124,7 @@ async fn test_retrospect_execute_validation() {
         Err(e) => {
             // Should be a meaningful error about validation
             let error_msg = e.to_string();
-            println!("Execute validation error: {}", error_msg);
+            println!("Execute validation error: {error_msg}");
             assert!(!error_msg.is_empty());
             assert!(
                 error_msg.contains("session")

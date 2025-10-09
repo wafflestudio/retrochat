@@ -7,6 +7,7 @@ pub enum LlmProvider {
     ClaudeCode,
     Gemini,
     ChatGpt,
+    Cursor,
     Other(String),
 }
 
@@ -16,6 +17,7 @@ impl std::fmt::Display for LlmProvider {
             LlmProvider::ClaudeCode => write!(f, "claude-code"),
             LlmProvider::Gemini => write!(f, "gemini"),
             LlmProvider::ChatGpt => write!(f, "chatgpt"),
+            LlmProvider::Cursor => write!(f, "cursor"),
             LlmProvider::Other(name) => write!(f, "{name}"),
         }
     }

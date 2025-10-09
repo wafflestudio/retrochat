@@ -1,4 +1,5 @@
 pub mod claude_code;
+pub mod cursor;
 pub mod gemini;
 pub mod project_inference;
 
@@ -10,10 +11,12 @@ use crate::models::chat_session::LlmProvider;
 use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
+pub use cursor::CursorParser;
 pub use gemini::GeminiParser;
 
 pub enum ChatParser {
     ClaudeCode(ClaudeCodeParser),
+    Cursor(CursorParser),
     Gemini(GeminiParser),
 }
 
@@ -21,6 +24,10 @@ impl ChatParser {
     pub async fn parse(&self) -> Result<Vec<(ChatSession, Vec<Message>)>> {
         match self {
             ChatParser::ClaudeCode(parser) => {
+                let (session, messages) = parser.parse().await?;
+                Ok(vec![(session, messages)])
+            }
+            ChatParser::Cursor(parser) => {
                 let (session, messages) = parser.parse().await?;
                 Ok(vec![(session, messages)])
             }
@@ -34,6 +41,7 @@ impl ChatParser {
     {
         match self {
             ChatParser::ClaudeCode(parser) => parser.parse_streaming(callback).await,
+            ChatParser::Cursor(parser) => parser.parse_streaming(callback).await,
             ChatParser::Gemini(parser) => parser.parse_streaming(callback).await,
         }
     }
@@ -41,6 +49,7 @@ impl ChatParser {
     pub fn get_provider(&self) -> LlmProvider {
         match self {
             ChatParser::ClaudeCode(_) => LlmProvider::ClaudeCode,
+            ChatParser::Cursor(_) => LlmProvider::Cursor,
             ChatParser::Gemini(_) => LlmProvider::Gemini,
         }
     }
@@ -63,6 +72,11 @@ impl ParserRegistry {
             .parse::<bool>()
             .unwrap_or(true);
 
+        let cursor_enabled = env::var("RETROCHAT_ENABLE_CURSOR")
+            .unwrap_or_else(|_| "true".to_string())
+            .parse::<bool>()
+            .unwrap_or(true);
+
         let codex_enabled = env::var("RETROCHAT_ENABLE_CODEX")
             .unwrap_or_else(|_| "false".to_string())
             .parse::<bool>()
@@ -71,6 +85,10 @@ impl ParserRegistry {
         // First check by file extension and content
         if claude_enabled && ClaudeCodeParser::is_valid_file(path) {
             return Some(LlmProvider::ClaudeCode);
+        }
+
+        if cursor_enabled && CursorParser::is_valid_file(path) {
+            return Some(LlmProvider::Cursor);
         }
 
         if gemini_enabled && GeminiParser::is_valid_file(path) {
@@ -86,6 +104,10 @@ impl ParserRegistry {
 
         if claude_enabled && (file_name.contains("claude") || file_name.contains("anthropic")) {
             return Some(LlmProvider::ClaudeCode);
+        }
+
+        if cursor_enabled && file_name.contains("cursor") {
+            return Some(LlmProvider::Cursor);
         }
 
         if gemini_enabled
@@ -126,6 +148,7 @@ impl ParserRegistry {
 
         match provider {
             LlmProvider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
+            LlmProvider::Cursor => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
             LlmProvider::Gemini => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
             LlmProvider::ChatGpt => Err(anyhow!("ChatGPT parser not yet implemented")),
             LlmProvider::Other(name) => Err(anyhow!("Parser for {name} not implemented")),
@@ -133,11 +156,15 @@ impl ParserRegistry {
     }
 
     pub fn get_supported_extensions() -> Vec<&'static str> {
-        vec!["jsonl", "json"]
+        vec!["jsonl", "json", "db"]
     }
 
     pub fn get_supported_providers() -> Vec<LlmProvider> {
-        vec![LlmProvider::ClaudeCode, LlmProvider::Gemini]
+        vec![
+            LlmProvider::ClaudeCode,
+            LlmProvider::Cursor,
+            LlmProvider::Gemini,
+        ]
     }
 
     pub async fn parse_file(
@@ -229,6 +256,14 @@ mod tests {
         let gemini_file = temp_dir.path().join("gemini_export.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
+        // Create Cursor test structure
+        let cursor_chats = temp_dir.path().join("chats");
+        let cursor_hash = cursor_chats.join("53460df9022de1a66445a5b78b067dd9");
+        let cursor_uuid = cursor_hash.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+        fs::create_dir_all(&cursor_uuid).unwrap();
+        let cursor_file = cursor_uuid.join("store.db");
+        fs::write(&cursor_file, "").unwrap();
+
         assert_eq!(
             ParserRegistry::detect_provider(&claude_file),
             Some(LlmProvider::ClaudeCode)
@@ -236,6 +271,10 @@ mod tests {
         assert_eq!(
             ParserRegistry::detect_provider(&gemini_file),
             Some(LlmProvider::Gemini)
+        );
+        assert_eq!(
+            ParserRegistry::detect_provider(&cursor_file),
+            Some(LlmProvider::Cursor)
         );
     }
 
@@ -250,17 +289,26 @@ mod tests {
         let gemini_file = temp_dir.path().join("gemini.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
+        // Create Cursor test structure
+        let cursor_chats = temp_dir.path().join("chats");
+        let cursor_hash = cursor_chats.join("53460df9022de1a66445a5b78b067dd9");
+        let cursor_uuid = cursor_hash.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+        fs::create_dir_all(&cursor_uuid).unwrap();
+        let cursor_file = cursor_uuid.join("store.db");
+        fs::write(&cursor_file, "").unwrap();
+
         let unknown_file = temp_dir.path().join("unknown.txt");
         fs::write(&unknown_file, "some text").unwrap();
 
-        let result = ParserRegistry::scan_directory(temp_dir.path(), false, None).unwrap();
+        let result = ParserRegistry::scan_directory(temp_dir.path(), true, None).unwrap();
 
-        // Should find 2 files (claude and gemini)
-        assert_eq!(result.len(), 2);
+        // Should find 3 files (claude, gemini, and cursor)
+        assert_eq!(result.len(), 3);
 
         let providers: Vec<_> = result.iter().map(|(_, p)| p.clone()).collect();
         assert!(providers.contains(&LlmProvider::ClaudeCode));
         assert!(providers.contains(&LlmProvider::Gemini));
+        assert!(providers.contains(&LlmProvider::Cursor));
     }
 
     #[test]
@@ -268,9 +316,11 @@ mod tests {
         let extensions = ParserRegistry::get_supported_extensions();
         assert!(extensions.contains(&"jsonl"));
         assert!(extensions.contains(&"json"));
+        assert!(extensions.contains(&"db"));
 
         let providers = ParserRegistry::get_supported_providers();
         assert!(providers.contains(&LlmProvider::ClaudeCode));
+        assert!(providers.contains(&LlmProvider::Cursor));
         assert!(providers.contains(&LlmProvider::Gemini));
     }
 }
