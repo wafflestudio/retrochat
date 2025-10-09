@@ -14,13 +14,13 @@ Usage: `/retrochat <subcommand> [args]`
 - `init` - Initialize application database
 
 ### Import Commands
-- `import scan` - Scan enabled AI service directories (respects .env config)
-- `import scan <directory>` - Scan specific directory for chat files
-- `import scan-claude` - Scan Claude Code directories
-- `import scan-gemini` - Scan Gemini directories
-- `import scan-codex` - Scan Codex directories
-- `import file <path>` - Import specific chat file
-- `import batch <directory>` - Import all files from directory
+- `import --path <path>` - Import from specific file or directory
+- `import --claude` - Import from Claude Code default directories
+- `import --cursor` - Import from Cursor default directories
+- `import --gemini` - Import from Gemini default directories
+- `import --codex` - Import from Codex default directories
+- `import --claude --cursor` - Import from multiple providers
+- `import --path <path> --overwrite` - Import with overwrite option
 
 ### Interface
 - `tui` - Launch terminal user interface
@@ -40,14 +40,14 @@ Usage: `/retrochat <subcommand> [args]`
 # Initialize database
 /retrochat init
 
-# Scan enabled AI services (respects .env config)
-/retrochat import scan
+# Import from specific path
+/retrochat import --path /path/to/directory
 
-# Scan specific directory
-/retrochat import scan /path/to/directory
+# Import from provider directories
+/retrochat import --claude --cursor
 
-# Scan Claude Code directories only
-/retrochat import scan-claude
+# Import with overwrite
+/retrochat import --path ~/.claude/projects --overwrite
 
 # Launch TUI interface
 /retrochat tui
@@ -61,7 +61,9 @@ Usage: `/retrochat <subcommand> [args]`
 
 ## Supported File Formats
 - Claude Code (.jsonl files)
+- Cursor (store.db SQLite database)
 - Gemini/Bard (.json files)
+- Codex (various formats, experimental)
 
 ## Instructions for Claude Code
 When executing retrochat commands, STRICTLY display ONLY the terminal output. Do not abbreviate, summarize, or add commentary. Show the complete raw output exactly as it appears.

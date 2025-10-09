@@ -57,40 +57,66 @@ This opens an interactive interface where you can:
 
 ### Import Commands
 
-#### Scan for Chat Files
+RetroChat provides a unified import command that can import from a specific path or from provider-specific default directories.
 
-Scan a directory to find supported chat files:
+#### Import from Specific Path
+
+Import a file or directory:
 
 ```bash
-# Scan current directory
-retrochat import scan
+# Import a single file
+retrochat import --path /path/to/chat/file.jsonl
 
-# Scan specific directory
-retrochat import scan /path/to/chat/files
+# Import all files from a directory
+retrochat import --path /path/to/chat/directory
 
-# Scan common chat directories
-retrochat import scan ~/.claude/projects
-retrochat import scan ~/.gemini/tmp
+# Import with overwrite flag
+retrochat import --path ~/.claude/projects --overwrite
 ```
 
-#### Import Single File
+#### Import from Provider Directories
 
-Import a specific chat file:
+Import from configured default directories for each provider:
 
 ```bash
-retrochat import file /path/to/chat/file.jsonl
+# Import from Claude Code default directories
+retrochat import --claude
+
+# Import from Cursor default directories
+retrochat import --cursor
+
+# Import from Gemini default directories
+retrochat import --gemini
+
+# Import from Codex default directories
+retrochat import --codex
+
+# Import from multiple providers at once
+retrochat import --claude --cursor --overwrite
 ```
 
-#### Batch Import
+#### Environment Configuration
 
-Import all supported files from a directory:
+Configure default directories for each provider:
 
 ```bash
-retrochat import batch /path/to/chat/directory
+# Claude Code directories (default: ~/.claude/projects)
+export RETROCHAT_CLAUDE_DIRS="~/.claude/projects:/another/path"
 
-# Import from common chat directories
-retrochat import batch ~/.claude/projects
-retrochat import batch ~/.gemini/tmp
+# Cursor directories (default: ~/.cursor/chats)
+export RETROCHAT_CURSOR_DIRS="~/.cursor/chats"
+
+# Gemini directories (no default)
+export RETROCHAT_GEMINI_DIRS="/path/to/gemini/chats"
+
+# Codex directories (no default)
+export RETROCHAT_CODEX_DIRS="/path/to/codex/chats"
+
+# Enable/disable specific providers
+export RETROCHAT_ENABLE_CLAUDE=true
+export RETROCHAT_ENABLE_CURSOR=true
+export RETROCHAT_ENABLE_GEMINI=true
+export RETROCHAT_ENABLE_CODEX=false
 ```
 
 ### Analytics Commands
@@ -134,15 +160,24 @@ RetroChat currently supports importing from:
 
 ### Claude Code
 - **File Format**: JSONL files
-- **Default Locations**:
-  - macOS: `~/Library/Application Support/Claude Code/`
-  - Linux: `~/.config/claude-code/`
-  - Windows: `%APPDATA%/Claude Code/`
-- **File Pattern**: `*claude-code*.json*`
+- **Default Location**: `~/.claude/projects`
+- **File Pattern**: `*.jsonl`
+- **Environment Variable**: `RETROCHAT_CLAUDE_DIRS`
+
+### Cursor
+- **File Format**: SQLite database (store.db)
+- **Default Location**: `~/.cursor/chats`
+- **File Pattern**: `store.db`
+- **Environment Variable**: `RETROCHAT_CURSOR_DIRS`
 
 ### Gemini
 - **File Format**: JSON export files
 - **File Pattern**: `*gemini*.json`
+- **Environment Variable**: `RETROCHAT_GEMINI_DIRS`
+
+### Codex (Experimental)
+- **File Format**: Various formats
+- **Environment Variable**: `RETROCHAT_CODEX_DIRS`
 
 ## Database
 
@@ -190,37 +225,27 @@ tests/
 
 ### Quick Start Workflow
 
-1. **Scan for existing chat files:**
+1. **Import your chat history:**
    ```bash
-   # Scan common chat directories
-   retrochat import scan ~/.claude/projects
-   retrochat import scan ~/.gemini/tmp
-   
-   # Or scan any directory
-   retrochat import scan ~/Downloads
+   # Import from provider default directories
+   retrochat import --claude --cursor
+
+   # Or import from a specific path
+   retrochat import --path ~/.claude/projects
+   retrochat import --path ~/Downloads/my-chats
    ```
 
-2. **Import your chat history:**
-   ```bash
-   # Import from common chat directories
-   retrochat import batch ~/.claude/projects
-   retrochat import batch ~/.gemini/tmp
-   
-   # Or import from any directory
-   retrochat import batch ~/Downloads
-   ```
-
-3. **Launch the TUI to explore:**
+2. **Launch the TUI to explore:**
    ```bash
    retrochat tui
    ```
 
-4. **Generate analytics:**
+3. **Generate analytics:**
    ```bash
    retrochat analyze insights
    ```
 
-5. **Export detailed report:**
+4. **Export detailed report:**
    ```bash
    retrochat analyze export json --output my_chat_analysis.json
    ```

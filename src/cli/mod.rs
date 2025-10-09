@@ -26,10 +26,26 @@ pub enum Commands {
     Init,
     /// Launch TUI interface
     Tui,
-    /// Import chat files
+    /// Import chat files from a path or provider-specific directories
     Import {
-        #[command(subcommand)]
-        command: ImportCommands,
+        /// Path to file or directory to import
+        #[arg(short, long)]
+        path: Option<String>,
+        /// Import from Claude Code default directories
+        #[arg(long)]
+        claude: bool,
+        /// Import from Gemini default directories
+        #[arg(long)]
+        gemini: bool,
+        /// Import from Codex default directories
+        #[arg(long)]
+        codex: bool,
+        /// Import from Cursor default directories
+        #[arg(long)]
+        cursor: bool,
+        /// Overwrite existing sessions if they already exist
+        #[arg(short, long)]
+        overwrite: bool,
     },
     /// Analyze usage data
     Analyze {
@@ -45,37 +61,6 @@ pub enum Commands {
     Retrospect {
         #[command(subcommand)]
         command: RetrospectCommands,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum ImportCommands {
-    /// Scan for chat files in directory
-    Scan {
-        /// Directory to scan (defaults to current directory)
-        directory: Option<String>,
-    },
-    /// Scan Claude Code directories
-    ScanClaude,
-    /// Scan Gemini directories
-    ScanGemini,
-    /// Scan Codex directories
-    ScanCodex,
-    /// Import specific file
-    File {
-        /// Path to the chat file to import
-        path: String,
-        /// Overwrite existing sessions if they already exist
-        #[arg(short, long)]
-        overwrite: bool,
-    },
-    /// Import batch of files from directory
-    Batch {
-        /// Directory containing chat files to import
-        directory: String,
-        /// Overwrite existing sessions if they already exist
-        #[arg(short, long)]
-        overwrite: bool,
     },
 }
 
@@ -141,18 +126,16 @@ impl Cli {
             match self.command {
                 Commands::Init => init::handle_init_command().await,
                 Commands::Tui => tui::handle_tui_command().await,
-                Commands::Import { command } => match command {
-                    ImportCommands::Scan { directory } => {
-                        import::handle_scan_command(directory).await
-                    }
-                    ImportCommands::ScanClaude => import::scan_claude_directories().await,
-                    ImportCommands::ScanGemini => import::scan_gemini_directories().await,
-                    ImportCommands::ScanCodex => import::scan_codex_directories().await,
-                    ImportCommands::File { path, overwrite } => import::handle_import_file_command(path, overwrite).await,
-                    ImportCommands::Batch { directory, overwrite } => {
-                        import::handle_import_batch_command(directory, overwrite).await
-                    }
-                },
+                Commands::Import {
+                    path,
+                    claude,
+                    gemini,
+                    codex,
+                    cursor,
+                    overwrite,
+                } => {
+                    import::handle_import_command(path, claude, gemini, codex, cursor, overwrite).await
+                }
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {
