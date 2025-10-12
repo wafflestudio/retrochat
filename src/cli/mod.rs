@@ -143,7 +143,9 @@ impl Cli {
                     overwrite,
                     watch,
                     verbose,
-                } => import::handle_import_command(path, providers, overwrite, watch, verbose).await,
+                } => {
+                    import::handle_import_command(path, providers, overwrite, watch, verbose).await
+                }
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {

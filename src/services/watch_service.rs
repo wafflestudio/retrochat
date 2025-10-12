@@ -30,7 +30,10 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
             Provider::All => {
                 unreachable!("Provider::All should have been expanded")
             }
-            Provider::ClaudeCode | Provider::GeminiCLI | Provider::Codex | Provider::CursorAgent => {
+            Provider::ClaudeCode
+            | Provider::GeminiCLI
+            | Provider::Codex
+            | Provider::CursorAgent => {
                 if let Some(config) = registry.get_provider(&provider) {
                     let dirs = config.get_import_directories();
                     paths.extend(dirs);
@@ -139,11 +142,7 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
 }
 
 /// Print a filesystem event
-fn print_event(
-    event: &Event,
-    verbose: bool,
-    file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
-) {
+fn print_event(event: &Event, verbose: bool, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>) {
     let (emoji, event_kind, color) = match &event.kind {
         EventKind::Create(_) => ("✨", "CREATE", Color::Green),
         EventKind::Modify(_) => ("📝", "MODIFY", Color::Yellow),
@@ -231,9 +230,9 @@ fn show_file_diff(path: &Path, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>
         }
     } else if extension == "jsonl" {
         // For JSONL, check if at least one line is valid JSON
-        let has_valid_json = current_content
-            .lines()
-            .any(|line| !line.trim().is_empty() && serde_json::from_str::<serde_json::Value>(line).is_ok());
+        let has_valid_json = current_content.lines().any(|line| {
+            !line.trim().is_empty() && serde_json::from_str::<serde_json::Value>(line).is_ok()
+        });
 
         if !has_valid_json {
             println!(
