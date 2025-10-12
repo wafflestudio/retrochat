@@ -70,3 +70,6 @@ retrochat_export_*.csv
 tmp/
 temp/
 :memory:
+
+# Local example files (generated from local provider directories)
+examples/local_*

@@ -13,10 +13,7 @@ impl CodexConfig {
             .with_description("Codex (various formats)".to_string())
             .with_env_var_name(env_vars::CODEX_DIRS.to_string())
             .with_default_directory("~/.codex/sessions".to_string())
-            .with_file_patterns(vec![
-                "*codex*.json".to_string(),
-                "*conversations*.json".to_string(),
-            ])
+            .with_file_patterns(vec!["*.jsonl".to_string()])
             .with_default_location("darwin".to_string(), vec!["~/.codex/sessions".to_string()])
             .with_default_location("linux".to_string(), vec!["~/.codex/sessions".to_string()])
             .with_default_location(
