@@ -86,6 +86,10 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
     // File content cache for diff comparison
     let file_cache: Arc<Mutex<HashMap<PathBuf, String>>> = Arc::new(Mutex::new(HashMap::new()));
 
+    // Debounce map to track last visit times (for preventing rapid successive diffs)
+    let debounce_map: Arc<Mutex<HashMap<PathBuf, std::time::Instant>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
     // Create channels for file system events and parse requests
     let (tx, rx) = channel();
     let (parse_tx, mut parse_rx) = tokio_mpsc::unbounded_channel::<PathBuf>();
@@ -135,7 +139,13 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
     loop {
         match rx.recv() {
             Ok(event) => {
-                print_event(&event, verbose, &file_cache, parse_tx.clone());
+                print_event(
+                    &event,
+                    verbose,
+                    &file_cache,
+                    &debounce_map,
+                    parse_tx.clone(),
+                );
             }
             Err(e) => {
                 eprintln!(
@@ -161,6 +171,7 @@ fn print_event(
     event: &Event,
     verbose: bool,
     file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
+    debounce_map: &Arc<Mutex<HashMap<PathBuf, std::time::Instant>>>,
     parse_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
 ) {
     let (emoji, event_kind, color) = match &event.kind {
@@ -200,9 +211,13 @@ fn print_event(
             provider_display.with(provider_color)
         );
 
-        // Show diff if verbose mode is enabled and file was modified
-        if verbose && matches!(event.kind, EventKind::Modify(_)) {
-            show_file_diff(path, file_cache, parse_tx.clone());
+        // Show diff if verbose mode is enabled, file pattern matched, and event is Create or Modify
+        let should_show_diff = verbose
+            && detection.file_pattern_matched
+            && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_));
+
+        if should_show_diff {
+            show_file_diff(path, file_cache, debounce_map, parse_tx.clone());
         }
     }
 }
@@ -211,8 +226,26 @@ fn print_event(
 fn show_file_diff(
     path: &Path,
     file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
+    debounce_map: &Arc<Mutex<HashMap<PathBuf, std::time::Instant>>>,
     parse_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
 ) {
+    // Debounce: Check if file was visited too recently (within 100ms)
+    const DEBOUNCE_DURATION_MS: u128 = 100;
+    let now = std::time::Instant::now();
+
+    {
+        let mut debounce = debounce_map.lock().unwrap();
+        if let Some(last_visit) = debounce.get(path) {
+            let elapsed = now.duration_since(*last_visit).as_millis();
+            if elapsed < DEBOUNCE_DURATION_MS {
+                // Too soon, skip this event
+                return;
+            }
+        }
+        // Update last visit time
+        debounce.insert(path.to_path_buf(), now);
+    }
+
     // Check file extension
     let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
@@ -321,28 +354,46 @@ fn print_diff(old: &str, new: &str) {
         "Diff:".with(Color::Cyan).bold()
     );
 
-    let mut has_changes = false;
-    let mut line_count = 0;
     const MAX_DIFF_LINES: usize = 50; // Limit output to prevent spam
 
-    for change in diff.iter_all_changes() {
-        if line_count >= MAX_DIFF_LINES {
-            println!(
-                "    {} {}",
-                "...".with(Color::DarkGrey),
-                format!("(showing first {} lines)", MAX_DIFF_LINES).with(Color::DarkGrey)
-            );
-            break;
-        }
+    // Collect all changes first (excluding Equal lines)
+    let changes: Vec<_> = diff
+        .iter_all_changes()
+        .filter(|change| !matches!(change.tag(), ChangeTag::Equal))
+        .collect();
 
+    if changes.is_empty() {
+        println!(
+            "    {} {}",
+            "ℹ️".with(Color::Blue),
+            "No content changes detected".with(Color::DarkGrey)
+        );
+        return;
+    }
+
+    let total_changes = changes.len();
+    let skip_count = total_changes.saturating_sub(MAX_DIFF_LINES);
+
+    // Show message if we're skipping lines
+    if skip_count > 0 {
+        println!(
+            "    {} {}",
+            "...".with(Color::DarkGrey),
+            format!(
+                "({} earlier lines omitted, showing last {} lines)",
+                skip_count, MAX_DIFF_LINES
+            )
+            .with(Color::DarkGrey)
+        );
+    }
+
+    // Display the last N changes
+    for change in changes.iter().skip(skip_count) {
         let (sign, color) = match change.tag() {
             ChangeTag::Delete => ("-", Color::Red),
             ChangeTag::Insert => ("+", Color::Green),
-            ChangeTag::Equal => continue, // Skip unchanged lines for brevity
+            ChangeTag::Equal => continue, // Already filtered out, but keep for completeness
         };
-
-        has_changes = true;
-        line_count += 1;
 
         // Trim the line for display (remove trailing newline)
         let line = change.as_str().unwrap_or("").trim_end();
@@ -355,14 +406,6 @@ fn print_diff(old: &str, new: &str) {
         };
 
         println!("      {} {}", sign.with(color), display_line.with(color));
-    }
-
-    if !has_changes {
-        println!(
-            "    {} {}",
-            "ℹ️".with(Color::Blue),
-            "No content changes detected".with(Color::DarkGrey)
-        );
     }
 }
 

@@ -138,7 +138,17 @@ impl GeminiCLIParser {
     }
 
     async fn parse_content(&self, content: &str) -> Result<Vec<(ChatSession, Vec<Message>)>> {
-        // First try to parse as the new session format
+        // Check if filename matches session-*.json pattern
+        if let Some(session_id_from_filename) = self.extract_session_id_from_filename() {
+            // Try to parse as array of session messages (new format)
+            if let Ok(messages) = serde_json::from_str::<Vec<GeminiSessionMessage>>(content) {
+                return self
+                    .parse_messages_with_filename_session_id(messages, session_id_from_filename)
+                    .await;
+            }
+        }
+
+        // Try to parse as the old session format (with sessionId field)
         if let Ok(session) = serde_json::from_str::<GeminiSession>(content) {
             return self.parse_session_format(session).await;
         }
@@ -176,6 +186,92 @@ impl GeminiCLIParser {
         Ok(results)
     }
 
+    fn extract_session_id_from_filename(&self) -> Option<String> {
+        let path = Path::new(&self.file_path);
+        let filename = path.file_stem()?.to_str()?;
+
+        // Check if filename starts with "session-"
+        if filename.starts_with("session-") {
+            Some(filename.to_string())
+        } else {
+            None
+        }
+    }
+
+    async fn parse_messages_with_filename_session_id(
+        &self,
+        messages: Vec<GeminiSessionMessage>,
+        session_id_str: String,
+    ) -> Result<Vec<(ChatSession, Vec<Message>)>> {
+        if messages.is_empty() {
+            return Err(anyhow!("No messages found in Gemini session file"));
+        }
+
+        // Generate UUID from session ID string
+        let session_id = self.generate_uuid_from_string(&session_id_str);
+
+        // Extract timestamps from messages for start/end time
+        let timestamps: Vec<DateTime<Utc>> = messages
+            .iter()
+            .filter_map(|msg| self.parse_timestamp(&msg.timestamp).ok())
+            .collect();
+
+        let start_time = timestamps.iter().min().cloned().unwrap_or_else(Utc::now);
+        let end_time = timestamps.iter().max().cloned();
+
+        let file_hash = self.calculate_file_hash()?;
+
+        let mut chat_session = ChatSession::new(
+            Provider::GeminiCLI,
+            self.file_path.clone(),
+            file_hash,
+            start_time,
+        );
+
+        chat_session.id = session_id;
+        if let Some(end) = end_time {
+            if end != start_time {
+                chat_session = chat_session.with_end_time(end);
+            }
+        }
+
+        // Extract project_hash from the first message if available
+        // The session_id_str format is typically: session-{timestamp}-{project_hash_prefix}
+        // We'll use the last part after the last hyphen as project identifier
+        if let Some(project_identifier) = session_id_str.rsplit('-').next() {
+            chat_session = chat_session.with_project(project_identifier.to_string());
+        } else {
+            // Fallback to file path inference
+            let project_inference = ProjectInference::new(&self.file_path);
+            if let Some(project_name) = project_inference.infer_project_name() {
+                chat_session = chat_session.with_project(project_name);
+            }
+        }
+
+        // Convert messages
+        let mut converted_messages = Vec::new();
+        let mut total_tokens = 0u32;
+
+        for (index, session_message) in messages.iter().enumerate() {
+            let message = self.convert_session_message(session_message, session_id, index + 1)?;
+
+            if let Some(token_count) = message.token_count {
+                total_tokens += token_count;
+            }
+
+            converted_messages.push(message);
+        }
+
+        chat_session.message_count = converted_messages.len() as u32;
+        if total_tokens > 0 {
+            chat_session = chat_session.with_token_count(total_tokens);
+        }
+
+        chat_session.set_state(SessionState::Imported);
+
+        Ok(vec![(chat_session, converted_messages)])
+    }
+
     async fn parse_session_format(
         &self,
         session: GeminiSession,
@@ -204,12 +300,12 @@ impl GeminiCLIParser {
         chat_session.id = session_id;
         chat_session = chat_session.with_end_time(end_time);
 
+        // Use project_hash as project name if available
         if let Some(project_hash) = &session.project_hash {
-            // TODO: Map projectHash to a human-friendly project name; using first 8 chars for now
-            let short_hash: String = project_hash.chars().take(8).collect();
-            chat_session = chat_session.with_project(short_hash);
+            // Use the full project_hash prefix as the project name
+            chat_session = chat_session.with_project(project_hash.clone());
         } else {
-            // Use project inference to determine project name from file path
+            // Fallback to file path inference
             let project_inference = ProjectInference::new(&self.file_path);
             if let Some(project_name) = project_inference.infer_project_name() {
                 chat_session = chat_session.with_project(project_name);
@@ -667,12 +763,33 @@ impl GeminiCLIParser {
             return false;
         }
 
+        // Check if filename matches session-*.json pattern
+        let filename_matches_pattern = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.starts_with("session-"))
+            .unwrap_or(false);
+
         // Try to read and parse the file to see if it looks like Gemini format
         if let Ok(mut file) = File::open(path) {
             let mut content = String::new();
             if file.read_to_string(&mut content).is_ok() {
                 if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
-                    // Check for new session format
+                    // Check for new session format (array of messages with filename pattern)
+                    if filename_matches_pattern && parsed.is_array() {
+                        if let Some(arr) = parsed.as_array() {
+                            // Check if first element has message structure
+                            if let Some(first) = arr.first() {
+                                if first.get("id").is_some()
+                                    && first.get("type").is_some()
+                                    && first.get("content").is_some()
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    // Check for session format with sessionId field
                     if parsed.get("sessionId").is_some() && parsed.get("messages").is_some() {
                         return true;
                     }

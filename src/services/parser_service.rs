@@ -53,11 +53,12 @@ impl ParserService {
                 println!("   Token count: {}", token_count);
             }
 
-            // Log first few messages
+            // Log last few messages
             let preview_count = 3.min(messages.len());
             if preview_count > 0 {
-                println!("   First {} messages:", preview_count);
-                for msg in messages.iter().take(preview_count) {
+                println!("   Last {} messages:", preview_count);
+                let start_index = messages.len().saturating_sub(preview_count);
+                for msg in messages.iter().skip(start_index) {
                     let content_preview = if msg.content.len() > 50 {
                         format!("{}...", &msg.content[..50])
                     } else {

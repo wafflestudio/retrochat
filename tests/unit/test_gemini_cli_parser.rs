@@ -228,3 +228,48 @@ async fn test_gemini_parser_invalid_json() {
 
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn test_gemini_parser_filename_session_id() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create a file with session-*.json pattern
+    let test_file = base_path.join("session-2025-10-12T17-51-4b2d82b4.json");
+
+    // Create an array of messages (new format based on user's description)
+    let sample_data = r#"[
+        {"id":"msg-1","timestamp":"2024-01-01T10:00:00Z","type":"user","content":"Hello","tokens":{"input":5,"output":0,"cached":0,"thoughts":0,"tool":0,"total":5}},
+        {"id":"msg-2","timestamp":"2024-01-01T10:01:00Z","type":"gemini","content":"Hi there! How can I help you?","tokens":{"input":0,"output":20,"cached":0,"thoughts":0,"tool":0,"total":20}}
+    ]"#;
+
+    fs::write(&test_file, sample_data).unwrap();
+
+    let parser = GeminiCLIParser::new(&test_file);
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let sessions = result.unwrap();
+
+    assert_eq!(sessions.len(), 1);
+
+    let (session, messages) = &sessions[0];
+    assert_eq!(session.provider, Provider::GeminiCLI);
+    assert_eq!(session.message_count, 2);
+    assert_eq!(messages.len(), 2);
+
+    // Check that messages were parsed correctly
+    assert_eq!(messages[0].content, "Hello");
+    assert_eq!(messages[1].content, "Hi there! How can I help you?");
+
+    // Check token counts
+    assert_eq!(messages[0].token_count, Some(5));
+    assert_eq!(messages[1].token_count, Some(20));
+    assert_eq!(session.token_count, Some(25));
+
+    // Check that project name was inferred from the filename
+    // The last part after the last hyphen should be used as project identifier
+    assert_eq!(session.project_name, Some("4b2d82b4".to_string()));
+
+    Ok(())
+}
