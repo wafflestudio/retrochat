@@ -122,11 +122,17 @@ pub fn print_import_help() {
     println!("     From provider directories:");
     for provider in &supported_providers() {
         // Provider enum uses lower-case value names in CLI (e.g., "gemini", "cursor")
-        println!("       $ retrochat import {}", format_provider_arg(provider));
+        println!(
+            "       $ retrochat import {}",
+            format_provider_arg(provider)
+        );
     }
     println!();
     println!("     Multiple providers at once:");
-    println!("       $ retrochat import {}", format_provider_arg(&Provider::All));
+    println!(
+        "       $ retrochat import {}",
+        format_provider_arg(&Provider::All)
+    );
     let args: Vec<String> = supported_providers()
         .into_iter()
         .take(3)
