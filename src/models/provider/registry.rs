@@ -18,16 +18,24 @@ impl ProviderRegistry {
         registry
     }
 
-    pub fn load_default_providers(&mut self) {
-        let claude_code = ClaudeCodeConfig::create();
-        let gemini = GeminiCliConfig::create();
-        let codex = CodexConfig::create();
-        let cursor = CursorAgentConfig::create();
+    /// List providers supported via CLI (excluding `All` aggregate)
+    pub fn supported_providers() -> Vec<Provider> {
+        Provider::all_concrete()
+    }
 
-        self.providers.insert(Provider::ClaudeCode, claude_code);
-        self.providers.insert(Provider::GeminiCLI, gemini);
-        self.providers.insert(Provider::Codex, codex);
-        self.providers.insert(Provider::CursorAgent, cursor);
+    pub fn load_default_providers(&mut self) {
+        // Get all supported providers and load their configurations
+        for provider in Self::supported_providers() {
+            let config = match provider {
+                Provider::ClaudeCode => ClaudeCodeConfig::create(),
+                Provider::GeminiCLI => GeminiCliConfig::create(),
+                Provider::Codex => CodexConfig::create(),
+                Provider::CursorAgent => CursorAgentConfig::create(),
+                Provider::All => continue, // Skip aggregate
+                Provider::Other(_) => continue, // Skip unknown providers
+            };
+            self.providers.insert(provider, config);
+        }
     }
 
     pub fn get_provider(&self, id: &Provider) -> Option<&ProviderConfig> {

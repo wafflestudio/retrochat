@@ -7,7 +7,7 @@ use crate::models::Provider;
 
 // Helper: list providers supported via CLI (excluding `All` aggregate)
 fn supported_providers() -> Vec<Provider> {
-    Provider::all_concrete()
+    ProviderRegistry::supported_providers()
 }
 
 // Helper: get provider information from registry
