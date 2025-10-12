@@ -13,7 +13,7 @@ impl GeminiCliConfig {
             .with_description("Gemini CLI (.json files)".to_string())
             .with_env_var_name(env_vars::GEMINI_DIRS.to_string())
             .with_default_directory("~/.gemini/tmp".to_string())
-            .with_file_patterns(vec!["logs.json".to_string()])
+            .with_file_patterns(vec!["session-*.json".to_string()])
             .with_default_location("darwin".to_string(), vec!["~/.gemini/tmp".to_string()])
             .with_default_location("linux".to_string(), vec!["~/.gemini/tmp".to_string()])
             .with_default_location(

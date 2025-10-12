@@ -26,7 +26,7 @@ PROVIDERS = {
     "gemini": {
         "name": "Gemini CLI",
         "default_dir": "~/.gemini/tmp",
-        "patterns": ["logs.json"],
+        "patterns": ["session-*.json"],
         "example_name": "gemini.json",
     },
     "codex": {

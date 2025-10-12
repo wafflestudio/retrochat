@@ -197,7 +197,7 @@ RetroChat currently supports importing from:
 
 ### Gemini
 - **File Format**: JSON export files
-- **File Pattern**: `*gemini*.json`
+- **File Pattern**: `session-*.json`
 - **Environment Variable**: `RETROCHAT_GEMINI_DIRS`
 
 ### Codex (Experimental)
