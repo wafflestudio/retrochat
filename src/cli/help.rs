@@ -88,14 +88,14 @@ pub fn print_import_usage() {
         .map(|p| format_provider_arg(&p))
         .collect();
     eprintln!(
-        "  retrochat import {}           # Import from multiple providers",
+        "  $ retrochat import {}           # Import from multiple providers",
         args.join(" ")
     );
-    eprintln!("  retrochat import all                     # Import from all providers");
-    eprintln!("  retrochat import --path ~/.claude/projects");
+    eprintln!("  $ retrochat import all                     # Import from all providers");
+    eprintln!("  $ retrochat import --path ~/.claude/projects");
     if let Some(first_provider) = supported_providers().first() {
         eprintln!(
-            "  retrochat import {} --overwrite      # Overwrite existing sessions",
+            "  $ retrochat import {} --overwrite      # Overwrite existing sessions",
             format_provider_arg(first_provider)
         );
     }
