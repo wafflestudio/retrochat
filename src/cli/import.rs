@@ -15,6 +15,7 @@ pub async fn handle_import_command(
     providers: Vec<Provider>,
     overwrite: bool,
     watch: bool,
+    verbose: bool,
 ) -> Result<()> {
     if watch {
         // Collect all paths to watch
@@ -38,10 +39,10 @@ pub async fn handle_import_command(
             ));
         }
 
-        return watch_paths_for_changes(watch_paths).await;
+        return watch_paths_for_changes(watch_paths, verbose).await;
     }
 
-    // Non-watch mode: original behavior
+    // Non-watch mode: original behavior (verbose not used)
     // Check if user provided a path
     if let Some(path_str) = path {
         return import_path(path_str, overwrite).await;

@@ -1,7 +1,11 @@
 use anyhow::{Context, Result};
 use crossterm::style::{Color, Stylize};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use similar::{ChangeTag, TextDiff};
+use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use crate::models::provider::config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
@@ -56,13 +60,20 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
 }
 
 /// Watch paths for file system changes and print events
-pub async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
+pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Result<()> {
     use std::sync::mpsc::channel;
 
     println!(
         "{}",
         "👁️  Starting file watcher...".with(Color::Cyan).bold()
     );
+    if verbose {
+        println!(
+            "{} {}",
+            "🔍".with(Color::Cyan),
+            "Verbose mode: Will show diffs for JSON/JSONL files".with(Color::Cyan)
+        );
+    }
     println!(
         "{} {} path(s):",
         "📂".with(Color::Yellow),
@@ -80,6 +91,9 @@ pub async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
         "⌨️".with(Color::Blue),
         "Press Ctrl+C to stop watching.".with(Color::DarkGrey)
     );
+
+    // File content cache for diff comparison
+    let file_cache: Arc<Mutex<HashMap<PathBuf, String>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let (tx, rx) = channel();
 
@@ -121,7 +135,7 @@ pub async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
     loop {
         match rx.recv() {
             Ok(event) => {
-                print_event(&event);
+                print_event(&event, verbose, &file_cache);
             }
             Err(e) => {
                 eprintln!(
@@ -139,7 +153,11 @@ pub async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
 }
 
 /// Print a filesystem event
-fn print_event(event: &Event) {
+fn print_event(
+    event: &Event,
+    verbose: bool,
+    file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
+) {
     let (emoji, event_kind, color) = match &event.kind {
         EventKind::Create(_) => ("✨", "CREATE", Color::Green),
         EventKind::Modify(_) => ("📝", "MODIFY", Color::Yellow),
@@ -175,6 +193,116 @@ fn print_event(event: &Event) {
             path.display().to_string().with(Color::Cyan),
             "·".with(Color::DarkGrey),
             provider_display.with(provider_color)
+        );
+
+        // Show diff if verbose mode is enabled and file was modified
+        if verbose && matches!(event.kind, EventKind::Modify(_)) {
+            show_file_diff(path, file_cache);
+        }
+    }
+}
+
+/// Show diff for modified files
+fn show_file_diff(path: &Path, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>) {
+    // Check file extension
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+    // Only show diff for JSON/JSONL files
+    if !matches!(extension, "json" | "jsonl") {
+        if extension == "db" {
+            println!(
+                "    {} {}",
+                "⚠️".with(Color::Yellow),
+                "Diff not supported for .db files".with(Color::DarkGrey)
+            );
+        }
+        return;
+    }
+
+    // Read current file content
+    let current_content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!(
+                "    {} {} {}",
+                "⚠️".with(Color::Yellow),
+                "Failed to read file:".with(Color::Yellow),
+                e.to_string().with(Color::DarkGrey)
+            );
+            return;
+        }
+    };
+
+    // Get previous content from cache
+    let mut cache = file_cache.lock().unwrap();
+    let previous_content = cache.get(path);
+
+    if let Some(old_content) = previous_content {
+        // Compute and display diff
+        print_diff(old_content, &current_content);
+    } else {
+        println!(
+            "    {} {}",
+            "ℹ️".with(Color::Blue),
+            "First time seeing this file, caching content...".with(Color::DarkGrey)
+        );
+    }
+
+    // Update cache with current content
+    cache.insert(path.to_path_buf(), current_content);
+}
+
+/// Print unified diff between two texts
+fn print_diff(old: &str, new: &str) {
+    let diff = TextDiff::from_lines(old, new);
+
+    println!(
+        "    {} {}",
+        "📊".with(Color::Cyan),
+        "Diff:".with(Color::Cyan).bold()
+    );
+
+    let mut has_changes = false;
+    let mut line_count = 0;
+    const MAX_DIFF_LINES: usize = 50; // Limit output to prevent spam
+
+    for change in diff.iter_all_changes() {
+        if line_count >= MAX_DIFF_LINES {
+            println!(
+                "    {} {}",
+                "...".with(Color::DarkGrey),
+                format!("(showing first {} lines)", MAX_DIFF_LINES).with(Color::DarkGrey)
+            );
+            break;
+        }
+
+        let (sign, color) = match change.tag() {
+            ChangeTag::Delete => ("-", Color::Red),
+            ChangeTag::Insert => ("+", Color::Green),
+            ChangeTag::Equal => continue, // Skip unchanged lines for brevity
+        };
+
+        has_changes = true;
+        line_count += 1;
+
+        // Trim the line for display (remove trailing newline)
+        let line = change.as_str().unwrap_or("").trim_end();
+
+        // Truncate long lines
+        let display_line = if line.len() > 120 {
+            format!("{}...", &line[..120])
+        } else {
+            line.to_string()
+        };
+
+        println!("      {} {}", sign.with(color), display_line.with(color));
+    }
+
+    if !has_changes {
+        println!(
+            "    {} {}",
+            "ℹ️".with(Color::Blue),
+            "No content changes detected".with(Color::DarkGrey)
         );
     }
 }

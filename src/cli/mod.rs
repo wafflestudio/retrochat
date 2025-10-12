@@ -53,6 +53,10 @@ pub enum Commands {
         /// Watch for file changes and automatically import
         #[arg(short, long)]
         watch: bool,
+
+        /// Show detailed diff of changes when overwriting sessions
+        #[arg(short = 'v', long)]
+        verbose: bool,
     },
     /// Analyze usage data
     Analyze {
@@ -138,7 +142,8 @@ impl Cli {
                     providers,
                     overwrite,
                     watch,
-                } => import::handle_import_command(path, providers, overwrite, watch).await,
+                    verbose,
+                } => import::handle_import_command(path, providers, overwrite, watch, verbose).await,
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {

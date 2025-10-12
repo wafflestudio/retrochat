@@ -33,6 +33,7 @@ prost = "0.12"
 bytes = "1.5"
 dirs = "5.0"
 notify = "8.1.0"
+similar = "2.7"
 
 [features]
 default = ["reqwest"]
