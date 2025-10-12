@@ -8,9 +8,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::models::provider::registry::ProviderRegistry;
-use crate::models::provider::config::{
-    ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
-};
 use crate::models::Provider;
 
 /// Result of provider detection
@@ -26,30 +23,18 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
     let expanded_providers = Provider::expand_all(providers.to_vec());
     let mut paths = Vec::new();
 
+    let registry = ProviderRegistry::global();
+
     for provider in expanded_providers {
         match provider {
             Provider::All => {
                 unreachable!("Provider::All should have been expanded")
             }
-            Provider::ClaudeCode => {
-                let config = ClaudeCodeConfig::create();
-                let dirs = config.get_import_directories();
-                paths.extend(dirs);
-            }
-            Provider::GeminiCLI => {
-                let config = GeminiCliConfig::create();
-                let dirs = config.get_import_directories();
-                paths.extend(dirs);
-            }
-            Provider::Codex => {
-                let config = CodexConfig::create();
-                let dirs = config.get_import_directories();
-                paths.extend(dirs);
-            }
-            Provider::CursorAgent => {
-                let config = CursorAgentConfig::create();
-                let dirs = config.get_import_directories();
-                paths.extend(dirs);
+            Provider::ClaudeCode | Provider::GeminiCLI | Provider::Codex | Provider::CursorAgent => {
+                if let Some(config) = registry.get_provider(&provider) {
+                    let dirs = config.get_import_directories();
+                    paths.extend(dirs);
+                }
             }
             Provider::Other(name) => {
                 eprintln!("Unknown provider: {name}");
