@@ -1,9 +1,13 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use super::config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig, ProviderConfig,
 };
 use super::r#enum::Provider;
+
+/// Global singleton instance of provider registry
+static PROVIDER_REGISTRY: OnceLock<ProviderRegistry> = OnceLock::new();
 
 pub struct ProviderRegistry {
     providers: HashMap<Provider, ProviderConfig>,
@@ -16,6 +20,11 @@ impl ProviderRegistry {
         };
         registry.load_default_providers();
         registry
+    }
+
+    /// Get the global singleton instance
+    pub fn global() -> &'static ProviderRegistry {
+        PROVIDER_REGISTRY.get_or_init(ProviderRegistry::new)
     }
 
     /// List providers supported via CLI (excluding `All` aggregate)
@@ -36,6 +45,25 @@ impl ProviderRegistry {
             };
             self.providers.insert(provider, config);
         }
+    }
+
+    /// Get all provider configs as a vector of tuples (config, name)
+    pub fn all_configs_with_names(&self) -> Vec<(&ProviderConfig, &str)> {
+        vec![
+            (
+                self.get_provider(&Provider::ClaudeCode).unwrap(),
+                "Claude Code",
+            ),
+            (
+                self.get_provider(&Provider::GeminiCLI).unwrap(),
+                "Gemini CLI",
+            ),
+            (self.get_provider(&Provider::Codex).unwrap(), "Codex"),
+            (
+                self.get_provider(&Provider::CursorAgent).unwrap(),
+                "Cursor Agent",
+            ),
+        ]
     }
 
     pub fn get_provider(&self, id: &Provider) -> Option<&ProviderConfig> {

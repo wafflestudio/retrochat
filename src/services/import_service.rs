@@ -189,50 +189,18 @@ impl ImportService {
         std::cmp::max(1, (file_size_bytes / 10240) as i32)
     }
 
-    pub async fn import_file(&self, request: ImportFileRequest) -> Result<ImportFileResponse> {
-        let start_time = Instant::now();
-
-        let path = Path::new(&request.file_path);
-        if !path.exists() || !path.is_file() {
-            return Err(anyhow!("Invalid file path: {}", request.file_path));
-        }
-
-        let metadata = fs::metadata(path)?;
-        let file_size_bytes = metadata.len() as i64;
-
+    /// Import sessions into the database
+    ///
+    /// Returns (sessions_imported, messages_imported, warnings)
+    async fn import_sessions(
+        &self,
+        sessions: Vec<(crate::models::ChatSession, Vec<crate::models::Message>)>,
+        overwrite_existing: bool,
+    ) -> Result<(i32, i32, Vec<String>)> {
         let mut warnings = Vec::new();
         let mut sessions_imported = 0;
         let mut messages_imported = 0;
 
-        // Detect provider if not provided (for validation)
-        let _provider = request.provider.unwrap_or_else(|| {
-            self.detect_provider(
-                path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                path.extension().and_then(|e| e.to_str()).unwrap_or(""),
-            )
-        });
-
-        // Parse the file using ParserRegistry
-        let sessions = match ParserRegistry::parse_file(path).await {
-            Ok(sessions) => sessions,
-            Err(e) => {
-                warnings.push(format!("Failed to parse file: {e}"));
-                return Err(anyhow!("Failed to parse file: {e}"));
-            }
-        };
-
-        if sessions.is_empty() {
-            warnings.push("No sessions found in file".to_string());
-            return Ok(ImportFileResponse {
-                sessions_imported: 0,
-                messages_imported: 0,
-                import_duration_ms: start_time.elapsed().as_millis() as i32,
-                file_size_bytes,
-                warnings,
-            });
-        }
-
-        // Import into database
         let session_repo = ChatSessionRepository::new(&self.db_manager);
         let message_repo = MessageRepository::new(&self.db_manager);
         let project_repo = ProjectRepository::new(&self.db_manager);
@@ -242,7 +210,7 @@ impl ImportService {
             let existing_session = session_repo.get_by_id(&session.id).await.ok().flatten();
 
             if existing_session.is_some() {
-                if request.overwrite_existing.unwrap_or(false) {
+                if overwrite_existing {
                     // Delete existing session and its messages
                     if let Err(e) = message_repo.delete_by_session(&session.id).await {
                         warnings.push(format!(
@@ -291,6 +259,57 @@ impl ImportService {
                 messages_imported += 1;
             }
         }
+
+        Ok((sessions_imported, messages_imported, warnings))
+    }
+
+    pub async fn import_file(&self, request: ImportFileRequest) -> Result<ImportFileResponse> {
+        let start_time = Instant::now();
+
+        let path = Path::new(&request.file_path);
+        if !path.exists() || !path.is_file() {
+            return Err(anyhow!("Invalid file path: {}", request.file_path));
+        }
+
+        let metadata = fs::metadata(path)?;
+        let file_size_bytes = metadata.len() as i64;
+
+        let mut warnings = Vec::new();
+
+        // Detect provider if not provided (for validation)
+        let _provider = request.provider.unwrap_or_else(|| {
+            self.detect_provider(
+                path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                path.extension().and_then(|e| e.to_str()).unwrap_or(""),
+            )
+        });
+
+        // Parse the file using ParserRegistry
+        let sessions = match ParserRegistry::parse_file(path).await {
+            Ok(sessions) => sessions,
+            Err(e) => {
+                warnings.push(format!("Failed to parse file: {e}"));
+                return Err(anyhow!("Failed to parse file: {e}"));
+            }
+        };
+
+        if sessions.is_empty() {
+            warnings.push("No sessions found in file".to_string());
+            return Ok(ImportFileResponse {
+                sessions_imported: 0,
+                messages_imported: 0,
+                import_duration_ms: start_time.elapsed().as_millis() as i32,
+                file_size_bytes,
+                warnings,
+            });
+        }
+
+        // Import sessions into database
+        let (sessions_imported, messages_imported, import_warnings) = self
+            .import_sessions(sessions, request.overwrite_existing.unwrap_or(false))
+            .await?;
+
+        warnings.extend(import_warnings);
 
         let import_duration_ms = start_time.elapsed().as_millis() as i32;
 

@@ -5,6 +5,7 @@ pub mod init;
 pub mod query;
 pub mod retrospect;
 pub mod tui;
+pub mod watch;
 
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
@@ -49,6 +50,33 @@ pub enum Commands {
         /// Overwrite existing sessions if they already exist
         #[arg(short, long)]
         overwrite: bool,
+    },
+    /// Watch files for changes and show diffs
+    ///
+    /// Available providers: all, claude, gemini, codex, cursor
+    ///
+    /// Examples:
+    ///   retrochat watch all --verbose         # Watch all providers with detailed output
+    ///   retrochat watch claude cursor         # Watch specific providers
+    ///   retrochat watch --path ~/.claude/projects --verbose
+    Watch {
+        /// A specific file or directory path to watch
+        #[arg(short, long)]
+        path: Option<String>,
+
+        /// One or more providers to watch
+        ///
+        /// Available: all, claude, gemini, codex, cursor
+        #[arg(value_enum)]
+        providers: Vec<Provider>,
+
+        /// Show detailed diff of changes
+        #[arg(short = 'v', long)]
+        verbose: bool,
+
+        /// Automatically import changes when detected (future feature)
+        #[arg(short, long)]
+        import: bool,
     },
     /// Analyze usage data
     Analyze {
@@ -134,6 +162,12 @@ impl Cli {
                     providers,
                     overwrite,
                 } => import::handle_import_command(path, providers, overwrite).await,
+                Commands::Watch {
+                    path,
+                    providers,
+                    verbose,
+                    import,
+                } => watch::handle_watch_command(path, providers, verbose, import).await,
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {

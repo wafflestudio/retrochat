@@ -9,7 +9,15 @@ CARGO_BIN := $(CARGO)
 RUSTC_BIN := rustc
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example test-import ci
+# Check if we're running the cli target
+ifeq (cli,$(firstword $(MAKECMDGOALS)))
+  # Use the rest as arguments for the cli target
+  CLI_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # Turn them into do-nothing targets
+  $(eval $(CLI_ARGS):;@:)
+endif
+
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli watch ci
 
 help:
 	@echo "Available targets:"
@@ -17,14 +25,18 @@ help:
 	@echo "  make clippy          - Run clippy with -D warnings (like CI)"
 	@echo "  make fmt             - Check formatting with rustfmt --check (like CI)"
 	@echo "  make fmt-fix         - Apply formatting changes with rustfmt"
-	@echo "  make clippy-fix      - Apply clippy auto-fixes"
+	@echo "  make clippy-fix      - Apply clippy auto-fixes (with -D warnings)"
 	@echo "  make fix             - Apply rustfmt and clippy fixes, then verify"
 	@echo "  make check           - Cargo check"
 	@echo "  make build           - Cargo build"
 	@echo "  make build-release   - Cargo build --release"
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make generate-example - Generate example files from provider directories"
-	@echo "  make test-import    - Generate and import example files from all providers"
+	@echo "  make e2e-import      - Generate and import example files from all providers"
+	@echo "  make e2e             - Run end-to-end tests"
+	@echo "  make cli <args>      - Run retrochat CLI (e.g., make cli import claude)"
+	@echo "                         Use 'make -- cli <args>' for flags (e.g., make -- cli watch --verbose all)"
+	@echo "  make watch           - Watch all providers with verbose output (make watch)"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -42,7 +54,7 @@ fmt-fix:
 # Apply clippy auto-fixes
 clippy-fix:
 	@echo "Applying clippy auto-fixes..."
-	@$(CARGO_BIN) clippy --fix --allow-dirty --allow-staged
+	@$(CARGO_BIN) clippy --fix --allow-dirty --allow-staged -- -D warnings
 
 # Apply automatic fixes: rustfmt, clippy --fix, then verify
 fix: fmt-fix clippy-fix
@@ -64,13 +76,21 @@ clean:
 generate-example:
 	@python3 scripts/generate-example.py
 
-test-import: generate-example
+e2e-import: generate-example
 	@echo "Importing example files..."
 	@$(CARGO_BIN) run -- import --path examples/local_claude.jsonl --overwrite || true
 	@$(CARGO_BIN) run -- import --path examples/local_codex.jsonl --overwrite || true
 	@$(CARGO_BIN) run -- import --path examples/local_cursor.db --overwrite || true
 	@$(CARGO_BIN) run -- import --path examples/local_gemini.json --overwrite || true
 	@echo "Example import complete"
+
+e2e: e2e-import
+
+cli:
+	$(CARGO_BIN) run -- $(CLI_ARGS)
+
+watch:
+	$(CARGO_BIN) run -- watch all --verbose
 
 ci: fmt clippy test
 	@echo "CI checks passed locally"

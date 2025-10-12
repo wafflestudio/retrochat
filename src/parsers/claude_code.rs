@@ -252,6 +252,15 @@ impl ClaudeCodeParser {
                 let mut content_parts = Vec::new();
                 for item in arr {
                     if let Some(obj) = item.as_object() {
+                        // Handle thinking content blocks
+                        if obj.get("type").and_then(|v| v.as_str()) == Some("thinking") {
+                            if let Some(thinking_text) =
+                                obj.get("thinking").and_then(|v| v.as_str())
+                            {
+                                content_parts.push(thinking_text.to_string());
+                            }
+                            continue;
+                        }
                         // Handle text content
                         if let Some(text) = obj.get("text").and_then(|v| v.as_str()) {
                             content_parts.push(text.to_string());
@@ -384,6 +393,18 @@ impl ClaudeCodeParser {
                 // Handle complex content structure
                 let mut content_parts = Vec::new();
                 for item in arr {
+                    // Handle thinking content blocks
+                    if let Some(obj) = item.as_object() {
+                        if obj.get("type").and_then(|v| v.as_str()) == Some("thinking") {
+                            if let Some(thinking_text) =
+                                obj.get("thinking").and_then(|v| v.as_str())
+                            {
+                                content_parts.push(thinking_text.to_string());
+                            }
+                            continue;
+                        }
+                    }
+
                     if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                         content_parts.push(text.to_string());
                     } else if let Some(content_str) = item.as_str() {

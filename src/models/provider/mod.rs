@@ -1,7 +1,7 @@
 pub mod config;
 mod r#enum;
 mod parser_type;
-mod registry;
+pub mod registry;
 
 pub use config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig, ProviderConfig,
