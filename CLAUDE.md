@@ -31,7 +31,7 @@ make test          # Run test suite (like CI)
 make clippy        # Run clippy with -D warnings (like CI)
 make fmt           # Check formatting with rustfmt --check
 make fmt-fix       # Apply formatting changes
-make clippy-fix    # Apply clippy auto-fixes (requires nightly)
+make clippy-fix    # Apply clippy auto-fixes
 make fix           # Apply rustfmt and clippy fixes, then verify
 make check         # Cargo check
 make build         # Cargo build

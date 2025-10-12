@@ -221,7 +221,7 @@ make test          # Run all tests
 
 # Quick fixes
 make fmt-fix       # Auto-format code
-make clippy-fix    # Auto-fix clippy issues (requires nightly)
+make clippy-fix    # Auto-fix clippy issues
 make fix           # Auto-format + auto-fix clippy + verify
 
 # Build commands
