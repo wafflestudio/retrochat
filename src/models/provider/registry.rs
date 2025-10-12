@@ -118,7 +118,7 @@ mod tests {
         assert!(registry.get_provider(&Provider::CursorAgent).is_some());
 
         // Test detection
-        let claude_provider = registry.detect_provider_from_file("chat.jsonl");
+        let claude_provider = registry.detect_provider_from_file("claude.jsonl");
         assert!(claude_provider.is_some());
         assert_eq!(claude_provider.unwrap().name, "Claude Code");
 
