@@ -165,10 +165,20 @@ impl ImportService {
     }
 
     fn detect_provider(&self, file_name: &str, extension: &str) -> String {
-        if file_name.contains("claude") || extension == "jsonl" {
+        if file_name.contains("claude") {
             "ClaudeCode".to_string()
-        } else if file_name.contains("gemini") || extension == "json" {
-            "Gemini".to_string() // Default JSON to Gemini
+        } else if file_name.contains("codex") {
+            "Codex".to_string()
+        } else if file_name.contains("cursor") {
+            "CursorAgent".to_string()
+        } else if file_name.contains("gemini") {
+            "GeminiCLI".to_string()
+        } else if extension == "jsonl" {
+            "ClaudeCode".to_string() // Default JSONL to Claude
+        } else if extension == "json" {
+            "GeminiCLI".to_string() // Default JSON to Gemini
+        } else if extension == "db" {
+            "CursorAgent".to_string() // Default DB to Cursor
         } else {
             "Unknown".to_string()
         }

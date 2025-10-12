@@ -9,7 +9,7 @@ CARGO_BIN := $(CARGO)
 RUSTC_BIN := rustc
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example ci
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example test-import ci
 
 help:
 	@echo "Available targets:"
@@ -24,6 +24,7 @@ help:
 	@echo "  make build-release   - Cargo build --release"
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make generate-example - Generate example files from provider directories"
+	@echo "  make test-import    - Generate and import example files from all providers"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -62,6 +63,14 @@ clean:
 
 generate-example:
 	@python3 scripts/generate-example.py
+
+test-import: generate-example
+	@echo "Importing example files..."
+	@$(CARGO_BIN) run -- import --path examples/local_claude.jsonl --overwrite || true
+	@$(CARGO_BIN) run -- import --path examples/local_codex.jsonl --overwrite || true
+	@$(CARGO_BIN) run -- import --path examples/local_cursor.db --overwrite || true
+	@$(CARGO_BIN) run -- import --path examples/local_gemini.json --overwrite || true
+	@echo "Example import complete"
 
 ci: fmt clippy test
 	@echo "CI checks passed locally"

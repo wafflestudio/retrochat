@@ -81,12 +81,25 @@ pub struct GeminiSession {
     pub messages: Vec<GeminiSessionMessage>,
 }
 
-pub struct GeminiParser {
+// Array format structures (simple message list grouped by session)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiArrayMessage {
+    #[serde(rename = "sessionId")]
+    pub session_id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: u32,
+    #[serde(rename = "type")]
+    pub message_type: String,
+    pub message: String,
+    pub timestamp: String,
+}
+
+pub struct GeminiCLIParser {
     file_path: String,
     use_memory_mapping: bool,
 }
 
-impl GeminiParser {
+impl GeminiCLIParser {
     pub fn new(file_path: impl AsRef<Path>) -> Self {
         Self {
             file_path: file_path.as_ref().to_string_lossy().to_string(),
@@ -128,6 +141,11 @@ impl GeminiParser {
         // First try to parse as the new session format
         if let Ok(session) = serde_json::from_str::<GeminiSession>(content) {
             return self.parse_session_format(session).await;
+        }
+
+        // Try to parse as array of message objects
+        if let Ok(array_messages) = serde_json::from_str::<Vec<GeminiArrayMessage>>(content) {
+            return self.parse_array_format(array_messages).await;
         }
 
         // Fallback to old export format
@@ -219,6 +237,128 @@ impl GeminiParser {
         chat_session.set_state(SessionState::Imported);
 
         Ok(vec![(chat_session, messages)])
+    }
+
+    async fn parse_array_format(
+        &self,
+        array_messages: Vec<GeminiArrayMessage>,
+    ) -> Result<Vec<(ChatSession, Vec<Message>)>> {
+        use std::collections::HashMap;
+
+        if array_messages.is_empty() {
+            return Err(anyhow!("No messages found in array format"));
+        }
+
+        // Group messages by session_id
+        let mut sessions_map: HashMap<String, Vec<&GeminiArrayMessage>> = HashMap::new();
+        for msg in &array_messages {
+            sessions_map
+                .entry(msg.session_id.clone())
+                .or_default()
+                .push(msg);
+        }
+
+        let mut results = Vec::new();
+
+        for (session_id_str, session_messages) in sessions_map {
+            // Parse or generate session UUID
+            let session_id = if let Ok(uuid) = Uuid::parse_str(&session_id_str) {
+                uuid
+            } else {
+                self.generate_uuid_from_string(&session_id_str)
+            };
+
+            // Find start and end times from messages
+            let timestamps: Vec<DateTime<Utc>> = session_messages
+                .iter()
+                .filter_map(|msg| self.parse_timestamp(&msg.timestamp).ok())
+                .collect();
+
+            let start_time = timestamps.iter().min().cloned().unwrap_or_else(Utc::now);
+            let end_time = timestamps.iter().max().cloned();
+
+            let file_hash = self.calculate_file_hash()?;
+
+            let mut chat_session = ChatSession::new(
+                Provider::GeminiCLI,
+                self.file_path.clone(),
+                file_hash,
+                start_time,
+            );
+
+            chat_session.id = session_id;
+            if let Some(end) = end_time {
+                if end != start_time {
+                    chat_session = chat_session.with_end_time(end);
+                }
+            }
+
+            // Use project inference to determine project name from file path
+            let project_inference = ProjectInference::new(&self.file_path);
+            if let Some(project_name) = project_inference.infer_project_name() {
+                chat_session = chat_session.with_project(project_name);
+            }
+
+            // Convert messages
+            let mut messages = Vec::new();
+            let mut total_tokens = 0u32;
+
+            // Sort by messageId to ensure correct order
+            let mut sorted_messages = session_messages.clone();
+            sorted_messages.sort_by_key(|m| m.message_id);
+
+            for (index, array_msg) in sorted_messages.iter().enumerate() {
+                let role = match array_msg.message_type.as_str() {
+                    "user" => MessageRole::User,
+                    "gemini" | "assistant" => MessageRole::Assistant,
+                    "system" => MessageRole::System,
+                    _ => MessageRole::User, // Default to user for unknown types
+                };
+
+                let timestamp = self
+                    .parse_timestamp(&array_msg.timestamp)
+                    .unwrap_or(start_time);
+
+                let message_id = self.generate_uuid_from_string(&format!(
+                    "{}-msg-{}",
+                    session_id, array_msg.message_id
+                ));
+
+                let mut message = Message::new(
+                    session_id,
+                    role,
+                    array_msg.message.clone(),
+                    timestamp,
+                    (index + 1) as u32,
+                );
+
+                message.id = message_id;
+
+                // Estimate token count based on content length
+                let estimated_tokens = (message.content.len() / 4) as u32;
+                if estimated_tokens > 0 {
+                    message = message.with_token_count(estimated_tokens);
+                    total_tokens += estimated_tokens;
+                }
+
+                messages.push(message);
+            }
+
+            chat_session.message_count = messages.len() as u32;
+            if total_tokens > 0 {
+                chat_session = chat_session.with_token_count(total_tokens);
+            }
+
+            chat_session.set_state(SessionState::Imported);
+
+            results.push((chat_session, messages));
+        }
+
+        if results.is_empty() {
+            return Err(anyhow!("No valid sessions could be parsed"));
+        }
+
+        Ok(results)
     }
 
     fn convert_session_message(
@@ -596,7 +736,7 @@ mod tests {
 
         temp_file.write_all(sample_data.as_bytes()).unwrap();
 
-        let parser = GeminiParser::new(temp_file.path());
+        let parser = GeminiCLIParser::new(temp_file.path());
         let result = parser.parse().await;
 
         assert!(result.is_ok());
@@ -618,7 +758,7 @@ mod tests {
         let sample_data = r#"{"conversations":[]}"#;
         temp_file.write_all(sample_data.as_bytes()).unwrap();
 
-        assert!(GeminiParser::is_valid_file(temp_file.path()));
+        assert!(GeminiCLIParser::is_valid_file(temp_file.path()));
     }
 
     #[test]
@@ -626,7 +766,7 @@ mod tests {
         let mut temp_file = NamedTempFile::with_suffix(".txt").unwrap();
         temp_file.write_all(b"not json").unwrap();
 
-        assert!(!GeminiParser::is_valid_file(temp_file.path()));
+        assert!(!GeminiCLIParser::is_valid_file(temp_file.path()));
     }
 
     #[tokio::test]
@@ -635,7 +775,7 @@ mod tests {
         let sample_data = r#"{"conversations":[{"conversation":[]},{"conversation":[]}]}"#;
         temp_file.write_all(sample_data.as_bytes()).unwrap();
 
-        let parser = GeminiParser::new(temp_file.path());
+        let parser = GeminiCLIParser::new(temp_file.path());
         let count = parser.get_conversation_count().unwrap();
 
         assert_eq!(count, 2);

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use retrochat::models::Provider;
-use retrochat::parsers::CursorParser;
+use retrochat::parsers::CursorAgentParser;
 use std::fs;
 use tempfile::TempDir;
 
@@ -53,7 +53,7 @@ fn test_cursor_parser_is_valid_file() {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    assert!(CursorParser::is_valid_file(&store_db));
+    assert!(CursorAgentParser::is_valid_file(&store_db));
 }
 
 #[test]
@@ -63,13 +63,13 @@ fn test_cursor_parser_is_invalid_file() {
     // Test invalid file name
     let invalid_file = temp_dir.path().join("not_store.db");
     fs::write(&invalid_file, "").unwrap();
-    assert!(!CursorParser::is_valid_file(&invalid_file));
+    assert!(!CursorAgentParser::is_valid_file(&invalid_file));
 
     // Test wrong directory structure
     let wrong_structure = temp_dir.path().join("wrong").join("store.db");
     fs::create_dir_all(wrong_structure.parent().unwrap()).unwrap();
     fs::write(&wrong_structure, "").unwrap();
-    assert!(!CursorParser::is_valid_file(&wrong_structure));
+    assert!(!CursorAgentParser::is_valid_file(&wrong_structure));
 }
 
 #[tokio::test]
@@ -77,7 +77,7 @@ async fn test_cursor_parser_parse() -> Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
     let result = parser.parse().await?;
 
     let (session, messages) = result;
@@ -102,7 +102,7 @@ async fn test_cursor_parser_parse_streaming() -> Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
 
     let mut session_count = 0;
     let mut message_count = 0;
@@ -130,7 +130,7 @@ async fn test_cursor_parser_metadata_extraction() {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
     let (session, _) = parser.parse().await.unwrap();
 
     // Verify that metadata was correctly extracted and used
@@ -146,7 +146,7 @@ async fn test_cursor_parser_timestamp_handling() {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
     let (session, _) = parser.parse().await.unwrap();
 
     // Should have converted timestamp correctly (1758872189097 ms -> valid DateTime)
@@ -158,8 +158,8 @@ async fn test_cursor_parser_file_consistency() {
     let temp_dir = TempDir::new().unwrap();
     let store_db = create_cursor_test_database(temp_dir.path());
 
-    let parser1 = CursorParser::new(&store_db);
-    let parser2 = CursorParser::new(&store_db);
+    let parser1 = CursorAgentParser::new(&store_db);
+    let parser2 = CursorAgentParser::new(&store_db);
 
     let (session1, _) = parser1.parse().await.unwrap();
     let (session2, _) = parser2.parse().await.unwrap();
@@ -182,7 +182,7 @@ async fn test_cursor_parser_invalid_database() {
     fs::create_dir_all(invalid_db.parent().unwrap()).unwrap();
     fs::write(&invalid_db, "not a database").unwrap();
 
-    let parser = CursorParser::new(&invalid_db);
+    let parser = CursorAgentParser::new(&invalid_db);
     let result = parser.parse().await;
 
     assert!(result.is_err());
@@ -207,7 +207,7 @@ async fn test_cursor_parser_missing_metadata() {
         .unwrap();
     // Don't insert any metadata
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
     let result = parser.parse().await;
 
     assert!(result.is_err());

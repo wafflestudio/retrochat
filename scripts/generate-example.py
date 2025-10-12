@@ -35,12 +35,12 @@ PROVIDERS = {
         "patterns": ["*.jsonl"],
         "example_name": "codex.jsonl",
     },
-    # "cursor": {
-    #     "name": "Cursor Agent",
-    #     "default_dir": "~/.cursor/chats",
-    #     "patterns": ["store.db", "*cursor*.db"],
-    #     "example_name": "cursor.db",
-    # },
+    "cursor": {
+        "name": "Cursor Agent",
+        "default_dir": "~/.cursor/chats",
+        "patterns": ["store.db", "*cursor*.db"],
+        "example_name": "cursor.db",
+    },
 }
 
 
