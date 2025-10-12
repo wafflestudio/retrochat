@@ -8,7 +8,7 @@ use tempfile::{NamedTempFile, TempDir};
 #[tokio::test]
 async fn test_codex_parser_is_valid_file() {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"test","timestamp":"2024-01-01T10:00:00Z","git":{}}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"test","timestamp":"2024-01-01T10:00:00Z"}}"#;
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
     assert!(CodexParser::is_valid_file(temp_file.path()));
@@ -26,9 +26,9 @@ async fn test_codex_parser_is_invalid_file() {
     temp_file2.write_all(b"not json").unwrap();
     assert!(!CodexParser::is_valid_file(temp_file2.path()));
 
-    // Test missing required fields
+    // Test missing session_meta
     let mut temp_file3 = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let invalid_data = r#"{"id":"test"}"#;
+    let invalid_data = r#"{"type":"other","payload":{}}"#;
     temp_file3.write_all(invalid_data.as_bytes()).unwrap();
     assert!(!CodexParser::is_valid_file(temp_file3.path()));
 }
@@ -36,10 +36,9 @@ async fn test_codex_parser_is_invalid_file() {
 #[tokio::test]
 async fn test_codex_parser_parse() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","instructions":null,"git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}
-{"record_type":"state"}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}
-{"type":"message","role":"assistant","content":[{"type":"text","text":"Hi there!"}]}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","cwd":"/Users/test/testproject","git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}
+{"timestamp":"2025-10-12T17:53:43.040Z","type":"event_msg","payload":{"type":"agent_message","message":"Hi there!"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -65,8 +64,8 @@ async fn test_codex_parser_parse() -> Result<()> {
 #[tokio::test]
 async fn test_codex_parser_parse_streaming() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -93,8 +92,9 @@ async fn test_codex_parser_parse_streaming() -> Result<()> {
 #[tokio::test]
 async fn test_codex_parser_project_from_git() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    // Git-based project inference (no cwd, so falls back to git)
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -104,7 +104,7 @@ async fn test_codex_parser_project_from_git() -> Result<()> {
     assert!(result.is_ok());
     let (session, _messages) = result.unwrap();
 
-    // Should have extracted project name from git URL
+    // Should have extracted project name from git URL (since no cwd)
     assert_eq!(session.project_name, Some("test-project".to_string()));
 
     Ok(())
@@ -121,8 +121,9 @@ async fn test_codex_parser_project_inference() {
 
     let test_file = project_dir.join("test.jsonl");
 
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    // CWD-based project inference
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","cwd":"/Users/test/myproject"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
     fs::write(&test_file, sample_data).unwrap();
 
     let parser = CodexParser::new(&test_file);
@@ -131,15 +132,15 @@ async fn test_codex_parser_project_inference() {
     assert!(result.is_ok());
     let (session, _messages) = result.unwrap();
 
-    // Should have inferred the project name from the path
-    assert_eq!(session.project_name, Some("testproject".to_string()));
+    // Should have inferred the project name from cwd (not file path)
+    assert_eq!(session.project_name, Some("myproject".to_string()));
 }
 
 #[tokio::test]
 async fn test_codex_parser_empty_content() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"type":"message","role":"user","content":[]}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":""}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -159,10 +160,11 @@ async fn test_codex_parser_empty_content() -> Result<()> {
 #[tokio::test]
 async fn test_codex_parser_skip_state_records() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"record_type":"state"}
-{"record_type":"state"}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    // Include some non-message event types that should be ignored
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:39.000Z","type":"other_event","payload":{}}
+{"timestamp":"2025-10-12T17:53:39.500Z","type":"response_item","payload":{}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -172,7 +174,7 @@ async fn test_codex_parser_skip_state_records() -> Result<()> {
     assert!(result.is_ok());
     let (session, messages) = result.unwrap();
 
-    // State records should be skipped, only 1 message should be parsed
+    // Other event types should be skipped, only 1 message should be parsed
     assert_eq!(session.message_count, 1);
     assert_eq!(messages.len(), 1);
 
@@ -182,7 +184,7 @@ async fn test_codex_parser_skip_state_records() -> Result<()> {
 #[tokio::test]
 async fn test_codex_parser_invalid_uuid() {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"invalid-uuid","timestamp":"2024-01-01T10:00:00Z","git":{}}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"invalid-uuid","timestamp":"2024-01-01T10:00:00Z"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -195,8 +197,8 @@ async fn test_codex_parser_invalid_uuid() {
 #[tokio::test]
 async fn test_codex_parser_missing_header() {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data =
-        r#"{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    // Missing session_meta, starts with message
+    let sample_data = r#"{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -209,8 +211,8 @@ async fn test_codex_parser_missing_header() {
 #[tokio::test]
 async fn test_codex_parser_file_consistency() {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}"#;
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -228,8 +230,10 @@ async fn test_codex_parser_file_consistency() {
 #[tokio::test]
 async fn test_codex_parser_multiple_content_items() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-    let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","git":{}}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"},{"type":"input_text","text":"World"}]}"#;
+    // Multiple messages
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}
+{"timestamp":"2025-10-12T17:53:41.000Z","type":"event_msg","payload":{"type":"user_message","message":"World"}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -239,10 +243,9 @@ async fn test_codex_parser_multiple_content_items() -> Result<()> {
     assert!(result.is_ok());
     let (session, messages) = result.unwrap();
 
-    assert_eq!(session.message_count, 1);
-    // Multiple content items should be joined with newlines
-    assert!(messages[0].content.contains("Hello"));
-    assert!(messages[0].content.contains("World"));
+    assert_eq!(session.message_count, 2);
+    assert_eq!(messages[0].content, "Hello");
+    assert_eq!(messages[1].content, "World");
 
     Ok(())
 }

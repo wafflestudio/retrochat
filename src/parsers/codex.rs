@@ -121,11 +121,7 @@ impl CodexParser {
                         match msg.msg_type.as_str() {
                             "user_message" => {
                                 if let Some(content) = msg.message {
-                                    messages.push((
-                                        event.timestamp,
-                                        MessageRole::User,
-                                        content,
-                                    ));
+                                    messages.push((event.timestamp, MessageRole::User, content));
                                 }
                             }
                             "agent_message" => {
@@ -182,19 +178,10 @@ impl CodexParser {
 
         chat_session.id = session_id;
 
-        // Determine project name from git info or path inference
-        let project_name = meta
-            .git
-            .as_ref()
-            .and_then(|git| {
-                git.repository_url.as_ref().and_then(|url| {
-                    // Extract project name from git URL
-                    // e.g., "git@github.com:user/project.git" -> "project"
-                    url.rsplit('/')
-                        .next()
-                        .map(|s| s.trim_end_matches(".git").to_string())
-                })
-            })
+        // Determine project name - prioritize cwd inference, fallback to git or path
+        let project_name = self
+            .infer_project_name_by_cwd(meta)
+            .or_else(|| self.infer_project_name_by_git(meta))
             .or_else(|| {
                 let inference = ProjectInference::new(&self.file_path);
                 inference.infer_project_name()
@@ -220,7 +207,13 @@ impl CodexParser {
             // Generate a deterministic UUID for the message
             let message_id = self.generate_uuid_from_string(&format!("{session_id}-msg-{index}"));
 
-            let mut message = Message::new(session_id, role.clone(), content, timestamp, (index + 1) as u32);
+            let mut message = Message::new(
+                session_id,
+                role.clone(),
+                content,
+                timestamp,
+                (index + 1) as u32,
+            );
             message.id = message_id;
 
             // Estimate token count based on content length (for individual message tracking)
@@ -332,6 +325,29 @@ impl CodexParser {
         Uuid::from_bytes(bytes)
     }
 
+    fn infer_project_name_by_cwd(&self, meta: &SessionMetaPayload) -> Option<String> {
+        // Extract project name from cwd path
+        // e.g., "/Users/u1trafast/Workspace/retrochat" -> "retrochat"
+        meta.cwd.as_ref().and_then(|cwd_path| {
+            Path::new(cwd_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|s| s.to_string())
+        })
+    }
+
+    fn infer_project_name_by_git(&self, meta: &SessionMetaPayload) -> Option<String> {
+        // Extract project name from git repository URL
+        // e.g., "git@github.com:user/project.git" -> "project"
+        meta.git.as_ref().and_then(|git| {
+            git.repository_url.as_ref().and_then(|url| {
+                url.rsplit('/')
+                    .next()
+                    .map(|s| s.trim_end_matches(".git").to_string())
+            })
+        })
+    }
+
     pub fn is_valid_file(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
 
@@ -408,8 +424,11 @@ mod tests {
         assert_eq!(messages[0].role, MessageRole::User);
         assert_eq!(messages[0].content, "hello");
         assert_eq!(messages[1].role, MessageRole::Assistant);
-        assert_eq!(messages[1].content, "Hey there! What can I help you with today?");
-        assert_eq!(session.project_name, Some("test-project".to_string()));
+        assert_eq!(
+            messages[1].content,
+            "Hey there! What can I help you with today?"
+        );
+        assert_eq!(session.project_name, Some("project".to_string())); // Extracted from cwd
     }
 
     #[tokio::test]
@@ -432,7 +451,7 @@ mod tests {
         assert_eq!(session.message_count, 2);
         assert_eq!(messages.len(), 2);
         assert_eq!(session.token_count, Some(6154)); // Token count should be parsed
-        assert_eq!(session.project_name, Some("test-project".to_string()));
+        assert_eq!(session.project_name, Some("project".to_string())); // Extracted from cwd
     }
 
     #[test]
