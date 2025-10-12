@@ -126,6 +126,7 @@ pub fn print_import_help() {
     }
     println!();
     println!("     Multiple providers at once:");
+    println!("       retrochat import {}", format_provider_arg(&Provider::All));
     let args: Vec<String> = supported_providers()
         .into_iter()
         .take(3)
