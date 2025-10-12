@@ -1,6 +1,7 @@
 pub mod claude_code;
-pub mod cursor;
-pub mod gemini;
+pub mod codex;
+pub mod cursor_agent;
+pub mod gemini_cli;
 pub mod project_inference;
 
 use anyhow::{anyhow, Result};
@@ -10,13 +11,15 @@ use crate::models::Provider;
 use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
-pub use cursor::CursorParser;
-pub use gemini::GeminiParser;
+pub use codex::CodexParser;
+pub use cursor_agent::CursorAgentParser;
+pub use gemini_cli::GeminiCLIParser;
 
 pub enum ChatParser {
     ClaudeCode(ClaudeCodeParser),
-    Cursor(CursorParser),
-    Gemini(GeminiParser),
+    Codex(CodexParser),
+    CursorAgent(CursorAgentParser),
+    GeminiCLI(GeminiCLIParser),
 }
 
 impl ChatParser {
@@ -26,11 +29,15 @@ impl ChatParser {
                 let (session, messages) = parser.parse().await?;
                 Ok(vec![(session, messages)])
             }
-            ChatParser::Cursor(parser) => {
+            ChatParser::Codex(parser) => {
                 let (session, messages) = parser.parse().await?;
                 Ok(vec![(session, messages)])
             }
-            ChatParser::Gemini(parser) => parser.parse().await,
+            ChatParser::CursorAgent(parser) => {
+                let (session, messages) = parser.parse().await?;
+                Ok(vec![(session, messages)])
+            }
+            ChatParser::GeminiCLI(parser) => parser.parse().await,
         }
     }
 
@@ -40,16 +47,18 @@ impl ChatParser {
     {
         match self {
             ChatParser::ClaudeCode(parser) => parser.parse_streaming(callback).await,
-            ChatParser::Cursor(parser) => parser.parse_streaming(callback).await,
-            ChatParser::Gemini(parser) => parser.parse_streaming(callback).await,
+            ChatParser::Codex(parser) => parser.parse_streaming(callback).await,
+            ChatParser::CursorAgent(parser) => parser.parse_streaming(callback).await,
+            ChatParser::GeminiCLI(parser) => parser.parse_streaming(callback).await,
         }
     }
 
     pub fn get_provider(&self) -> Provider {
         match self {
             ChatParser::ClaudeCode(_) => Provider::ClaudeCode,
-            ChatParser::Cursor(_) => Provider::CursorAgent,
-            ChatParser::Gemini(_) => Provider::GeminiCLI,
+            ChatParser::Codex(_) => Provider::Codex,
+            ChatParser::CursorAgent(_) => Provider::CursorAgent,
+            ChatParser::GeminiCLI(_) => Provider::GeminiCLI,
         }
     }
 }
@@ -65,11 +74,15 @@ impl ParserRegistry {
             return Some(Provider::ClaudeCode);
         }
 
-        if CursorParser::is_valid_file(path) {
+        if CodexParser::is_valid_file(path) {
+            return Some(Provider::Codex);
+        }
+
+        if CursorAgentParser::is_valid_file(path) {
             return Some(Provider::CursorAgent);
         }
 
-        if GeminiParser::is_valid_file(path) {
+        if GeminiCLIParser::is_valid_file(path) {
             return Some(Provider::GeminiCLI);
         }
 
@@ -124,9 +137,9 @@ impl ParserRegistry {
 
         match provider {
             Provider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
-            Provider::CursorAgent => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
-            Provider::GeminiCLI => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
-            Provider::Codex => Err(anyhow!("Codex parser not yet implemented")),
+            Provider::Codex => Ok(ChatParser::Codex(CodexParser::new(file_path))),
+            Provider::CursorAgent => Ok(ChatParser::CursorAgent(CursorAgentParser::new(file_path))),
+            Provider::GeminiCLI => Ok(ChatParser::GeminiCLI(GeminiCLIParser::new(file_path))),
             Provider::All => Err(anyhow!(
                 "'All' is a CLI-only provider and cannot be used for parsing"
             )),
@@ -141,6 +154,7 @@ impl ParserRegistry {
     pub fn get_supported_providers() -> Vec<Provider> {
         vec![
             Provider::ClaudeCode,
+            Provider::Codex,
             Provider::CursorAgent,
             Provider::GeminiCLI,
         ]

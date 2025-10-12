@@ -1,6 +1,6 @@
 use anyhow::Result;
 use retrochat::models::Provider;
-use retrochat::parsers::{CursorParser, ParserRegistry};
+use retrochat::parsers::{CursorAgentParser, ParserRegistry};
 use std::fs;
 use tempfile::TempDir;
 
@@ -86,8 +86,8 @@ async fn test_cursor_parser_registry_detection() -> Result<()> {
     // Test creation of parser
     let parser = ParserRegistry::create_parser(&store_db1)?;
     match parser {
-        retrochat::parsers::ChatParser::Cursor(_) => {}
-        _ => panic!("Expected Cursor parser"),
+        retrochat::parsers::ChatParser::CursorAgent(_) => {}
+        _ => panic!("Expected CursorAgent parser"),
     }
 
     Ok(())
@@ -235,7 +235,7 @@ async fn test_cursor_parser_with_project_inference() -> Result<()> {
         "557abc41-6f00-41e7-bf7b-696c80d4ee94",
     );
 
-    let parser = CursorParser::new(&store_db);
+    let parser = CursorAgentParser::new(&store_db);
     let (session, _) = parser.parse().await?;
 
     // Should extract project name from parent directory

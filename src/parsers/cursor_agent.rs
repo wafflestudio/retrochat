@@ -117,11 +117,11 @@ pub struct CursorChatMetadata {
     pub last_used_model: String,
 }
 
-pub struct CursorParser {
+pub struct CursorAgentParser {
     db_path: String,
 }
 
-impl CursorParser {
+impl CursorAgentParser {
     pub fn new(db_path: impl AsRef<Path>) -> Self {
         Self {
             db_path: db_path.as_ref().to_string_lossy().to_string(),
@@ -525,7 +525,7 @@ mod tests {
         let store_db = uuid_dir.join("store.db");
         fs::write(&store_db, "").unwrap();
 
-        assert!(CursorParser::is_valid_file(&store_db));
+        assert!(CursorAgentParser::is_valid_file(&store_db));
     }
 
     #[test]
@@ -534,6 +534,6 @@ mod tests {
         let invalid_file = temp_dir.path().join("not_store.db");
         fs::write(&invalid_file, "").unwrap();
 
-        assert!(!CursorParser::is_valid_file(&invalid_file));
+        assert!(!CursorAgentParser::is_valid_file(&invalid_file));
     }
 }
