@@ -528,10 +528,10 @@ fn find_matching_pattern(patterns: &[String], file_name: &str) -> Option<String>
         // Simple glob pattern matching
         if pattern.contains('*') {
             let parts: Vec<&str> = pattern.split('*').collect();
-            if parts.len() == 2
-                && file_name.starts_with(parts[0]) && file_name.ends_with(parts[1]) {
-                    return Some(pattern.clone());
-                }
+            if parts.len() == 2 && file_name.starts_with(parts[0]) && file_name.ends_with(parts[1])
+            {
+                return Some(pattern.clone());
+            }
         } else if file_name == pattern {
             // Exact match for non-wildcard patterns (e.g., "store.db" only matches "store.db", not "store.db-wal")
             return Some(pattern.clone());
