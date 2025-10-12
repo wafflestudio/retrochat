@@ -308,12 +308,27 @@ fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
 async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
     use std::sync::mpsc::channel;
 
-    println!("{}", "👁️  Starting file watcher...".with(Color::Cyan).bold());
-    println!("{} {} path(s):", "📂".with(Color::Yellow), "Watching".bold());
+    println!(
+        "{}",
+        "👁️  Starting file watcher...".with(Color::Cyan).bold()
+    );
+    println!(
+        "{} {} path(s):",
+        "📂".with(Color::Yellow),
+        "Watching".bold()
+    );
     for path in &paths {
-        println!("  {} {}", "└─".with(Color::DarkGrey), path.as_str().with(Color::Green));
+        println!(
+            "  {} {}",
+            "└─".with(Color::DarkGrey),
+            path.as_str().with(Color::Green)
+        );
     }
-    println!("\n{} {}\n", "⌨️".with(Color::Blue), "Press Ctrl+C to stop watching.".with(Color::DarkGrey));
+    println!(
+        "\n{} {}\n",
+        "⌨️".with(Color::Blue),
+        "Press Ctrl+C to stop watching.".with(Color::DarkGrey)
+    );
 
     let (tx, rx) = channel();
 
@@ -330,7 +345,12 @@ async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
     for path_str in &paths {
         let path = PathBuf::from(path_str);
         if !path.exists() {
-            eprintln!("{} {} {}", "⚠️".with(Color::Yellow), "Warning:".with(Color::Yellow).bold(), format!("Path does not exist: {}", path_str).with(Color::DarkGrey));
+            eprintln!(
+                "{} {} {}",
+                "⚠️".with(Color::Yellow),
+                "Warning:".with(Color::Yellow).bold(),
+                format!("Path does not exist: {}", path_str).with(Color::DarkGrey)
+            );
             continue;
         }
 
@@ -353,7 +373,12 @@ async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
                 print_event(&event);
             }
             Err(e) => {
-                eprintln!("{} {} {}", "❌".with(Color::Red), "Watch error:".with(Color::Red).bold(), e.to_string().with(Color::DarkGrey));
+                eprintln!(
+                    "{} {} {}",
+                    "❌".with(Color::Red),
+                    "Watch error:".with(Color::Red).bold(),
+                    e.to_string().with(Color::DarkGrey)
+                );
                 break;
             }
         }
@@ -373,7 +398,11 @@ fn print_event(event: &Event) {
         EventKind::Other => ("❓", "OTHER", Color::DarkGrey),
     };
 
-    println!("{} {}", emoji, format!("[{}]", event_kind).with(color).bold());
+    println!(
+        "{} {}",
+        emoji,
+        format!("[{}]", event_kind).with(color).bold()
+    );
     for path in &event.paths {
         let detection = detect_provider(path);
 
@@ -413,15 +442,9 @@ struct ProviderDetection {
 
 /// Detect provider from file path using directory and file patterns
 fn detect_provider(file_path: &Path) -> ProviderDetection {
-    let file_name = file_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-    let parent_dir = file_path
-        .parent()
-        .and_then(|p| p.to_str())
-        .unwrap_or("");
+    let parent_dir = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
 
     // Create all provider configs
     let providers = vec![
@@ -435,7 +458,7 @@ fn detect_provider(file_path: &Path) -> ProviderDetection {
     for (config, provider_name) in &providers {
         if let Some(matched_pattern) = find_matching_pattern(&config.file_patterns, file_name) {
             // Check if directory also matches
-            let dir_matches = check_directory_match(&config, parent_dir);
+            let dir_matches = check_directory_match(config, parent_dir);
 
             if dir_matches {
                 return ProviderDetection {
@@ -460,7 +483,7 @@ fn detect_provider(file_path: &Path) -> ProviderDetection {
 
     // Priority 3: Check directory only match (no file pattern match)
     for (config, provider_name) in &providers {
-        if check_directory_match(&config, parent_dir) {
+        if check_directory_match(config, parent_dir) {
             return ProviderDetection {
                 provider: provider_name.to_string(),
                 file_pattern_matched: false,
@@ -505,11 +528,10 @@ fn find_matching_pattern(patterns: &[String], file_name: &str) -> Option<String>
         // Simple glob pattern matching
         if pattern.contains('*') {
             let parts: Vec<&str> = pattern.split('*').collect();
-            if parts.len() == 2 {
-                if file_name.starts_with(parts[0]) && file_name.ends_with(parts[1]) {
+            if parts.len() == 2
+                && file_name.starts_with(parts[0]) && file_name.ends_with(parts[1]) {
                     return Some(pattern.clone());
                 }
-            }
         } else if file_name == pattern {
             // Exact match for non-wildcard patterns (e.g., "store.db" only matches "store.db", not "store.db-wal")
             return Some(pattern.clone());
