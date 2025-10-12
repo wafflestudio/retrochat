@@ -49,6 +49,10 @@ pub enum Commands {
         /// Overwrite existing sessions if they already exist
         #[arg(short, long)]
         overwrite: bool,
+
+        /// Watch for file changes and automatically import
+        #[arg(short, long)]
+        watch: bool,
     },
     /// Analyze usage data
     Analyze {
@@ -133,7 +137,8 @@ impl Cli {
                     path,
                     providers,
                     overwrite,
-                } => import::handle_import_command(path, providers, overwrite).await,
+                    watch,
+                } => import::handle_import_command(path, providers, overwrite, watch).await,
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {
