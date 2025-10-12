@@ -233,6 +233,32 @@ fn show_file_diff(path: &Path, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>
         }
     };
 
+    // Validate JSON format
+    if extension == "json" {
+        if serde_json::from_str::<serde_json::Value>(&current_content).is_err() {
+            println!(
+                "    {} {}",
+                "⚠️".with(Color::Yellow),
+                "Failed to parse as valid JSON, skipping diff".with(Color::Yellow)
+            );
+            return;
+        }
+    } else if extension == "jsonl" {
+        // For JSONL, check if at least one line is valid JSON
+        let has_valid_json = current_content
+            .lines()
+            .any(|line| !line.trim().is_empty() && serde_json::from_str::<serde_json::Value>(line).is_ok());
+
+        if !has_valid_json {
+            println!(
+                "    {} {}",
+                "⚠️".with(Color::Yellow),
+                "Failed to parse as valid JSONL, skipping diff".with(Color::Yellow)
+            );
+            return;
+        }
+    }
+
     // Get previous content from cache
     let mut cache = file_cache.lock().unwrap();
     let previous_content = cache.get(path);
