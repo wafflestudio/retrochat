@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::models::provider::registry::ProviderRegistry;
 use crate::models::provider::config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
 };
@@ -336,16 +337,11 @@ fn print_diff(old: &str, new: &str) {
 /// Detect provider from file path using directory and file patterns
 pub fn detect_provider(file_path: &Path) -> ProviderDetection {
     let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
     let parent_dir = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
 
-    // Create all provider configs
-    let providers = vec![
-        (ClaudeCodeConfig::create(), "Claude Code"),
-        (GeminiCliConfig::create(), "Gemini CLI"),
-        (CodexConfig::create(), "Codex"),
-        (CursorAgentConfig::create(), "Cursor Agent"),
-    ];
+    // Get provider configs from global registry
+    let registry = ProviderRegistry::global();
+    let providers = registry.all_configs_with_names();
 
     // Priority 1: Check directory + file pattern match (most specific)
     for (config, provider_name) in &providers {
