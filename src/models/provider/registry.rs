@@ -64,7 +64,7 @@ impl ProviderRegistry {
     pub fn all_known(&self) -> Vec<&ProviderConfig> {
         let mut providers: Vec<_> = self.providers.iter().collect();
         // Sort by provider ID for consistent ordering
-        providers.sort_by_key(|(id, _)| format!("{:?}", id));
+        providers.sort_by_key(|(id, _)| format!("{id:?}"));
         providers.into_iter().map(|(_, config)| config).collect()
     }
 

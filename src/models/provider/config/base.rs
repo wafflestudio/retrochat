@@ -24,7 +24,7 @@ impl ProviderConfig {
         Self {
             name: name.clone(),
             cli_name: name.clone(),
-            description: format!("{} provider", name),
+            description: format!("{name} provider"),
             env_var_name: None,
             default_directory: None,
             file_patterns: Vec::new(),
