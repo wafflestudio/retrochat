@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc, Weekday};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::chat_session::LlmProvider;
+use super::llm_provider::LlmProvider;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AnalysisType {

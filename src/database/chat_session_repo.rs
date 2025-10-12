@@ -4,7 +4,7 @@ use sqlx::{sqlite::SqliteRow, Pool, Row, Sqlite};
 use uuid::Uuid;
 
 use super::connection::DatabaseManager;
-use crate::models::chat_session::{ChatSession, LlmProvider, SessionState};
+use crate::models::{ChatSession, LlmProvider, SessionState};
 
 fn parse_datetime(datetime_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     // Try RFC3339 format first

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 
+use crate::cli::help;
 use crate::database::{config, DatabaseManager};
 
 pub async fn handle_init_command() -> Result<()> {
@@ -11,7 +12,7 @@ pub async fn handle_init_command() -> Result<()> {
     // Check if database already exists
     if db_path.exists() {
         println!("✓ Database already exists at: {}", db_path.display());
-        println!("  Use 'retrochat tui' to launch the interface");
+        help::print_getting_started();
         return Ok(());
     }
 
@@ -27,18 +28,7 @@ pub async fn handle_init_command() -> Result<()> {
         "✓ Database initialized successfully at: {}",
         db_path.display()
     );
-    println!();
-    println!("Next steps:");
-    println!("  1. Import your chat files:");
-    println!("     retrochat import scan");
-    println!("     retrochat import file <path>");
-    println!("     retrochat import batch <directory>");
-    println!();
-    println!("  2. Launch the TUI interface:");
-    println!("     retrochat tui");
-    println!();
-    println!("  3. Generate insights:");
-    println!("     retrochat analyze insights");
+    help::print_getting_started();
 
     Ok(())
 }

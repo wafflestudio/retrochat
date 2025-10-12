@@ -16,10 +16,10 @@ Usage: `/retrochat <subcommand> [args]`
 ### Import Commands
 - `import --path <path>` - Import from specific file or directory
 - `import --claude` - Import from Claude Code default directories
-- `import --cursor` - Import from Cursor default directories
+- `import --cursor-agent` - Import from Cursor default directories
 - `import --gemini` - Import from Gemini default directories
 - `import --codex` - Import from Codex default directories
-- `import --claude --cursor` - Import from multiple providers
+- `import --claude --cursor-agent` - Import from multiple providers
 - `import --path <path> --overwrite` - Import with overwrite option
 
 ### Interface
@@ -44,7 +44,7 @@ Usage: `/retrochat <subcommand> [args]`
 /retrochat import --path /path/to/directory
 
 # Import from provider directories
-/retrochat import --claude --cursor
+/retrochat import --claude --cursor-agent
 
 # Import with overwrite
 /retrochat import --path ~/.claude/projects --overwrite

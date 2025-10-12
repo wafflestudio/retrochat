@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::chat_session::{LlmProvider, SessionState};
+use crate::models::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
 use crate::parsers::project_inference::ProjectInference;
 
@@ -177,7 +177,7 @@ impl GeminiParser {
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
-            LlmProvider::Gemini,
+            LlmProvider::GeminiCLI,
             self.file_path.clone(),
             file_hash,
             start_time,
@@ -323,7 +323,7 @@ impl GeminiParser {
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
-            LlmProvider::Gemini,
+            LlmProvider::GeminiCLI,
             self.file_path.clone(),
             file_hash,
             start_time,
@@ -605,7 +605,7 @@ mod tests {
         assert_eq!(sessions.len(), 1);
 
         let (session, messages) = &sessions[0];
-        assert_eq!(session.provider, LlmProvider::Gemini);
+        assert_eq!(session.provider, LlmProvider::GeminiCLI);
         assert_eq!(session.message_count, 2);
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, MessageRole::User);

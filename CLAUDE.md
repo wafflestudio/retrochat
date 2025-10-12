@@ -26,9 +26,17 @@ tests/
 # Build and test commands
 cargo check && cargo test && cargo clippy
 cargo run -- tui                                      # Launch TUI interface
-cargo run -- import --claude --cursor                  # Import from provider directories
+
+# Import commands
+cargo run -- import --claude --cursor-agent                 # Import from provider directories
+cargo run -- import --gemini --codex                  # Import from other providers
 cargo run -- import --path /path/to/files             # Import from specific path
+cargo run -- import --path /path/to/file.jsonl        # Import a single file
+
+# Analytics commands
 cargo run -- analyze insights                         # Generate usage insights
+cargo run -- analyze export json                      # Export to JSON
+cargo run -- analyze export csv                       # Export to CSV
 
 # Retrospection commands (requires GOOGLE_AI_API_KEY env var)
 cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions

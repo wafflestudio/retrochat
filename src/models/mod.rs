@@ -6,8 +6,8 @@ pub mod retrospect_request;
 pub mod retrospection;
 pub mod usage_analysis;
 
-pub use chat_session::{ChatSession, LlmProvider, SessionState};
-pub use llm_provider::{LlmProviderConfig, LlmProviderRegistry, ParserType};
+pub use chat_session::{ChatSession, SessionState};
+pub use llm_provider::{LlmProvider, LlmProviderConfig, LlmProviderRegistry, ParserType};
 pub use message::{Message, MessageRole, ToolCall};
 pub use project::Project;
 pub use retrospect_request::{

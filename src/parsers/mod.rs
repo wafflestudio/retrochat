@@ -6,7 +6,7 @@ pub mod project_inference;
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-use crate::models::chat_session::LlmProvider;
+use crate::models::LlmProvider;
 use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
@@ -48,8 +48,8 @@ impl ChatParser {
     pub fn get_provider(&self) -> LlmProvider {
         match self {
             ChatParser::ClaudeCode(_) => LlmProvider::ClaudeCode,
-            ChatParser::Cursor(_) => LlmProvider::Cursor,
-            ChatParser::Gemini(_) => LlmProvider::Gemini,
+            ChatParser::Cursor(_) => LlmProvider::CursorAgent,
+            ChatParser::Gemini(_) => LlmProvider::GeminiCLI,
         }
     }
 }
@@ -66,11 +66,11 @@ impl ParserRegistry {
         }
 
         if CursorParser::is_valid_file(path) {
-            return Some(LlmProvider::Cursor);
+            return Some(LlmProvider::CursorAgent);
         }
 
         if GeminiParser::is_valid_file(path) {
-            return Some(LlmProvider::Gemini);
+            return Some(LlmProvider::GeminiCLI);
         }
 
         // Fallback to file name patterns
@@ -85,14 +85,14 @@ impl ParserRegistry {
         }
 
         if file_name.contains("cursor") {
-            return Some(LlmProvider::Cursor);
+            return Some(LlmProvider::CursorAgent);
         }
 
         if file_name.contains("gemini")
             || file_name.contains("bard")
             || file_name.contains("google")
         {
-            return Some(LlmProvider::Gemini);
+            return Some(LlmProvider::GeminiCLI);
         }
 
         if file_name.contains("codex")
@@ -106,7 +106,7 @@ impl ParserRegistry {
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             match extension.to_lowercase().as_str() {
                 "jsonl" => Some(LlmProvider::ClaudeCode), // Default JSONL to Claude
-                "json" => Some(LlmProvider::Gemini),      // Default JSON to Gemini
+                "json" => Some(LlmProvider::GeminiCLI),      // Default JSON to Gemini
                 _ => None,
             }
         } else {
@@ -124,9 +124,9 @@ impl ParserRegistry {
 
         match provider {
             LlmProvider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
-            LlmProvider::Cursor => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
-            LlmProvider::Gemini => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
-            LlmProvider::ChatGpt => Err(anyhow!("ChatGPT parser not yet implemented")),
+            LlmProvider::CursorAgent => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
+            LlmProvider::GeminiCLI => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
+            LlmProvider::Codex => Err(anyhow!("Codex parser not yet implemented")),
             LlmProvider::Other(name) => Err(anyhow!("Parser for {name} not implemented")),
         }
     }
@@ -138,8 +138,8 @@ impl ParserRegistry {
     pub fn get_supported_providers() -> Vec<LlmProvider> {
         vec![
             LlmProvider::ClaudeCode,
-            LlmProvider::Cursor,
-            LlmProvider::Gemini,
+            LlmProvider::CursorAgent,
+            LlmProvider::GeminiCLI,
         ]
     }
 
@@ -246,11 +246,11 @@ mod tests {
         );
         assert_eq!(
             ParserRegistry::detect_provider(&gemini_file),
-            Some(LlmProvider::Gemini)
+            Some(LlmProvider::GeminiCLI)
         );
         assert_eq!(
             ParserRegistry::detect_provider(&cursor_file),
-            Some(LlmProvider::Cursor)
+            Some(LlmProvider::CursorAgent)
         );
     }
 
@@ -283,8 +283,8 @@ mod tests {
 
         let providers: Vec<_> = result.iter().map(|(_, p)| p.clone()).collect();
         assert!(providers.contains(&LlmProvider::ClaudeCode));
-        assert!(providers.contains(&LlmProvider::Gemini));
-        assert!(providers.contains(&LlmProvider::Cursor));
+        assert!(providers.contains(&LlmProvider::GeminiCLI));
+        assert!(providers.contains(&LlmProvider::CursorAgent));
     }
 
     #[test]
@@ -296,7 +296,7 @@ mod tests {
 
         let providers = ParserRegistry::get_supported_providers();
         assert!(providers.contains(&LlmProvider::ClaudeCode));
-        assert!(providers.contains(&LlmProvider::Cursor));
-        assert!(providers.contains(&LlmProvider::Gemini));
+        assert!(providers.contains(&LlmProvider::CursorAgent));
+        assert!(providers.contains(&LlmProvider::GeminiCLI));
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use retrochat::models::chat_session::LlmProvider;
+use retrochat::models::LlmProvider;
 use retrochat::parsers::{CursorParser, ParserRegistry};
 use std::fs;
 use tempfile::TempDir;
@@ -81,7 +81,7 @@ async fn test_cursor_parser_registry_detection() -> Result<()> {
         .join("store.db");
 
     let detected_provider = ParserRegistry::detect_provider(&store_db1);
-    assert_eq!(detected_provider, Some(LlmProvider::Cursor));
+    assert_eq!(detected_provider, Some(LlmProvider::CursorAgent));
 
     // Test creation of parser
     let parser = ParserRegistry::create_parser(&store_db1)?;
@@ -104,7 +104,7 @@ async fn test_cursor_directory_scanning() -> Result<()> {
     // Should find 2 Cursor store.db files
     let cursor_files: Vec<_> = found_files
         .iter()
-        .filter(|(_, provider)| matches!(provider, LlmProvider::Cursor))
+        .filter(|(_, provider)| matches!(provider, LlmProvider::CursorAgent))
         .collect();
 
     assert_eq!(cursor_files.len(), 2);
@@ -124,12 +124,12 @@ async fn test_cursor_parser_with_filter() -> Result<()> {
     let chats_dir = create_cursor_test_structure(temp_dir.path());
 
     // Test scanning with Cursor filter only
-    let cursor_filter = [LlmProvider::Cursor];
+    let cursor_filter = [LlmProvider::CursorAgent];
     let found_files = ParserRegistry::scan_directory(&chats_dir, true, Some(&cursor_filter))?;
 
     assert_eq!(found_files.len(), 2);
     for (_, provider) in &found_files {
-        assert_eq!(provider, &LlmProvider::Cursor);
+        assert_eq!(provider, &LlmProvider::CursorAgent);
     }
 
     // Test scanning with different filter (should find nothing)
@@ -148,7 +148,7 @@ async fn test_cursor_parse_multiple_sessions() -> Result<()> {
     let found_files = ParserRegistry::scan_directory(&chats_dir, true, None)?;
     let cursor_files: Vec<_> = found_files
         .iter()
-        .filter(|(_, provider)| matches!(provider, LlmProvider::Cursor))
+        .filter(|(_, provider)| matches!(provider, LlmProvider::CursorAgent))
         .collect();
 
     assert_eq!(cursor_files.len(), 2);
@@ -159,7 +159,7 @@ async fn test_cursor_parse_multiple_sessions() -> Result<()> {
         assert_eq!(sessions.len(), 1);
 
         let (session, messages) = &sessions[0];
-        assert_eq!(session.provider, LlmProvider::Cursor);
+        assert_eq!(session.provider, LlmProvider::CursorAgent);
         assert_eq!(session.message_count, 1);
         assert_eq!(messages.len(), 1);
     }
@@ -184,7 +184,7 @@ async fn test_cursor_streaming_parse() -> Result<()> {
         session_count += 1;
         message_count += 1;
 
-        assert_eq!(session.provider, LlmProvider::Cursor);
+        assert_eq!(session.provider, LlmProvider::CursorAgent);
         assert!(message.content.contains("Chat Session 1"));
 
         Ok(())
@@ -206,7 +206,7 @@ fn test_cursor_supported_extensions() {
 #[test]
 fn test_cursor_supported_providers() {
     let providers = ParserRegistry::get_supported_providers();
-    assert!(providers.contains(&LlmProvider::Cursor));
+    assert!(providers.contains(&LlmProvider::CursorAgent));
 }
 
 #[tokio::test]

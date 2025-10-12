@@ -85,7 +85,7 @@ Import from configured default directories for each provider:
 retrochat import --claude
 
 # Import from Cursor default directories
-retrochat import --cursor
+retrochat import --cursor-agent
 
 # Import from Gemini default directories
 retrochat import --gemini
@@ -94,7 +94,7 @@ retrochat import --gemini
 retrochat import --codex
 
 # Import from multiple providers at once
-retrochat import --claude --cursor --overwrite
+retrochat import --claude --cursor-agent --overwrite
 ```
 
 #### Environment Configuration
@@ -210,8 +210,8 @@ The application stores:
 cargo check && cargo test && cargo clippy
 
 # Run specific test suites
-cargo test --test test_import_scan
-cargo test --test test_analytics_usage
+cargo test --test test_import_file
+cargo test --test test_import_batch
 ```
 
 ### Project Structure
@@ -243,19 +243,12 @@ tests/
 
 2. **Import your chat history:**
    ```bash
-   # Scan for existing chat files
-   retrochat import scan ~/.claude/projects
-   retrochat import scan ~/.gemini/tmp
-   
-   # Or scan any directory
-   retrochat import scan ~/Downloads
-   
-   # Import from common chat directories
-   retrochat import batch ~/.claude/projects
-   retrochat import batch ~/.gemini/tmp
-   
-   # Or import from any directory
-   retrochat import batch ~/Downloads
+   # Import from provider default directories
+   retrochat import --claude --cursor-agent
+
+   # Or import from a specific path
+   retrochat import --path ~/.claude/projects
+   retrochat import --path /path/to/chat/files
    ```
 
 3. **Launch the TUI to explore:**

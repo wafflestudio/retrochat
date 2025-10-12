@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod help;
 pub mod import;
 pub mod init;
 pub mod query;

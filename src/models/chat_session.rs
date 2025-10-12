@@ -2,26 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum LlmProvider {
-    ClaudeCode,
-    Gemini,
-    ChatGpt,
-    Cursor,
-    Other(String),
-}
-
-impl std::fmt::Display for LlmProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LlmProvider::ClaudeCode => write!(f, "claude-code"),
-            LlmProvider::Gemini => write!(f, "gemini"),
-            LlmProvider::ChatGpt => write!(f, "chatgpt"),
-            LlmProvider::Cursor => write!(f, "cursor"),
-            LlmProvider::Other(name) => write!(f, "{name}"),
-        }
-    }
-}
+use super::llm_provider::LlmProvider;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionState {
@@ -52,19 +33,6 @@ impl std::str::FromStr for SessionState {
             "imported" => Ok(SessionState::Imported),
             "analyzed" => Ok(SessionState::Analyzed),
             _ => Err(format!("Unknown session state: {s}")),
-        }
-    }
-}
-
-impl std::str::FromStr for LlmProvider {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "claude-code" => Ok(LlmProvider::ClaudeCode),
-            "gemini" => Ok(LlmProvider::Gemini),
-            "chatgpt" => Ok(LlmProvider::ChatGpt),
-            _ => Ok(LlmProvider::Other(s.to_string())),
         }
     }
 }
@@ -201,7 +169,7 @@ mod tests {
     #[test]
     fn test_provider_display() {
         assert_eq!(LlmProvider::ClaudeCode.to_string(), "claude-code");
-        assert_eq!(LlmProvider::Gemini.to_string(), "gemini");
+        assert_eq!(LlmProvider::GeminiCLI.to_string(), "gemini");
         assert_eq!(
             LlmProvider::Other("custom".to_string()).to_string(),
             "custom"

@@ -3,7 +3,7 @@ use retrochat::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
 };
 use retrochat::models::{
-    chat_session::{ChatSession, LlmProvider},
+    {ChatSession, LlmProvider},
     message::{Message, MessageRole},
     project::Project,
 };
@@ -56,7 +56,7 @@ async fn setup_test_data() -> QueryService {
 
     // Session 2: Gemini with another-project
     let mut session2 = ChatSession::new(
-        LlmProvider::Gemini,
+        LlmProvider::GeminiCLI,
         "test2.jsonl".to_string(),
         "hash456".to_string(),
         Utc::now(),
