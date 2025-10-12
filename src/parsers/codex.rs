@@ -12,6 +12,25 @@ use crate::models::{Provider, SessionState};
 
 use super::project_inference::ProjectInference;
 
+// ===== New Event-based Format Structures =====
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CodexEvent {
+    pub timestamp: String,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub payload: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionMetaPayload {
+    pub id: String,
+    pub timestamp: String,
+    pub cwd: Option<String>,
+    pub instructions: Option<String>,
+    pub git: Option<CodexGitInfo>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CodexGitInfo {
     pub commit_hash: Option<String>,
@@ -20,31 +39,10 @@ pub struct CodexGitInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CodexSessionHeader {
-    pub id: String,
-    pub timestamp: String,
-    pub instructions: Option<String>,
-    pub git: Option<CodexGitInfo>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CodexContentItem {
+pub struct EventMsgPayload {
     #[serde(rename = "type")]
-    pub content_type: String,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CodexMessage {
-    #[serde(rename = "type")]
-    pub message_type: String,
-    pub role: String,
-    pub content: Vec<CodexContentItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CodexStateRecord {
-    pub record_type: String,
+    pub msg_type: String,
+    pub message: Option<String>,
 }
 
 pub struct CodexParser {
@@ -78,8 +76,8 @@ impl CodexParser {
         &self,
         lines: Lines<B>,
     ) -> Result<(ChatSession, Vec<Message>)> {
-        let mut session_header: Option<CodexSessionHeader> = None;
-        let mut codex_messages: Vec<CodexMessage> = Vec::new();
+        let mut session_meta: Option<SessionMetaPayload> = None;
+        let mut messages: Vec<(String, MessageRole, String)> = Vec::new(); // (timestamp, role, content)
 
         for line in lines {
             let line = line.with_context(|| "Failed to read line from file")?;
@@ -88,45 +86,64 @@ impl CodexParser {
                 continue;
             }
 
-            // Try to parse as session header first (has 'id' and 'timestamp' fields)
-            if session_header.is_none() {
-                if let Ok(header) = serde_json::from_str::<CodexSessionHeader>(&line) {
-                    session_header = Some(header);
-                    continue;
-                }
-            }
+            // Parse as event
+            let event: CodexEvent = match serde_json::from_str(&line) {
+                Ok(e) => e,
+                Err(_) => continue, // Skip lines that aren't valid events
+            };
 
-            // Try to parse as state record (can be ignored)
-            if let Ok(state) = serde_json::from_str::<CodexStateRecord>(&line) {
-                if state.record_type == "state" {
-                    continue;
+            match event.event_type.as_str() {
+                "session_meta" => {
+                    // Parse session metadata
+                    if let Ok(meta) = serde_json::from_value::<SessionMetaPayload>(event.payload) {
+                        session_meta = Some(meta);
+                    }
                 }
-            }
-
-            // Try to parse as message
-            if let Ok(message) = serde_json::from_str::<CodexMessage>(&line) {
-                if message.message_type == "message" {
-                    codex_messages.push(message);
+                "event_msg" => {
+                    // Parse event messages (user_message or agent_message)
+                    if let Ok(msg) = serde_json::from_value::<EventMsgPayload>(event.payload) {
+                        match msg.msg_type.as_str() {
+                            "user_message" => {
+                                if let Some(content) = msg.message {
+                                    messages.push((
+                                        event.timestamp,
+                                        MessageRole::User,
+                                        content,
+                                    ));
+                                }
+                            }
+                            "agent_message" => {
+                                if let Some(content) = msg.message {
+                                    messages.push((
+                                        event.timestamp,
+                                        MessageRole::Assistant,
+                                        content,
+                                    ));
+                                }
+                            }
+                            _ => {} // Ignore other event message types
+                        }
+                    }
                 }
+                _ => {} // Ignore other event types (response_item, turn_context, etc.)
             }
         }
 
-        // If no session header found, return error
-        let header =
-            session_header.ok_or_else(|| anyhow!("No session header found in Codex file"))?;
+        // If no session metadata found, return error
+        let meta = session_meta.ok_or_else(|| anyhow!("No session_meta found in Codex file"))?;
 
-        self.convert_session(&header, codex_messages)
+        self.convert_session(&meta, messages)
     }
 
     fn convert_session(
         &self,
-        header: &CodexSessionHeader,
-        codex_messages: Vec<CodexMessage>,
+        meta: &SessionMetaPayload,
+        messages: Vec<(String, MessageRole, String)>,
     ) -> Result<(ChatSession, Vec<Message>)> {
-        let session_id = Uuid::parse_str(&header.id)
-            .with_context(|| format!("Invalid UUID format: {}", header.id))?;
+        let session_id = Uuid::parse_str(&meta.id)
+            .with_context(|| format!("Invalid UUID format: {}", meta.id))?;
 
-        let start_time = self.parse_timestamp(&header.timestamp)?;
+        let start_time = self.parse_timestamp(&meta.timestamp)?;
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
@@ -139,7 +156,7 @@ impl CodexParser {
         chat_session.id = session_id;
 
         // Determine project name from git info or path inference
-        let project_name = header
+        let project_name = meta
             .git
             .as_ref()
             .and_then(|git| {
@@ -160,75 +177,50 @@ impl CodexParser {
             chat_session = chat_session.with_project(name);
         }
 
-        let mut messages = Vec::new();
+        let mut converted_messages = Vec::new();
         let mut total_tokens = 0u32;
 
-        for (index, codex_message) in codex_messages.iter().enumerate() {
-            let message = self.convert_message(codex_message, session_id, index + 1)?;
+        for (index, (timestamp_str, role, content)) in messages.iter().enumerate() {
+            let timestamp = self.parse_timestamp(timestamp_str)?;
 
-            if let Some(token_count) = message.token_count {
-                total_tokens += token_count;
+            // Ensure content is never empty to satisfy database constraint
+            let content = if content.trim().is_empty() {
+                "[No content]".to_string()
+            } else {
+                content.clone()
+            };
+
+            // Generate a deterministic UUID for the message
+            let message_id = self.generate_uuid_from_string(&format!("{session_id}-msg-{index}"));
+
+            let mut message = Message::new(session_id, role.clone(), content, timestamp, (index + 1) as u32);
+            message.id = message_id;
+
+            // Estimate token count based on content length
+            let estimated_tokens = (message.content.len() / 4) as u32; // Rough estimate: 4 chars per token
+            if estimated_tokens > 0 {
+                message = message.with_token_count(estimated_tokens);
+                total_tokens += estimated_tokens;
             }
 
-            messages.push(message);
+            converted_messages.push(message);
         }
 
-        chat_session.message_count = messages.len() as u32;
+        chat_session.message_count = converted_messages.len() as u32;
         if total_tokens > 0 {
             chat_session = chat_session.with_token_count(total_tokens);
         }
 
-        chat_session.set_state(SessionState::Imported);
-
-        Ok((chat_session, messages))
-    }
-
-    fn convert_message(
-        &self,
-        codex_message: &CodexMessage,
-        session_id: Uuid,
-        sequence: usize,
-    ) -> Result<Message> {
-        let role = match codex_message.role.as_str() {
-            "user" => MessageRole::User,
-            "assistant" => MessageRole::Assistant,
-            "system" => MessageRole::System,
-            _ => return Err(anyhow!("Unknown message role: {}", codex_message.role)),
-        };
-
-        // Extract content from content array
-        let content = codex_message
-            .content
-            .iter()
-            .filter_map(|item| item.text.clone())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Ensure content is never empty to satisfy database constraint
-        let content = if content.trim().is_empty() {
-            "[No content]".to_string()
-        } else {
-            content
-        };
-
-        // Use the session start time for messages since Codex doesn't provide individual message timestamps
-        // We could increment by sequence if needed for ordering
-        let timestamp = Utc::now();
-
-        // Generate a deterministic UUID for the message
-        let message_id = self.generate_uuid_from_string(&format!("{session_id}-msg-{sequence}"));
-
-        let mut message = Message::new(session_id, role, content, timestamp, sequence as u32);
-
-        message.id = message_id;
-
-        // Estimate token count based on content length
-        let estimated_tokens = (message.content.len() / 4) as u32; // Rough estimate: 4 chars per token
-        if estimated_tokens > 0 {
-            message = message.with_token_count(estimated_tokens);
+        // Calculate end time from last message timestamp
+        if let Some(last_message) = converted_messages.last() {
+            if last_message.timestamp != start_time {
+                chat_session = chat_session.with_end_time(last_message.timestamp);
+            }
         }
 
-        Ok(message)
+        chat_session.set_state(SessionState::Imported);
+
+        Ok((chat_session, converted_messages))
     }
 
     fn parse_timestamp(&self, timestamp_str: &str) -> Result<DateTime<Utc>> {
@@ -331,10 +323,9 @@ impl CodexParser {
             let reader = BufReader::new(file);
             for line_content in reader.lines().take(1).flatten() {
                 if let Ok(parsed) = serde_json::from_str::<Value>(&line_content) {
-                    // Check for Codex session header format
-                    if parsed.get("id").is_some()
-                        && parsed.get("timestamp").is_some()
-                        && (parsed.get("git").is_some() || parsed.get("instructions").is_some())
+                    // Check for new event-based format with session_meta
+                    if parsed.get("type").and_then(|t| t.as_str()) == Some("session_meta")
+                        && parsed.get("payload").is_some()
                     {
                         return true;
                     }
@@ -366,12 +357,11 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[tokio::test]
-    async fn test_parse_codex_session() {
+    async fn test_parse_codex_session_new_format() {
         let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-        let sample_data = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","instructions":null,"git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}
-{"record_type":"state"}
-{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}
-{"type":"message","role":"assistant","content":[{"type":"text","text":"Hi there!"}]}"#;
+        let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"0199d8c1-ffeb-7b21-9ebe-f35fbbcf7a59","timestamp":"2025-10-12T14:10:16.683Z","cwd":"/Users/test/project","git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
+{"timestamp":"2025-10-12T17:53:43.040Z","type":"event_msg","payload":{"type":"agent_message","message":"Hey there! What can I help you with today?"}}"#;
 
         temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -385,13 +375,16 @@ mod tests {
         assert_eq!(session.message_count, 2);
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(messages[0].content, "hello");
         assert_eq!(messages[1].role, MessageRole::Assistant);
+        assert_eq!(messages[1].content, "Hey there! What can I help you with today?");
+        assert_eq!(session.project_name, Some("test-project".to_string()));
     }
 
     #[test]
-    fn test_is_valid_file() {
+    fn test_is_valid_file_new_format() {
         let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-        let sample_data = r#"{"id":"test","timestamp":"2024-01-01T10:00:00Z","git":{}}"#;
+        let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"test","timestamp":"2024-01-01T10:00:00Z"}}"#;
         temp_file.write_all(sample_data.as_bytes()).unwrap();
 
         assert!(CodexParser::is_valid_file(temp_file.path()));
