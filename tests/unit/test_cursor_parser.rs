@@ -1,5 +1,5 @@
 use anyhow::Result;
-use retrochat::models::chat_session::LlmProvider;
+use retrochat::models::Provider;
 use retrochat::parsers::CursorParser;
 use std::fs;
 use tempfile::TempDir;
@@ -83,7 +83,7 @@ async fn test_cursor_parser_parse() -> Result<()> {
     let (session, messages) = result;
 
     // Verify session properties
-    assert_eq!(session.provider, LlmProvider::Cursor);
+    assert_eq!(session.provider, Provider::CursorAgent);
     assert_eq!(
         session.id.to_string(),
         "557abc41-6f00-41e7-bf7b-696c80d4ee94"
@@ -112,7 +112,7 @@ async fn test_cursor_parser_parse_streaming() -> Result<()> {
             session_count += 1;
             message_count += 1;
 
-            assert_eq!(session.provider, LlmProvider::Cursor);
+            assert_eq!(session.provider, Provider::CursorAgent);
             // Role can be User or Assistant based on heuristics
 
             Ok(())
@@ -138,7 +138,7 @@ async fn test_cursor_parser_metadata_extraction() {
         session.id.to_string(),
         "557abc41-6f00-41e7-bf7b-696c80d4ee94"
     );
-    assert_eq!(session.provider, LlmProvider::Cursor);
+    assert_eq!(session.provider, Provider::CursorAgent);
 }
 
 #[tokio::test]

@@ -509,7 +509,7 @@ impl RetrospectRequestRepository {
 mod tests {
     use super::*;
     use crate::database::{ChatSessionRepository, Database};
-    use crate::models::{ChatSession, LlmProvider};
+    use crate::models::{ChatSession, Provider};
 
     #[tokio::test]
     async fn test_create_and_find_request() {
@@ -519,7 +519,7 @@ mod tests {
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&database.manager);
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/test/path".to_string(),
             "test-hash".to_string(),
             Utc::now(),
@@ -554,7 +554,7 @@ mod tests {
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&database.manager);
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/test/path".to_string(),
             "test-hash".to_string(),
             Utc::now(),
@@ -588,7 +588,7 @@ mod tests {
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&database.manager);
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/test/path".to_string(),
             "test-hash".to_string(),
             Utc::now(),

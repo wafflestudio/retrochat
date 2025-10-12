@@ -47,10 +47,6 @@ name = "retrochat"
 path = "src/main.rs"
 
 [[test]]
-name = "test_import_scan"
-path = "tests/contract/test_import_scan.rs"
-
-[[test]]
 name = "test_import_file"
 path = "tests/contract/test_import_file.rs"
 

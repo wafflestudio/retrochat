@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc, Weekday};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::chat_session::LlmProvider;
+use super::provider::Provider;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AnalysisType {
@@ -65,7 +65,7 @@ pub struct UsageAnalysis {
     pub analysis_type: AnalysisType,
     pub time_period_start: DateTime<Utc>,
     pub time_period_end: DateTime<Utc>,
-    pub provider_filter: Option<LlmProvider>,
+    pub provider_filter: Option<Provider>,
     pub project_filter: Option<String>,
     pub total_sessions: u32,
     pub total_messages: u32,
@@ -103,7 +103,7 @@ impl UsageAnalysis {
         }
     }
 
-    pub fn with_provider_filter(mut self, provider: LlmProvider) -> Self {
+    pub fn with_provider_filter(mut self, provider: Provider) -> Self {
         self.provider_filter = Some(provider);
         self
     }

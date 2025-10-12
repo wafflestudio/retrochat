@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
+use crate::cli::help;
 use crate::database::DatabaseManager;
 use crate::tui::app::App;
 
@@ -114,20 +115,7 @@ impl TuiLauncher {
     }
 
     pub fn print_getting_started() {
-        println!("Getting Started:");
-        println!("1. Import your chat files:");
-        println!("   - Scan for files: retrochat import scan");
-        println!("   - Import specific file: retrochat import file <path>");
-        println!("   - Import directory: retrochat import batch <directory>");
-        println!();
-        println!("2. Supported formats:");
-        println!("   - Claude Code (.jsonl files)");
-        println!("   - Gemini/Bard (.json files)");
-        println!();
-        println!("3. Launch TUI: retrochat tui");
-        println!();
-        println!("4. Generate insights: retrochat analyze insights");
-        println!();
+        help::print_full_getting_started();
     }
 }
 
@@ -167,9 +155,9 @@ pub async fn handle_tui_command() -> Result<()> {
             println!("  • Terminal doesn't support the required features");
             println!();
             println!("Alternative options:");
-            println!("  • Use 'retrochat query sessions' to list sessions");
-            println!("  • Use 'retrochat query search <query>' to search messages");
-            println!("  • Use 'retrochat analyze insights' to generate analytics");
+            println!("  • Use '$ retrochat query sessions' to list sessions");
+            println!("  • Use '$ retrochat query search <query>' to search messages");
+            println!("  • Use '$ retrochat analyze insights' to generate analytics");
             println!();
             println!(
                 "If you believe this is a bug, please check your terminal setup and try again."

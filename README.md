@@ -82,19 +82,22 @@ Import from configured default directories for each provider:
 
 ```bash
 # Import from Claude Code default directories
-retrochat import --claude
+retrochat import claude
 
 # Import from Cursor default directories
-retrochat import --cursor
+retrochat import cursor
 
 # Import from Gemini default directories
-retrochat import --gemini
+retrochat import gemini
 
 # Import from Codex default directories
-retrochat import --codex
+retrochat import codex
+
+# Import from all providers
+retrochat import all
 
 # Import from multiple providers at once
-retrochat import --claude --cursor --overwrite
+retrochat import claude cursor --overwrite
 ```
 
 #### Environment Configuration
@@ -205,13 +208,46 @@ The application stores:
 
 ### Build and Test
 
+The project includes a Makefile for convenient development workflows that replicate CI checks locally:
+
+```bash
+# Show all available commands
+make help
+
+# Run full CI validation locally (format check, clippy, tests)
+make ci
+
+# Individual checks
+make fmt           # Check code formatting
+make clippy        # Run clippy with strict warnings
+make test          # Run all tests
+
+# Quick fixes
+make fmt-fix       # Auto-format code
+make clippy-fix    # Auto-fix clippy issues
+make fix           # Auto-format + auto-fix clippy + verify
+
+# Build commands
+make check         # Quick compilation check
+make build         # Debug build
+make build-release # Optimized release build
+```
+
+You can also use cargo directly:
+
 ```bash
 # Check code quality
 cargo check && cargo test && cargo clippy
 
 # Run specific test suites
-cargo test --test test_import_scan
-cargo test --test test_analytics_usage
+cargo test --test test_import_file
+cargo test --test test_import_batch
+
+# Format code
+cargo fmt
+
+# Run clippy
+cargo clippy
 ```
 
 ### Project Structure
@@ -243,19 +279,15 @@ tests/
 
 2. **Import your chat history:**
    ```bash
-   # Scan for existing chat files
-   retrochat import scan ~/.claude/projects
-   retrochat import scan ~/.gemini/tmp
-   
-   # Or scan any directory
-   retrochat import scan ~/Downloads
-   
-   # Import from common chat directories
-   retrochat import batch ~/.claude/projects
-   retrochat import batch ~/.gemini/tmp
-   
-   # Or import from any directory
-   retrochat import batch ~/Downloads
+   # Import from provider default directories
+   retrochat import claude cursor
+
+   # Import from all providers
+   retrochat import all
+
+   # Or import from a specific path
+   retrochat import --path ~/.claude/projects
+   retrochat import --path /path/to/chat/files
    ```
 
 3. **Launch the TUI to explore:**

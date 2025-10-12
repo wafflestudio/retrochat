@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod help;
 pub mod import;
 pub mod init;
 pub mod query;
@@ -9,12 +10,12 @@ use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+use crate::env::apis as env_vars;
+use crate::models::Provider;
 use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
-#[command(name = "retrochat")]
-#[command(about = "LLM Agent Chat History Retrospect Application")]
-#[command(version = "0.1.0")]
+#[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -26,23 +27,25 @@ pub enum Commands {
     Init,
     /// Launch TUI interface
     Tui,
-    /// Import chat files from a path or provider-specific directories
+    /// Import chat files from a path or from one or more providers
+    ///
+    /// Available providers: all, claude, gemini, codex, cursor
+    ///
+    /// Examples:
+    ///   retrochat import claude cursor        # Import from multiple providers
+    ///   retrochat import all                  # Import from all providers
+    ///   retrochat import --path ~/.claude/projects
     Import {
-        /// Path to file or directory to import
+        /// A specific file or directory path to import from
         #[arg(short, long)]
         path: Option<String>,
-        /// Import from Claude Code default directories
-        #[arg(long)]
-        claude: bool,
-        /// Import from Gemini default directories
-        #[arg(long)]
-        gemini: bool,
-        /// Import from Codex default directories
-        #[arg(long)]
-        codex: bool,
-        /// Import from Cursor default directories
-        #[arg(long)]
-        cursor: bool,
+
+        /// One or more providers to import from
+        ///
+        /// Available: all, claude, gemini, codex, cursor
+        #[arg(value_enum)]
+        providers: Vec<Provider>,
+
         /// Overwrite existing sessions if they already exist
         #[arg(short, long)]
         overwrite: bool,
@@ -128,15 +131,9 @@ impl Cli {
                 Commands::Tui => tui::handle_tui_command().await,
                 Commands::Import {
                     path,
-                    claude,
-                    gemini,
-                    codex,
-                    cursor,
+                    providers,
                     overwrite,
-                } => {
-                    import::handle_import_command(path, claude, gemini, codex, cursor, overwrite)
-                        .await
-                }
+                } => import::handle_import_command(path, providers, overwrite).await,
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {
@@ -210,7 +207,7 @@ impl Cli {
         let db_path = crate::database::config::get_default_db_path()?;
         let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
-        let api_key = std::env::var("GOOGLE_AI_API_KEY").unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
+        let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
 
         let google_ai_config = if api_key.is_empty() {
             GoogleAiConfig::default()

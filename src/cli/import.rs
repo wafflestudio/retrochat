@@ -1,17 +1,18 @@
 use anyhow::{Context, Result};
-use std::env;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::cli::help;
 use crate::database::DatabaseManager;
+use crate::models::provider::config::{
+    ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
+};
+use crate::models::Provider;
 use crate::services::ImportService;
 
 pub async fn handle_import_command(
     path: Option<String>,
-    claude: bool,
-    gemini: bool,
-    codex: bool,
-    cursor: bool,
+    providers: Vec<Provider>,
     overwrite: bool,
 ) -> Result<()> {
     // Check if user provided a path
@@ -19,15 +20,14 @@ pub async fn handle_import_command(
         return import_path(path_str, overwrite).await;
     }
 
-    // Check if any provider flags are set
-    if claude || gemini || codex || cursor {
-        return import_providers(claude, gemini, codex, cursor, overwrite).await;
+    // Check if any providers are specified
+    if !providers.is_empty() {
+        return import_providers(providers, overwrite).await;
     }
 
     // No arguments provided - show help message
-    Err(anyhow::anyhow!(
-        "No import source specified. Use --path to import from a specific location or use provider flags like --claude, --gemini, etc."
-    ))
+    help::print_import_usage();
+    Err(anyhow::anyhow!("No import source specified"))
 }
 
 async fn import_path(path_str: String, overwrite: bool) -> Result<()> {
@@ -48,53 +48,74 @@ async fn import_path(path_str: String, overwrite: bool) -> Result<()> {
     }
 }
 
-async fn import_providers(
-    claude: bool,
-    gemini: bool,
-    codex: bool,
-    cursor: bool,
-    overwrite: bool,
-) -> Result<()> {
+async fn import_providers(providers: Vec<Provider>, overwrite: bool) -> Result<()> {
+    // Expand "All" to all specific providers
+    let expanded_providers = Provider::expand_all(providers);
+
     let mut imported_any = false;
 
-    if claude {
-        println!("Importing from Claude Code directories...");
-        if let Err(e) = import_claude_directories(overwrite).await {
-            eprintln!("Error importing Claude directories: {e}");
-        } else {
-            imported_any = true;
+    for provider in expanded_providers {
+        match provider {
+            Provider::All => {
+                // Should not happen due to expansion above, but handle it anyway
+                unreachable!("Provider::All should have been expanded")
+            }
+            Provider::ClaudeCode => {
+                println!("Importing from Claude Code directories...");
+                if let Err(e) = ClaudeCodeConfig::import_directories(overwrite, |path, ow| {
+                    Box::pin(import_batch(path, ow))
+                })
+                .await
+                {
+                    eprintln!("Error importing Claude directories: {e}");
+                } else {
+                    imported_any = true;
+                }
+                println!();
+            }
+            Provider::GeminiCLI => {
+                println!("Importing from Gemini directories...");
+                if let Err(e) = GeminiCliConfig::import_directories(overwrite, |path, ow| {
+                    Box::pin(import_batch(path, ow))
+                })
+                .await
+                {
+                    eprintln!("Error importing Gemini directories: {e}");
+                } else {
+                    imported_any = true;
+                }
+                println!();
+            }
+            Provider::Codex => {
+                println!("Importing from Codex directories...");
+                if let Err(e) = CodexConfig::import_directories(overwrite, |path, ow| {
+                    Box::pin(import_batch(path, ow))
+                })
+                .await
+                {
+                    eprintln!("Error importing Codex directories: {e}");
+                } else {
+                    imported_any = true;
+                }
+                println!();
+            }
+            Provider::CursorAgent => {
+                println!("Importing from Cursor directories...");
+                if let Err(e) = CursorAgentConfig::import_directories(overwrite, |path, ow| {
+                    Box::pin(import_batch(path, ow))
+                })
+                .await
+                {
+                    eprintln!("Error importing Cursor directories: {e}");
+                } else {
+                    imported_any = true;
+                }
+                println!();
+            }
+            Provider::Other(name) => {
+                eprintln!("Unknown provider: {name}");
+            }
         }
-        println!();
-    }
-
-    if gemini {
-        println!("Importing from Gemini directories...");
-        if let Err(e) = import_gemini_directories(overwrite).await {
-            eprintln!("Error importing Gemini directories: {e}");
-        } else {
-            imported_any = true;
-        }
-        println!();
-    }
-
-    if codex {
-        println!("Importing from Codex directories...");
-        if let Err(e) = import_codex_directories(overwrite).await {
-            eprintln!("Error importing Codex directories: {e}");
-        } else {
-            imported_any = true;
-        }
-        println!();
-    }
-
-    if cursor {
-        println!("Importing from Cursor directories...");
-        if let Err(e) = import_cursor_directories(overwrite).await {
-            eprintln!("Error importing Cursor directories: {e}");
-        } else {
-            imported_any = true;
-        }
-        println!();
     }
 
     if imported_any {
@@ -210,172 +231,6 @@ async fn import_batch(directory: String, overwrite: bool) -> Result<()> {
                 println!("  - {error}");
             }
         }
-    }
-
-    Ok(())
-}
-
-async fn import_claude_directories(overwrite: bool) -> Result<()> {
-    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let claude_dirs =
-        env::var("RETROCHAT_CLAUDE_DIRS").unwrap_or_else(|_| format!("{home}/.claude/projects"));
-
-    let mut imported_any = false;
-
-    for dir_str in claude_dirs.split(':') {
-        if dir_str.is_empty() {
-            continue;
-        }
-
-        let dir_path = if dir_str.starts_with('~') {
-            dir_str.replacen('~', &home, 1)
-        } else {
-            dir_str.to_string()
-        };
-
-        let path = Path::new(&dir_path);
-        if path.exists() {
-            println!("  Importing from: {}", path.display());
-            if let Err(e) = import_batch(dir_path, overwrite).await {
-                eprintln!("  Error: {e}");
-            } else {
-                imported_any = true;
-            }
-        } else {
-            println!("  Directory not found: {}", path.display());
-        }
-    }
-
-    if !imported_any {
-        println!("  No Claude directories found or imported");
-    }
-
-    Ok(())
-}
-
-async fn import_gemini_directories(overwrite: bool) -> Result<()> {
-    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let gemini_dirs =
-        env::var("RETROCHAT_GEMINI_DIRS").unwrap_or_else(|_| format!("{home}/.gemini/tmp"));
-
-    if gemini_dirs.trim().is_empty() {
-        println!(
-            "  No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable."
-        );
-        return Ok(());
-    }
-
-    let mut imported_any = false;
-
-    for dir_str in gemini_dirs.split(':') {
-        if dir_str.is_empty() {
-            continue;
-        }
-
-        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let dir_path = if dir_str.starts_with('~') {
-            dir_str.replacen('~', &home, 1)
-        } else {
-            dir_str.to_string()
-        };
-
-        let path = Path::new(&dir_path);
-        if path.exists() {
-            println!("  Importing from: {}", path.display());
-            if let Err(e) = import_batch(dir_path, overwrite).await {
-                eprintln!("  Error: {e}");
-            } else {
-                imported_any = true;
-            }
-        } else {
-            println!("  Directory not found: {}", path.display());
-        }
-    }
-
-    if !imported_any {
-        println!("  No Gemini directories found or imported");
-    }
-
-    Ok(())
-}
-
-async fn import_codex_directories(overwrite: bool) -> Result<()> {
-    let codex_dirs = env::var("RETROCHAT_CODEX_DIRS").unwrap_or_else(|_| "".to_string());
-
-    if codex_dirs.trim().is_empty() {
-        println!(
-            "  No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable."
-        );
-        return Ok(());
-    }
-
-    let mut imported_any = false;
-
-    for dir_str in codex_dirs.split(':') {
-        if dir_str.is_empty() {
-            continue;
-        }
-
-        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let dir_path = if dir_str.starts_with('~') {
-            dir_str.replacen('~', &home, 1)
-        } else {
-            dir_str.to_string()
-        };
-
-        let path = Path::new(&dir_path);
-        if path.exists() {
-            println!("  Importing from: {}", path.display());
-            if let Err(e) = import_batch(dir_path, overwrite).await {
-                eprintln!("  Error: {e}");
-            } else {
-                imported_any = true;
-            }
-        } else {
-            println!("  Directory not found: {}", path.display());
-        }
-    }
-
-    if !imported_any {
-        println!("  No Codex directories found or imported");
-    }
-
-    Ok(())
-}
-
-async fn import_cursor_directories(overwrite: bool) -> Result<()> {
-    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let cursor_dirs =
-        env::var("RETROCHAT_CURSOR_DIRS").unwrap_or_else(|_| format!("{home}/.cursor/chats"));
-
-    let mut imported_any = false;
-
-    for dir_str in cursor_dirs.split(':') {
-        if dir_str.is_empty() {
-            continue;
-        }
-
-        let dir_path = if dir_str.starts_with('~') {
-            dir_str.replacen('~', &home, 1)
-        } else {
-            dir_str.to_string()
-        };
-
-        let path = Path::new(&dir_path);
-        if path.exists() {
-            println!("  Importing from: {}", path.display());
-            if let Err(e) = import_batch(dir_path, overwrite).await {
-                eprintln!("  Error: {e}");
-            } else {
-                imported_any = true;
-            }
-        } else {
-            println!("  Directory not found: {}", path.display());
-        }
-    }
-
-    if !imported_any {
-        println!("  No Cursor directories found or imported");
     }
 
     Ok(())

@@ -23,18 +23,45 @@ tests/
 ```
 
 ## Commands
+
+### Development & Testing (using Makefile)
+```bash
+make help          # Show all available targets
+make test          # Run test suite (like CI)
+make clippy        # Run clippy with -D warnings (like CI)
+make fmt           # Check formatting with rustfmt --check
+make fmt-fix       # Apply formatting changes
+make clippy-fix    # Apply clippy auto-fixes
+make fix           # Apply rustfmt and clippy fixes, then verify
+make check         # Cargo check
+make build         # Cargo build
+make build-release # Cargo build --release
+make ci            # Run fmt, clippy, then tests (full CI validation)
+```
+
+### Direct Cargo Commands
+```bash
 # Build and test commands
 cargo check && cargo test && cargo clippy
 cargo run -- tui                                      # Launch TUI interface
-cargo run -- import --claude --cursor                  # Import from provider directories
+
+# Import commands
+cargo run -- import claude cursor                     # Import from provider directories
+cargo run -- import gemini codex                      # Import from other providers
 cargo run -- import --path /path/to/files             # Import from specific path
+cargo run -- import --path /path/to/file.jsonl        # Import a single file
+
+# Analytics commands
 cargo run -- analyze insights                         # Generate usage insights
+cargo run -- analyze export json                      # Export to JSON
+cargo run -- analyze export csv                       # Export to CSV
 
 # Retrospection commands (requires GOOGLE_AI_API_KEY env var)
 cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions
 cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
 cargo run -- retrospect status [--all|--history]      # Check analysis status
 cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
+```
 
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
@@ -65,5 +92,18 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 ### Database Migration Rules
 - **SQLx Prepare**: After creating database migrations, use `sqlx prepare` to update .sqlx files appropriately
 - **Migration Updates**: Ensure .sqlx files are kept in sync with schema changes
+
+### Environment Variable Management
+- **Centralized Constants**: All environment variable names are defined in `src/env.rs`
+- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, retrospection)
+- **Adding New Variables**: When adding or modifying environment variables, always:
+  1. Add the constant to the appropriate module in `src/env.rs`
+  2. Use the constant throughout the codebase instead of hardcoded strings
+  3. Document the purpose and expected values in the constant's comment
+- **Example Usage**:
+  ```rust
+  use crate::env::providers as env_vars;
+  let dirs = std::env::var(env_vars::CLAUDE_DIRS)?;
+  ```
 
 <!-- MANUAL ADDITIONS END -->

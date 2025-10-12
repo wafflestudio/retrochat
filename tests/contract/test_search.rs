@@ -3,9 +3,9 @@ use retrochat::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
 };
 use retrochat::models::{
-    chat_session::{ChatSession, LlmProvider},
     message::{Message, MessageRole},
     project::Project,
+    {ChatSession, Provider},
 };
 use retrochat::services::query_service::{DateRange, QueryService, SearchRequest};
 use std::sync::Arc;
@@ -46,7 +46,7 @@ async fn setup_test_data() -> QueryService {
 
     // Session 1: ClaudeCode with test-project
     let mut session1 = ChatSession::new(
-        LlmProvider::ClaudeCode,
+        Provider::ClaudeCode,
         "test.jsonl".to_string(),
         "hash123".to_string(),
         Utc::now(),
@@ -56,7 +56,7 @@ async fn setup_test_data() -> QueryService {
 
     // Session 2: Gemini with another-project
     let mut session2 = ChatSession::new(
-        LlmProvider::Gemini,
+        Provider::GeminiCLI,
         "test2.jsonl".to_string(),
         "hash456".to_string(),
         Utc::now(),
@@ -152,7 +152,7 @@ async fn test_search_messages_with_provider_filter() {
 
     let response = result.unwrap();
     for search_result in &response.results {
-        assert_eq!(search_result.provider, "claude-code");
+        assert_eq!(search_result.provider, "Claude Code");
     }
 }
 
