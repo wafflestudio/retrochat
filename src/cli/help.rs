@@ -57,10 +57,10 @@ pub fn print_getting_started() {
     println!("Next steps:");
     print_import_help();
     println!("  2. Launch the TUI interface:");
-    println!("     retrochat tui");
+    println!("     $ retrochat tui");
     println!();
     println!("  3. Generate insights:");
-    println!("     retrochat analyze insights");
+    println!("     $ retrochat analyze insights");
 }
 
 /// Print comprehensive import command usage (for command errors)
@@ -122,20 +122,20 @@ pub fn print_import_help() {
     println!("     From provider directories:");
     for provider in &supported_providers() {
         // Provider enum uses lower-case value names in CLI (e.g., "gemini", "cursor")
-        println!("       retrochat import {}", format_provider_arg(provider));
+        println!("       $ retrochat import {}", format_provider_arg(provider));
     }
     println!();
     println!("     Multiple providers at once:");
-    println!("       retrochat import {}", format_provider_arg(&Provider::All));
+    println!("       $ retrochat import {}", format_provider_arg(&Provider::All));
     let args: Vec<String> = supported_providers()
         .into_iter()
         .take(3)
         .map(|p| format_provider_arg(&p))
         .collect();
-    println!("       retrochat import {}", args.join(" "));
+    println!("       $ retrochat import {}", args.join(" "));
     println!();
     println!("     From a specific path:");
-    println!("       retrochat import --path <file-or-directory>");
+    println!("       $ retrochat import --path <file-or-directory>");
     println!();
 }
 
@@ -174,41 +174,41 @@ pub fn print_full_getting_started() {
     print_import_help();
     print_supported_formats();
     println!("3. Launch TUI:");
-    println!("   retrochat tui");
+    println!("   $ retrochat tui");
     println!();
     println!("4. Generate insights:");
-    println!("   retrochat analyze insights");
+    println!("   $ retrochat analyze insights");
     println!();
 }
 
 /// Print query command examples
 pub fn print_query_examples() {
     println!("Query Commands:");
-    println!("  retrochat query sessions                    - List all sessions");
-    println!("  retrochat query sessions --provider claude  - Filter by provider");
-    println!("  retrochat query session <SESSION_ID>        - View session details");
-    println!("  retrochat query search <QUERY>              - Search messages");
+    println!("  $ retrochat query sessions                    - List all sessions");
+    println!("  $ retrochat query sessions --provider claude  - Filter by provider");
+    println!("  $ retrochat query session <SESSION_ID>        - View session details");
+    println!("  $ retrochat query search <QUERY>              - Search messages");
     println!();
 }
 
 /// Print analyze command examples
 pub fn print_analyze_examples() {
     println!("Analytics Commands:");
-    println!("  retrochat analyze insights           - Generate usage insights");
-    println!("  retrochat analyze export json        - Export to JSON");
-    println!("  retrochat analyze export csv         - Export to CSV");
-    println!("  retrochat analyze export txt         - Export to text");
+    println!("  $ retrochat analyze insights           - Generate usage insights");
+    println!("  $ retrochat analyze export json        - Export to JSON");
+    println!("  $ retrochat analyze export csv         - Export to CSV");
+    println!("  $ retrochat analyze export txt         - Export to text");
     println!();
 }
 
 /// Print retrospection command examples
 pub fn print_retrospect_examples() {
     println!("Retrospection Commands (requires GOOGLE_AI_API_KEY):");
-    println!("  retrochat retrospect execute <SESSION_ID>           - Analyze a session");
-    println!("  retrochat retrospect execute --all                  - Analyze all sessions");
-    println!("  retrochat retrospect show <SESSION_ID>              - View analysis results");
-    println!("  retrochat retrospect status                         - Check analysis status");
-    println!("  retrochat retrospect cancel <REQUEST_ID>            - Cancel an analysis");
+    println!("  $ retrochat retrospect execute <SESSION_ID>           - Analyze a session");
+    println!("  $ retrochat retrospect execute --all                  - Analyze all sessions");
+    println!("  $ retrochat retrospect show <SESSION_ID>              - View analysis results");
+    println!("  $ retrochat retrospect status                         - Check analysis status");
+    println!("  $ retrochat retrospect cancel <REQUEST_ID>            - Cancel an analysis");
     println!();
 }
 
