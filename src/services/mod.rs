@@ -3,6 +3,7 @@ pub mod google_ai;
 pub mod import_service;
 pub mod query_service;
 pub mod retrospection_service;
+pub mod watch_service;
 
 pub use analytics_service::{
     AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest, ExportResponse,
@@ -23,3 +24,4 @@ pub use query_service::{
 pub use retrospection_service::{
     AnalysisData, RetrospectionCleanupHandler, RetrospectionService, SessionMetrics,
 };
+pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};
