@@ -78,7 +78,7 @@ pub fn print_import_usage() {
     for provider in supported_providers() {
         let arg = format_provider_arg(&provider);
         let desc = provider_description(&provider);
-        eprintln!("  {:<18} {}", arg, desc);
+        eprintln!("  {arg:<18} {desc}");
     }
     eprintln!();
     eprintln!("Examples:");
@@ -105,9 +105,9 @@ pub fn print_import_usage() {
         if let Some(env_var) = provider_env_var(&provider) {
             let desc = provider_description(&provider);
             if let Some(default_path) = provider_default_dir(&provider) {
-                eprintln!("  {:<23} - {} (default: {})", env_var, desc, default_path);
+                eprintln!("  {env_var:<23} - {desc} (default: {default_path})");
             } else {
-                eprintln!("  {:<23} - {} (no default)", env_var, desc);
+                eprintln!("  {env_var:<23} - {desc} (no default)");
             }
         }
     }
@@ -154,12 +154,9 @@ pub fn print_environment_config() {
         if let Some(env_var) = provider_env_var(&provider) {
             let desc = provider_description(&provider);
             if let Some(default_path) = provider_default_dir(&provider) {
-                println!("  {:<25} - {} (default: {})", env_var, desc, default_path);
+                println!("  {env_var:<25} - {desc} (default: {default_path})");
             } else {
-                println!(
-                    "  {:<25} - {} (no default, must be configured)",
-                    env_var, desc
-                );
+                println!("  {env_var:<25} - {desc} (no default, must be configured)");
             }
         }
     }
