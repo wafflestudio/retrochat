@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
+use crate::models::{Provider, SessionState};
 
 mod blob_decoder {
     use super::*;
@@ -140,7 +140,7 @@ impl CursorParser {
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
-            LlmProvider::CursorAgent,
+            Provider::CursorAgent,
             self.db_path.clone(),
             file_hash,
             start_time,

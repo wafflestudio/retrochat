@@ -7,8 +7,8 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::{LlmProvider, SessionState};
 use crate::models::{ChatSession, Message, MessageRole};
+use crate::models::{Provider, SessionState};
 
 use super::project_inference::ProjectInference;
 
@@ -167,7 +167,7 @@ impl ClaudeCodeParser {
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             self.file_path.clone(),
             file_hash,
             start_time,
@@ -315,7 +315,7 @@ impl ClaudeCodeParser {
         let file_hash = self.calculate_file_hash()?;
 
         let mut chat_session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             self.file_path.clone(),
             file_hash,
             start_time,
@@ -557,7 +557,7 @@ mod tests {
         assert!(result.is_ok());
         let (session, messages) = result.unwrap();
 
-        assert_eq!(session.provider, LlmProvider::ClaudeCode);
+        assert_eq!(session.provider, Provider::ClaudeCode);
         assert_eq!(session.message_count, 2);
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, MessageRole::User);

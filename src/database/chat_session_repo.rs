@@ -4,7 +4,7 @@ use sqlx::{sqlite::SqliteRow, Pool, Row, Sqlite};
 use uuid::Uuid;
 
 use super::connection::DatabaseManager;
-use crate::models::{ChatSession, LlmProvider, SessionState};
+use crate::models::{ChatSession, Provider, SessionState};
 
 fn parse_datetime(datetime_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     // Try RFC3339 format first
@@ -153,7 +153,7 @@ impl ChatSessionRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn get_by_provider(&self, provider: &LlmProvider) -> AnyhowResult<Vec<ChatSession>> {
+    pub async fn get_by_provider(&self, provider: &Provider) -> AnyhowResult<Vec<ChatSession>> {
         let rows = sqlx::query(
             r#"
             SELECT id, provider, project_name, start_time, end_time,
@@ -231,7 +231,7 @@ impl ChatSessionRepository {
         Ok(count)
     }
 
-    pub async fn count_by_provider(&self, provider: &LlmProvider) -> AnyhowResult<i64> {
+    pub async fn count_by_provider(&self, provider: &Provider) -> AnyhowResult<i64> {
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM chat_sessions WHERE provider = ?")
                 .bind(provider.to_string())
@@ -282,7 +282,7 @@ impl ChatSessionRepository {
         let id = Uuid::parse_str(&id_str).context("Invalid session ID format")?;
 
         let provider = provider_str
-            .parse::<LlmProvider>()
+            .parse::<Provider>()
             .map_err(|e| anyhow::anyhow!("Invalid provider: {e}"))?;
 
         let start_time = DateTime::parse_from_rfc3339(&start_time_str)

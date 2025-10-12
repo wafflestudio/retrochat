@@ -69,3 +69,4 @@ retrochat_export_*.csv
 # Temporary files
 tmp/
 temp/
+:memory:

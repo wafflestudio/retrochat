@@ -1,30 +1,48 @@
 /// Centralized help and usage information for the CLI
 ///
 /// This module provides consistent help messages across different CLI commands.
-/// It uses the LlmProviderRegistry to ensure help text stays in sync
-/// with the codebase.
-///
-/// ## Design Principles
-///
-/// 1. **Single Source of Truth**: All provider information (CLI names, descriptions,
-///    environment variables, defaults) is defined in the `LlmProviderRegistry`.
-///
-/// 2. **Type Safety**: Uses actual provider configs from the registry, ensuring
-///    all providers are properly configured before being shown in help.
-///
-/// 3. **Automatic Synchronization**: When you add a new provider to the registry's
-///    `load_default_providers()`, all help messages automatically reflect the change.
-///
-/// ## Adding a New Provider
-///
-/// To add a new provider:
-/// 1. Add the enum variant to `models::LlmProvider`
-/// 2. Add provider configuration in `LlmProviderRegistry::load_default_providers()`
-/// 3. Set cli_name, description, env_var_name, and default_directory in the config
-///
-/// The help system will automatically generate all relevant help messages.
-///
-use crate::models::LlmProviderRegistry;
+/// It now uses the `Provider` enum from the models module to drive examples and
+/// supported provider listings.
+use crate::models::Provider;
+
+// Helper: list providers supported via CLI (excluding `All` aggregate)
+fn supported_providers() -> Vec<Provider> {
+    Provider::all_concrete()
+}
+
+// Helper: map Provider to human-friendly description
+fn provider_description(p: &Provider) -> &'static str {
+    match p {
+        Provider::ClaudeCode => "Claude Code (.jsonl files)",
+        Provider::GeminiCLI => "Gemini CLI (.json files)",
+        Provider::Codex => "Codex (various formats)",
+        Provider::CursorAgent => "Cursor Agent (store.db files)",
+        Provider::All => "All providers",
+        Provider::Other(_) => "Unknown provider",
+    }
+}
+
+// Helper: map Provider to environment variable name (if any)
+fn provider_env_var(p: &Provider) -> Option<&'static str> {
+    match p {
+        Provider::ClaudeCode => Some("RETROCHAT_CLAUDE_DIRS"),
+        Provider::GeminiCLI => Some("RETROCHAT_GEMINI_DIRS"),
+        Provider::Codex => Some("RETROCHAT_CODEX_DIRS"),
+        Provider::CursorAgent => Some("RETROCHAT_CURSOR_DIRS"),
+        Provider::All | Provider::Other(_) => None,
+    }
+}
+
+// Helper: map Provider to a default directory hint (if any)
+fn provider_default_dir(p: &Provider) -> Option<&'static str> {
+    match p {
+        Provider::ClaudeCode => Some("~/.claude/projects"),
+        Provider::GeminiCLI => Some("~/.gemini/tmp"),
+        Provider::Codex => Some("~/.codex/sessions"),
+        Provider::CursorAgent => Some("~/.cursor/chats"),
+        Provider::All | Provider::Other(_) => None,
+    }
+}
 
 /// Print getting started guide with import examples
 pub fn print_getting_started() {
@@ -40,22 +58,21 @@ pub fn print_getting_started() {
 
 /// Print import command usage examples
 pub fn print_import_help() {
-    let registry = LlmProviderRegistry::new();
-    let providers = registry.all_known();
-
     println!("  1. Import your chat files:");
     println!();
     println!("     From provider directories:");
-    for provider in &providers {
-        println!("       retrochat import --{}", provider.cli_name());
+    for provider in &supported_providers() {
+        // Provider enum uses lower-case value names in CLI (e.g., "gemini", "cursor")
+        println!("       retrochat import {}", format_provider_arg(provider));
     }
     println!();
     println!("     Multiple providers at once:");
-    let flags: Vec<String> = providers.iter()
+    let args: Vec<String> = supported_providers()
+        .into_iter()
         .take(3)
-        .map(|p| format!("--{}", p.cli_name()))
+        .map(|p| format_provider_arg(&p))
         .collect();
-    println!("       retrochat import {}", flags.join(" "));
+    println!("       retrochat import {}", args.join(" "));
     println!();
     println!("     From a specific path:");
     println!("       retrochat import --path <file-or-directory>");
@@ -64,30 +81,31 @@ pub fn print_import_help() {
 
 /// Print supported file formats
 pub fn print_supported_formats() {
-    let registry = LlmProviderRegistry::new();
-    let providers = registry.all_known();
-
     println!("Supported formats:");
-    for provider in providers {
-        println!("  • {}", provider.description());
+    for provider in supported_providers() {
+        println!("  • {}", provider_description(&provider));
     }
     println!();
 }
 
 /// Print environment variable configuration
 pub fn print_environment_config() {
-    let registry = LlmProviderRegistry::new();
-    let providers = registry.all_known();
-
     println!("Environment Variables:");
-    for provider in providers {
-        if let Some(env_var) = provider.env_var_name() {
-            if let Some(default_path) = provider.default_directory() {
-                println!("  {:<25} - {} (default: {})",
-                    env_var, provider.description(), default_path);
+    for provider in supported_providers() {
+        if let Some(env_var) = provider_env_var(&provider) {
+            if let Some(default_path) = provider_default_dir(&provider) {
+                println!(
+                    "  {:<25} - {} (default: {})",
+                    env_var,
+                    provider_description(&provider),
+                    default_path
+                );
             } else {
-                println!("  {:<25} - {} (no default, must be configured)",
-                    env_var, provider.description());
+                println!(
+                    "  {:<25} - {} (no default, must be configured)",
+                    env_var,
+                    provider_description(&provider)
+                );
             }
         }
     }
@@ -115,7 +133,7 @@ pub fn print_full_getting_started() {
 pub fn print_query_examples() {
     println!("Query Commands:");
     println!("  retrochat query sessions                    - List all sessions");
-    println!("  retrochat query sessions --provider Claude  - Filter by provider");
+    println!("  retrochat query sessions --provider claude  - Filter by provider");
     println!("  retrochat query session <SESSION_ID>        - View session details");
     println!("  retrochat query search <QUERY>              - Search messages");
     println!();
@@ -140,4 +158,16 @@ pub fn print_retrospect_examples() {
     println!("  retrochat retrospect status                         - Check analysis status");
     println!("  retrochat retrospect cancel <REQUEST_ID>            - Cancel an analysis");
     println!();
+}
+
+// Helper: format a provider as it should appear in CLI examples
+fn format_provider_arg(p: &Provider) -> String {
+    match p {
+        Provider::All => "all".to_string(),
+        Provider::ClaudeCode => "claude".to_string(),
+        Provider::GeminiCLI => "gemini".to_string(),
+        Provider::Codex => "codex".to_string(),
+        Provider::CursorAgent => "cursor".to_string(),
+        Provider::Other(name) => name.clone(),
+    }
 }

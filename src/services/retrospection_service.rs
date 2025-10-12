@@ -521,7 +521,7 @@ mod tests {
         // Create a test session
         let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
         let test_session = crate::models::ChatSession::new(
-            crate::models::LlmProvider::ClaudeCode,
+            crate::models::Provider::ClaudeCode,
             "/test/chat.jsonl".to_string(),
             "test_hash".to_string(),
             chrono::Utc::now(),
@@ -566,7 +566,7 @@ mod tests {
         // Create a test session
         let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
         let test_session = crate::models::ChatSession::new(
-            crate::models::LlmProvider::ClaudeCode,
+            crate::models::Provider::ClaudeCode,
             "/test/chat2.jsonl".to_string(),
             "test_hash2".to_string(),
             chrono::Utc::now(),

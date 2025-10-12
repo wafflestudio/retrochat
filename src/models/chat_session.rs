@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::llm_provider::LlmProvider;
+use super::provider::Provider;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionState {
@@ -40,7 +40,7 @@ impl std::str::FromStr for SessionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSession {
     pub id: Uuid,
-    pub provider: LlmProvider,
+    pub provider: Provider,
     pub project_name: Option<String>,
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,
@@ -55,7 +55,7 @@ pub struct ChatSession {
 
 impl ChatSession {
     pub fn new(
-        provider: LlmProvider,
+        provider: Provider,
         file_path: String,
         file_hash: String,
         start_time: DateTime<Utc>,
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_new_chat_session() {
-        let provider = LlmProvider::ClaudeCode;
+        let provider = Provider::ClaudeCode;
         let file_path = "/path/to/chat.jsonl".to_string();
         let file_hash = "abc123".to_string();
         let start_time = Utc::now();
@@ -156,7 +156,7 @@ mod tests {
         let end_time = start_time - chrono::Duration::hours(1);
 
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/path/to/chat.jsonl".to_string(),
             "abc123".to_string(),
             start_time,
@@ -168,11 +168,8 @@ mod tests {
 
     #[test]
     fn test_provider_display() {
-        assert_eq!(LlmProvider::ClaudeCode.to_string(), "claude-code");
-        assert_eq!(LlmProvider::GeminiCLI.to_string(), "gemini");
-        assert_eq!(
-            LlmProvider::Other("custom".to_string()).to_string(),
-            "custom"
-        );
+        assert_eq!(Provider::ClaudeCode.to_string(), "Claude Code");
+        assert_eq!(Provider::GeminiCLI.to_string(), "Gemini CLI");
+        assert_eq!(Provider::Other("custom".to_string()).to_string(), "custom");
     }
 }

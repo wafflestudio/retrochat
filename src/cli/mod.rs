@@ -6,16 +6,15 @@ pub mod query;
 pub mod retrospect;
 pub mod tui;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+use crate::models::Provider;
 use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
-#[command(name = "retrochat")]
-#[command(about = "LLM Agent Chat History Retrospect Application")]
-#[command(version = "0.1.0")]
+#[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -27,23 +26,17 @@ pub enum Commands {
     Init,
     /// Launch TUI interface
     Tui,
-    /// Import chat files from a path or provider-specific directories
+    /// Import chat files from a path or from one or more providers
+    #[command(group(ArgGroup::new("source").required(true).args(["path", "providers"])))]
     Import {
-        /// Path to file or directory to import
+        /// A specific file or directory path to import from
         #[arg(short, long)]
         path: Option<String>,
-        /// Import from Claude Code default directories
-        #[arg(long)]
-        claude: bool,
-        /// Import from Gemini default directories
-        #[arg(long)]
-        gemini: bool,
-        /// Import from Codex default directories
-        #[arg(long)]
-        codex: bool,
-        /// Import from Cursor default directories
-        #[arg(long)]
-        cursor: bool,
+
+        /// One or more providers to import from (e.g., gemini, cursor, all)
+        #[arg(value_enum)]
+        providers: Vec<Provider>,
+
         /// Overwrite existing sessions if they already exist
         #[arg(short, long)]
         overwrite: bool,
@@ -129,15 +122,9 @@ impl Cli {
                 Commands::Tui => tui::handle_tui_command().await,
                 Commands::Import {
                     path,
-                    claude,
-                    gemini,
-                    codex,
-                    cursor,
+                    providers,
                     overwrite,
-                } => {
-                    import::handle_import_command(path, claude, gemini, codex, cursor, overwrite)
-                        .await
-                }
+                } => import::handle_import_command(path, providers, overwrite).await,
                 Commands::Analyze { command } => match command {
                     AnalyzeCommands::Insights => analytics::handle_insights_command().await,
                     AnalyzeCommands::Export { format, output } => {

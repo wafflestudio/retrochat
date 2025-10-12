@@ -349,7 +349,7 @@ impl RetrospectionRepository {
 mod tests {
     use super::*;
     use crate::database::{ChatSessionRepository, Database, RetrospectRequestRepository};
-    use crate::models::{ChatSession, LlmProvider, RetrospectRequest, RetrospectionAnalysisType};
+    use crate::models::{ChatSession, Provider, RetrospectRequest, RetrospectionAnalysisType};
     use std::sync::Arc;
 
     #[tokio::test]
@@ -362,7 +362,7 @@ mod tests {
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&db_manager);
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/test/path".to_string(),
             "test-hash".to_string(),
             Utc::now(),
@@ -414,7 +414,7 @@ mod tests {
         // Create a chat session first (required for foreign key constraint)
         let session_repo = ChatSessionRepository::new(&db_manager);
         let session = ChatSession::new(
-            LlmProvider::ClaudeCode,
+            Provider::ClaudeCode,
             "/test/path".to_string(),
             "test-hash".to_string(),
             Utc::now(),

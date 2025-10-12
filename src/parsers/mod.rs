@@ -6,7 +6,7 @@ pub mod project_inference;
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-use crate::models::LlmProvider;
+use crate::models::Provider;
 use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
@@ -45,11 +45,11 @@ impl ChatParser {
         }
     }
 
-    pub fn get_provider(&self) -> LlmProvider {
+    pub fn get_provider(&self) -> Provider {
         match self {
-            ChatParser::ClaudeCode(_) => LlmProvider::ClaudeCode,
-            ChatParser::Cursor(_) => LlmProvider::CursorAgent,
-            ChatParser::Gemini(_) => LlmProvider::GeminiCLI,
+            ChatParser::ClaudeCode(_) => Provider::ClaudeCode,
+            ChatParser::Cursor(_) => Provider::CursorAgent,
+            ChatParser::Gemini(_) => Provider::GeminiCLI,
         }
     }
 }
@@ -57,20 +57,20 @@ impl ChatParser {
 pub struct ParserRegistry;
 
 impl ParserRegistry {
-    pub fn detect_provider(file_path: impl AsRef<Path>) -> Option<LlmProvider> {
+    pub fn detect_provider(file_path: impl AsRef<Path>) -> Option<Provider> {
         let path = file_path.as_ref();
 
         // First check by file extension and content
         if ClaudeCodeParser::is_valid_file(path) {
-            return Some(LlmProvider::ClaudeCode);
+            return Some(Provider::ClaudeCode);
         }
 
         if CursorParser::is_valid_file(path) {
-            return Some(LlmProvider::CursorAgent);
+            return Some(Provider::CursorAgent);
         }
 
         if GeminiParser::is_valid_file(path) {
-            return Some(LlmProvider::GeminiCLI);
+            return Some(Provider::GeminiCLI);
         }
 
         // Fallback to file name patterns
@@ -81,32 +81,32 @@ impl ParserRegistry {
             .to_lowercase();
 
         if file_name.contains("claude") || file_name.contains("anthropic") {
-            return Some(LlmProvider::ClaudeCode);
+            return Some(Provider::ClaudeCode);
         }
 
         if file_name.contains("cursor") {
-            return Some(LlmProvider::CursorAgent);
+            return Some(Provider::CursorAgent);
         }
 
         if file_name.contains("gemini")
             || file_name.contains("bard")
             || file_name.contains("google")
         {
-            return Some(LlmProvider::GeminiCLI);
+            return Some(Provider::GeminiCLI);
         }
 
         if file_name.contains("codex")
             || file_name.contains("github")
             || file_name.contains("copilot")
         {
-            return Some(LlmProvider::Other("codex".to_string()));
+            return Some(Provider::Other("codex".to_string()));
         }
 
         // Check by file extension as last resort
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             match extension.to_lowercase().as_str() {
-                "jsonl" => Some(LlmProvider::ClaudeCode), // Default JSONL to Claude
-                "json" => Some(LlmProvider::GeminiCLI),      // Default JSON to Gemini
+                "jsonl" => Some(Provider::ClaudeCode), // Default JSONL to Claude
+                "json" => Some(Provider::GeminiCLI),   // Default JSON to Gemini
                 _ => None,
             }
         } else {
@@ -123,11 +123,14 @@ impl ParserRegistry {
         })?;
 
         match provider {
-            LlmProvider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
-            LlmProvider::CursorAgent => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
-            LlmProvider::GeminiCLI => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
-            LlmProvider::Codex => Err(anyhow!("Codex parser not yet implemented")),
-            LlmProvider::Other(name) => Err(anyhow!("Parser for {name} not implemented")),
+            Provider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
+            Provider::CursorAgent => Ok(ChatParser::Cursor(CursorParser::new(file_path))),
+            Provider::GeminiCLI => Ok(ChatParser::Gemini(GeminiParser::new(file_path))),
+            Provider::Codex => Err(anyhow!("Codex parser not yet implemented")),
+            Provider::All => Err(anyhow!(
+                "'All' is a CLI-only provider and cannot be used for parsing"
+            )),
+            Provider::Other(name) => Err(anyhow!("Parser for {name} not implemented")),
         }
     }
 
@@ -135,11 +138,11 @@ impl ParserRegistry {
         vec!["jsonl", "json", "db"]
     }
 
-    pub fn get_supported_providers() -> Vec<LlmProvider> {
+    pub fn get_supported_providers() -> Vec<Provider> {
         vec![
-            LlmProvider::ClaudeCode,
-            LlmProvider::CursorAgent,
-            LlmProvider::GeminiCLI,
+            Provider::ClaudeCode,
+            Provider::CursorAgent,
+            Provider::GeminiCLI,
         ]
     }
 
@@ -161,8 +164,8 @@ impl ParserRegistry {
     pub fn scan_directory(
         directory_path: impl AsRef<Path>,
         recursive: bool,
-        provider_filter: Option<&[LlmProvider]>,
-    ) -> Result<Vec<(std::path::PathBuf, LlmProvider)>> {
+        provider_filter: Option<&[Provider]>,
+    ) -> Result<Vec<(std::path::PathBuf, Provider)>> {
         let mut files = Vec::new();
         Self::scan_directory_recursive(
             directory_path.as_ref(),
@@ -176,8 +179,8 @@ impl ParserRegistry {
     fn scan_directory_recursive(
         dir: &Path,
         recursive: bool,
-        provider_filter: Option<&[LlmProvider]>,
-        files: &mut Vec<(std::path::PathBuf, LlmProvider)>,
+        provider_filter: Option<&[Provider]>,
+        files: &mut Vec<(std::path::PathBuf, Provider)>,
     ) -> Result<()> {
         if !dir.is_dir() {
             return Err(anyhow!("Path is not a directory: {}", dir.display()));
@@ -242,15 +245,15 @@ mod tests {
 
         assert_eq!(
             ParserRegistry::detect_provider(&claude_file),
-            Some(LlmProvider::ClaudeCode)
+            Some(Provider::ClaudeCode)
         );
         assert_eq!(
             ParserRegistry::detect_provider(&gemini_file),
-            Some(LlmProvider::GeminiCLI)
+            Some(Provider::GeminiCLI)
         );
         assert_eq!(
             ParserRegistry::detect_provider(&cursor_file),
-            Some(LlmProvider::CursorAgent)
+            Some(Provider::CursorAgent)
         );
     }
 
@@ -282,9 +285,9 @@ mod tests {
         assert_eq!(result.len(), 3);
 
         let providers: Vec<_> = result.iter().map(|(_, p)| p.clone()).collect();
-        assert!(providers.contains(&LlmProvider::ClaudeCode));
-        assert!(providers.contains(&LlmProvider::GeminiCLI));
-        assert!(providers.contains(&LlmProvider::CursorAgent));
+        assert!(providers.contains(&Provider::ClaudeCode));
+        assert!(providers.contains(&Provider::GeminiCLI));
+        assert!(providers.contains(&Provider::CursorAgent));
     }
 
     #[test]
@@ -295,8 +298,8 @@ mod tests {
         assert!(extensions.contains(&"db"));
 
         let providers = ParserRegistry::get_supported_providers();
-        assert!(providers.contains(&LlmProvider::ClaudeCode));
-        assert!(providers.contains(&LlmProvider::CursorAgent));
-        assert!(providers.contains(&LlmProvider::GeminiCLI));
+        assert!(providers.contains(&Provider::ClaudeCode));
+        assert!(providers.contains(&Provider::CursorAgent));
+        assert!(providers.contains(&Provider::GeminiCLI));
     }
 }
