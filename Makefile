@@ -9,7 +9,7 @@ CARGO_BIN := $(CARGO)
 RUSTC_BIN := rustc
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e ci
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli ci
 
 help:
 	@echo "Available targets:"
@@ -26,6 +26,7 @@ help:
 	@echo "  make generate-example - Generate example files from provider directories"
 	@echo "  make e2e-import      - Generate and import example files from all providers"
 	@echo "  make e2e             - Run end-to-end tests"
+	@echo "  make cli ARGS=\"...\" - Run retrochat CLI with arguments (e.g., make cli ARGS=\"import --watch claude\")"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -74,6 +75,9 @@ e2e-import: generate-example
 	@echo "Example import complete"
 
 e2e: e2e-import
+
+cli:
+	$(CARGO_BIN) run -- $(ARGS)
 
 ci: fmt clippy test
 	@echo "CI checks passed locally"
