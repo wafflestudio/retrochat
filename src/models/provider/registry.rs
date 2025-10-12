@@ -31,7 +31,7 @@ impl ProviderRegistry {
                 Provider::GeminiCLI => GeminiCliConfig::create(),
                 Provider::Codex => CodexConfig::create(),
                 Provider::CursorAgent => CursorAgentConfig::create(),
-                Provider::All => continue, // Skip aggregate
+                Provider::All => continue,      // Skip aggregate
                 Provider::Other(_) => continue, // Skip unknown providers
             };
             self.providers.insert(provider, config);
