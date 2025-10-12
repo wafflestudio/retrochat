@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::env::system as env_vars;
 use crate::models::provider::ParserType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,7 +147,7 @@ impl ProviderConfig {
 
     /// Get directories to import from based on environment variable or default
     pub fn get_import_directories(&self) -> Vec<String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let home = std::env::var(env_vars::HOME).unwrap_or_else(|_| ".".to_string());
 
         // Get directories from environment variable or default
         let dirs_str = if let Some(env_var) = &self.env_var_name {

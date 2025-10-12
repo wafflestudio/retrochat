@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+use crate::env::apis as env_vars;
 use crate::models::Provider;
 use retrospect::RetrospectCommands;
 
@@ -206,7 +207,7 @@ impl Cli {
         let db_path = crate::database::config::get_default_db_path()?;
         let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
-        let api_key = std::env::var("GOOGLE_AI_API_KEY").unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
+        let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
 
         let google_ai_config = if api_key.is_empty() {
             GoogleAiConfig::default()

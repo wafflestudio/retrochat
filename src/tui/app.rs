@@ -14,6 +14,7 @@ use tokio::task;
 use tokio::time::timeout;
 
 use crate::database::DatabaseManager;
+use crate::env::apis as env_vars;
 use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
@@ -150,7 +151,7 @@ impl App {
         let analytics_service = AnalyticsService::new((*db_manager).clone());
 
         // Try to create retrospection service if Google AI API key is available
-        let retrospection_service = if std::env::var("GOOGLE_AI_API_KEY").is_ok() {
+        let retrospection_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
             let config = GoogleAiConfig::default();
             match GoogleAiClient::new(config) {
                 Ok(client) => Some(Arc::new(RetrospectionService::new(
@@ -337,7 +338,10 @@ impl App {
                             }
                         } else {
                             // Show message that Google AI API key is required
-                            self.state.show_error("Google AI API key not configured. Set GOOGLE_AI_API_KEY environment variable.".to_string());
+                            self.state.show_error(format!(
+                                "Google AI API key not configured. Set {} environment variable.",
+                                env_vars::GOOGLE_AI_API_KEY
+                            ));
                         }
                     } else {
                         // Normal session selection

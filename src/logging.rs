@@ -6,6 +6,8 @@ use tracing_subscriber::{
     filter::LevelFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry,
 };
 
+use crate::env::logging as env_vars;
+
 /// Simplified logging configuration for RetroChat
 #[derive(Debug, Clone)]
 pub struct LoggingConfig {
@@ -74,7 +76,7 @@ impl LoggingConfig {
         let mut config = Self::default();
 
         // Set log level from environment
-        if let Ok(level_str) = env::var("RETROCHAT_LOG_LEVEL") {
+        if let Ok(level_str) = env::var(env_vars::LOG_LEVEL) {
             config.level = match level_str.to_lowercase().as_str() {
                 "error" => Level::ERROR,
                 "warn" => Level::WARN,
@@ -86,12 +88,12 @@ impl LoggingConfig {
         }
 
         // Set file path from environment
-        if let Ok(file_path) = env::var("RETROCHAT_LOG_FILE") {
+        if let Ok(file_path) = env::var(env_vars::LOG_FILE) {
             config.file_path = Some(PathBuf::from(file_path));
         }
 
-        // Disable colors if NO_COLOR is set
-        if env::var("NO_COLOR").is_ok() {
+        // Disable colors if RETROCHAT_NO_COLOR is set
+        if env::var(env_vars::NO_COLOR).is_ok() {
             config.use_colors = false;
         }
 

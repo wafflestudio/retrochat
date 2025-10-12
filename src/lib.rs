@@ -5,6 +5,7 @@ pub mod parsers;
 pub mod services;
 pub mod tui;
 
+pub mod env;
 pub mod error;
 pub mod logging;
 

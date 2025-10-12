@@ -1,4 +1,5 @@
 use super::base::ProviderConfig;
+use crate::env::providers as env_vars;
 use crate::models::provider::ParserType;
 use anyhow::Result;
 use std::path::Path;
@@ -10,7 +11,7 @@ impl CodexConfig {
         ProviderConfig::new("Codex".to_string(), ParserType::CodexJson)
             .with_cli_name("codex".to_string())
             .with_description("Codex (various formats)".to_string())
-            .with_env_var_name("RETROCHAT_CODEX_DIRS".to_string())
+            .with_env_var_name(env_vars::CODEX_DIRS.to_string())
             .with_default_directory("~/.codex/sessions".to_string())
             .with_file_patterns(vec![
                 "*codex*.json".to_string(),
@@ -38,7 +39,8 @@ impl CodexConfig {
 
         if directories.is_empty() {
             println!(
-                "  No Codex directories configured. Set RETROCHAT_CODEX_DIRS environment variable."
+                "  No Codex directories configured. Set {} environment variable.",
+                env_vars::CODEX_DIRS
             );
             return Ok(());
         }
@@ -118,12 +120,12 @@ mod tests {
                 as std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
         };
 
-        std::env::set_var("RETROCHAT_CODEX_DIRS", "/tmp/nonexistent_codex");
+        std::env::set_var(env_vars::CODEX_DIRS, "/tmp/nonexistent_codex");
 
         let result = CodexConfig::import_directories(false, import_fn).await;
         assert!(result.is_ok());
         assert_eq!(*call_count.lock().unwrap(), 0);
 
-        std::env::remove_var("RETROCHAT_CODEX_DIRS");
+        std::env::remove_var(env_vars::CODEX_DIRS);
     }
 }

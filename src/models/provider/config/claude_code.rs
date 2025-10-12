@@ -1,4 +1,5 @@
 use super::base::ProviderConfig;
+use crate::env::providers as env_vars;
 use crate::models::provider::ParserType;
 use anyhow::Result;
 use std::path::Path;
@@ -10,7 +11,7 @@ impl ClaudeCodeConfig {
         ProviderConfig::new("Claude Code".to_string(), ParserType::ClaudeCodeJsonl)
             .with_cli_name("claude".to_string())
             .with_description("Claude Code (.jsonl files)".to_string())
-            .with_env_var_name("RETROCHAT_CLAUDE_DIRS".to_string())
+            .with_env_var_name(env_vars::CLAUDE_DIRS.to_string())
             .with_default_directory("~/.claude/projects".to_string())
             .with_file_patterns(vec![
                 "*.jsonl".to_string(),
@@ -101,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_claude_code_import_directories_with_env() {
-        std::env::set_var("RETROCHAT_CLAUDE_DIRS", "/tmp/test1:/tmp/test2");
+        std::env::set_var(env_vars::CLAUDE_DIRS, "/tmp/test1:/tmp/test2");
         let config = ClaudeCodeConfig::create();
         let dirs = config.get_import_directories();
 
@@ -109,7 +110,7 @@ mod tests {
         assert_eq!(dirs[0], "/tmp/test1");
         assert_eq!(dirs[1], "/tmp/test2");
 
-        std::env::remove_var("RETROCHAT_CLAUDE_DIRS");
+        std::env::remove_var(env_vars::CLAUDE_DIRS);
     }
 
     #[tokio::test]
@@ -130,7 +131,7 @@ mod tests {
         };
 
         // Set a test directory that doesn't exist
-        std::env::set_var("RETROCHAT_CLAUDE_DIRS", "/tmp/nonexistent_test_dir");
+        std::env::set_var(env_vars::CLAUDE_DIRS, "/tmp/nonexistent_test_dir");
 
         let result = ClaudeCodeConfig::import_directories(false, import_fn).await;
         assert!(result.is_ok());
@@ -138,6 +139,6 @@ mod tests {
         // Should not have been called since directory doesn't exist
         assert_eq!(*call_count.lock().unwrap(), 0);
 
-        std::env::remove_var("RETROCHAT_CLAUDE_DIRS");
+        std::env::remove_var(env_vars::CLAUDE_DIRS);
     }
 }

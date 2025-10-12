@@ -7,6 +7,7 @@ use tokio::time::timeout;
 use super::errors::{GoogleAiError, RetryError};
 use super::models::{GenerateContentRequest, GenerateContentResponse, GenerationConfig};
 use super::retry::{with_retry, RetryConfig};
+use crate::env::apis as env_vars;
 use crate::models::RetrospectionAnalysisType;
 
 #[derive(Debug, Clone)]
@@ -21,7 +22,7 @@ pub struct GoogleAiConfig {
 impl Default for GoogleAiConfig {
     fn default() -> Self {
         Self {
-            api_key: std::env::var("GOOGLE_AI_API_KEY").unwrap_or_default(),
+            api_key: std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_default(),
             base_url: "https://generativelanguage.googleapis.com/v1beta".to_string(),
             model: "gemini-2.5-flash-lite".to_string(),
             timeout: Duration::from_secs(300),

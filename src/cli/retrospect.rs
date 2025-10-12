@@ -3,6 +3,7 @@ use clap::Subcommand;
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
+use crate::env::apis as env_vars;
 use crate::models::{OperationStatus, RetrospectionAnalysisType};
 use crate::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
@@ -98,7 +99,7 @@ pub async fn handle_execute_command(
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
     // Initialize Google AI client
-    let api_key = std::env::var("GOOGLE_AI_API_KEY")
+    let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY)
         .context("GOOGLE_AI_API_KEY environment variable is required")?;
 
     let config = GoogleAiConfig::new(api_key);

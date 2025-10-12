@@ -1,4 +1,5 @@
 use super::base::ProviderConfig;
+use crate::env::providers as env_vars;
 use crate::models::provider::ParserType;
 use anyhow::Result;
 use std::path::Path;
@@ -10,7 +11,7 @@ impl GeminiCliConfig {
         ProviderConfig::new("Gemini CLI".to_string(), ParserType::GeminiJson)
             .with_cli_name("gemini".to_string())
             .with_description("Gemini CLI (.json files)".to_string())
-            .with_env_var_name("RETROCHAT_GEMINI_DIRS".to_string())
+            .with_env_var_name(env_vars::GEMINI_DIRS.to_string())
             .with_default_directory("~/.gemini/tmp".to_string())
             .with_file_patterns(vec!["*gemini*.json".to_string(), "*bard*.json".to_string()])
             .with_default_location("darwin".to_string(), vec!["~/.gemini/tmp".to_string()])
@@ -33,7 +34,10 @@ impl GeminiCliConfig {
         let directories = config.get_import_directories();
 
         if directories.is_empty() {
-            println!("  No Gemini directories configured. Set RETROCHAT_GEMINI_DIRS environment variable.");
+            println!(
+                "  No Gemini directories configured. Set {} environment variable.",
+                env_vars::GEMINI_DIRS
+            );
             return Ok(());
         }
 
@@ -111,12 +115,12 @@ mod tests {
                 as std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
         };
 
-        std::env::set_var("RETROCHAT_GEMINI_DIRS", "/tmp/nonexistent_gemini");
+        std::env::set_var(env_vars::GEMINI_DIRS, "/tmp/nonexistent_gemini");
 
         let result = GeminiCliConfig::import_directories(false, import_fn).await;
         assert!(result.is_ok());
         assert_eq!(*call_count.lock().unwrap(), 0);
 
-        std::env::remove_var("RETROCHAT_GEMINI_DIRS");
+        std::env::remove_var(env_vars::GEMINI_DIRS);
     }
 }

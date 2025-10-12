@@ -1,4 +1,5 @@
 use super::base::ProviderConfig;
+use crate::env::providers as env_vars;
 use crate::models::provider::ParserType;
 use anyhow::Result;
 use std::path::Path;
@@ -10,7 +11,7 @@ impl CursorAgentConfig {
         ProviderConfig::new("Cursor Agent".to_string(), ParserType::CursorDb)
             .with_cli_name("cursor-agent".to_string())
             .with_description("Cursor Agent (store.db files)".to_string())
-            .with_env_var_name("RETROCHAT_CURSOR_DIRS".to_string())
+            .with_env_var_name(env_vars::CURSOR_DIRS.to_string())
             .with_default_directory("~/.cursor/chats".to_string())
             .with_file_patterns(vec!["store.db".to_string(), "*cursor*.db".to_string()])
             .with_default_location("darwin".to_string(), vec!["~/.cursor/chats".to_string()])
@@ -113,12 +114,12 @@ mod tests {
                 as std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
         };
 
-        std::env::set_var("RETROCHAT_CURSOR_DIRS", "/tmp/nonexistent_cursor");
+        std::env::set_var(env_vars::CURSOR_DIRS, "/tmp/nonexistent_cursor");
 
         let result = CursorAgentConfig::import_directories(false, import_fn).await;
         assert!(result.is_ok());
         assert_eq!(*call_count.lock().unwrap(), 0);
 
-        std::env::remove_var("RETROCHAT_CURSOR_DIRS");
+        std::env::remove_var(env_vars::CURSOR_DIRS);
     }
 }

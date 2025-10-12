@@ -93,4 +93,17 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 - **SQLx Prepare**: After creating database migrations, use `sqlx prepare` to update .sqlx files appropriately
 - **Migration Updates**: Ensure .sqlx files are kept in sync with schema changes
 
+### Environment Variable Management
+- **Centralized Constants**: All environment variable names are defined in `src/env.rs`
+- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, retrospection)
+- **Adding New Variables**: When adding or modifying environment variables, always:
+  1. Add the constant to the appropriate module in `src/env.rs`
+  2. Use the constant throughout the codebase instead of hardcoded strings
+  3. Document the purpose and expected values in the constant's comment
+- **Example Usage**:
+  ```rust
+  use crate::env::providers as env_vars;
+  let dirs = std::env::var(env_vars::CLAUDE_DIRS)?;
+  ```
+
 <!-- MANUAL ADDITIONS END -->

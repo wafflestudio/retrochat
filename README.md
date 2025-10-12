@@ -82,19 +82,22 @@ Import from configured default directories for each provider:
 
 ```bash
 # Import from Claude Code default directories
-retrochat import --claude
+retrochat import claude
 
 # Import from Cursor default directories
-retrochat import --cursor-agent
+retrochat import cursor
 
 # Import from Gemini default directories
-retrochat import --gemini
+retrochat import gemini
 
 # Import from Codex default directories
-retrochat import --codex
+retrochat import codex
+
+# Import from all providers
+retrochat import all
 
 # Import from multiple providers at once
-retrochat import --claude --cursor-agent --overwrite
+retrochat import claude cursor --overwrite
 ```
 
 #### Environment Configuration
@@ -277,7 +280,10 @@ tests/
 2. **Import your chat history:**
    ```bash
    # Import from provider default directories
-   retrochat import --claude --cursor-agent
+   retrochat import claude cursor
+
+   # Import from all providers
+   retrochat import all
 
    # Or import from a specific path
    retrochat import --path ~/.claude/projects
