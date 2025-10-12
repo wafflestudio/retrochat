@@ -9,6 +9,14 @@ CARGO_BIN := $(CARGO)
 RUSTC_BIN := rustc
 endif
 
+# Check if we're running the cli target
+ifeq (cli,$(firstword $(MAKECMDGOALS)))
+  # Use the rest as arguments for the cli target
+  CLI_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # Turn them into do-nothing targets
+  $(eval $(CLI_ARGS):;@:)
+endif
+
 .PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli ci
 
 help:
@@ -26,7 +34,8 @@ help:
 	@echo "  make generate-example - Generate example files from provider directories"
 	@echo "  make e2e-import      - Generate and import example files from all providers"
 	@echo "  make e2e             - Run end-to-end tests"
-	@echo "  make cli ARGS=\"...\" - Run retrochat CLI with arguments (e.g., make cli ARGS=\"import --watch claude\")"
+	@echo "  make cli <args>      - Run retrochat CLI (e.g., make cli import claude)"
+	@echo "                         Use 'make -- cli <args>' for flags (e.g., make -- cli import --watch claude)"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -77,7 +86,7 @@ e2e-import: generate-example
 e2e: e2e-import
 
 cli:
-	$(CARGO_BIN) run -- $(ARGS)
+	$(CARGO_BIN) run -- $(CLI_ARGS)
 
 ci: fmt clippy test
 	@echo "CI checks passed locally"
