@@ -6,7 +6,7 @@ pub mod query;
 pub mod retrospect;
 pub mod tui;
 
-use clap::{ArgGroup, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
@@ -27,13 +27,21 @@ pub enum Commands {
     /// Launch TUI interface
     Tui,
     /// Import chat files from a path or from one or more providers
-    #[command(group(ArgGroup::new("source").required(true).args(["path", "providers"])))]
+    ///
+    /// Available providers: all, claude, gemini, codex, cursor
+    ///
+    /// Examples:
+    ///   retrochat import claude cursor        # Import from multiple providers
+    ///   retrochat import all                  # Import from all providers
+    ///   retrochat import --path ~/.claude/projects
     Import {
         /// A specific file or directory path to import from
         #[arg(short, long)]
         path: Option<String>,
 
-        /// One or more providers to import from (e.g., gemini, cursor, all)
+        /// One or more providers to import from
+        ///
+        /// Available: all, claude, gemini, codex, cursor
         #[arg(value_enum)]
         providers: Vec<Provider>,
 
