@@ -349,7 +349,7 @@ async fn watch_paths_for_changes(paths: Vec<String>) -> Result<()> {
                 "{} {} {}",
                 "⚠️".with(Color::Yellow),
                 "Warning:".with(Color::Yellow).bold(),
-                format!("Path does not exist: {}", path_str).with(Color::DarkGrey)
+                format!("Path does not exist: {path_str}").with(Color::DarkGrey)
             );
             continue;
         }
@@ -398,11 +398,7 @@ fn print_event(event: &Event) {
         EventKind::Other => ("❓", "OTHER", Color::DarkGrey),
     };
 
-    println!(
-        "{} {}",
-        emoji,
-        format!("[{}]", event_kind).with(color).bold()
-    );
+    println!("{} {}", emoji, format!("[{event_kind}]").with(color).bold());
     for path in &event.paths {
         let detection = detect_provider(path);
 
