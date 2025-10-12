@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::models::provider::registry::ProviderRegistry;
 use crate::models::Provider;
+use crate::services::ParserService;
 
 /// Result of provider detection
 #[derive(Debug, Clone)]
@@ -51,6 +52,7 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
 /// Watch paths for file system changes and print events
 pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Result<()> {
     use std::sync::mpsc::channel;
+    use tokio::sync::mpsc as tokio_mpsc;
 
     println!(
         "{}",
@@ -84,7 +86,9 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
     // File content cache for diff comparison
     let file_cache: Arc<Mutex<HashMap<PathBuf, String>>> = Arc::new(Mutex::new(HashMap::new()));
 
+    // Create channels for file system events and parse requests
     let (tx, rx) = channel();
+    let (parse_tx, mut parse_rx) = tokio_mpsc::unbounded_channel::<PathBuf>();
 
     let mut watcher: RecommendedWatcher = Watcher::new(
         move |res: Result<Event, notify::Error>| {
@@ -120,11 +124,18 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
             .with_context(|| format!("Failed to watch path: {path_str}"))?;
     }
 
+    // Spawn a task to handle async parsing
+    let parse_handle = tokio::spawn(async move {
+        while let Some(path) = parse_rx.recv().await {
+            parse_and_log_sessions_async(&path).await;
+        }
+    });
+
     // Process events
     loop {
         match rx.recv() {
             Ok(event) => {
-                print_event(&event, verbose, &file_cache);
+                print_event(&event, verbose, &file_cache, parse_tx.clone());
             }
             Err(e) => {
                 eprintln!(
@@ -138,11 +149,20 @@ pub async fn watch_paths_for_changes(paths: Vec<String>, verbose: bool) -> Resul
         }
     }
 
+    // Clean up
+    drop(parse_tx);
+    let _ = parse_handle.await;
+
     Ok(())
 }
 
 /// Print a filesystem event
-fn print_event(event: &Event, verbose: bool, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>) {
+fn print_event(
+    event: &Event,
+    verbose: bool,
+    file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
+    parse_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
+) {
     let (emoji, event_kind, color) = match &event.kind {
         EventKind::Create(_) => ("✨", "CREATE", Color::Green),
         EventKind::Modify(_) => ("📝", "MODIFY", Color::Yellow),
@@ -182,13 +202,17 @@ fn print_event(event: &Event, verbose: bool, file_cache: &Arc<Mutex<HashMap<Path
 
         // Show diff if verbose mode is enabled and file was modified
         if verbose && matches!(event.kind, EventKind::Modify(_)) {
-            show_file_diff(path, file_cache);
+            show_file_diff(path, file_cache, parse_tx.clone());
         }
     }
 }
 
 /// Show diff for modified files
-fn show_file_diff(path: &Path, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>) {
+fn show_file_diff(
+    path: &Path,
+    file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>,
+    parse_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
+) {
     // Check file extension
     let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
@@ -261,6 +285,30 @@ fn show_file_diff(path: &Path, file_cache: &Arc<Mutex<HashMap<PathBuf, String>>>
 
     // Update cache with current content
     cache.insert(path.to_path_buf(), current_content);
+    drop(cache); // Release the mutex before async operation
+
+    // Send path to parse channel for async parsing
+    let _ = parse_tx.send(path.to_path_buf());
+}
+
+/// Parse file and log session information (async version)
+async fn parse_and_log_sessions_async(path: &Path) {
+    let parser_service = ParserService::new();
+    let result = parser_service.parse_file(path).await;
+
+    match result {
+        Ok(_sessions) => {
+            // ParserService already logs the sessions, so we don't need to do anything here
+        }
+        Err(e) => {
+            eprintln!(
+                "    {} {} {}",
+                "⚠️".with(Color::Yellow),
+                "Failed to parse file:".with(Color::Yellow),
+                e.to_string().with(Color::DarkGrey)
+            );
+        }
+    }
 }
 
 /// Print unified diff between two texts

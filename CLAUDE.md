@@ -51,6 +51,11 @@ cargo run -- import gemini codex                      # Import from other provid
 cargo run -- import --path /path/to/files             # Import from specific path
 cargo run -- import --path /path/to/file.jsonl        # Import a single file
 
+# Watch commands
+cargo run -- watch all --verbose                      # Watch all providers with detailed output
+cargo run -- watch claude cursor --verbose            # Watch specific providers
+cargo run -- watch --path /path/to/files --verbose    # Watch specific path
+
 # Analytics commands
 cargo run -- analyze insights                         # Generate usage insights
 cargo run -- analyze export json                      # Export to JSON

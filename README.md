@@ -57,6 +57,30 @@ This opens an interactive interface where you can:
 - Navigate through messages
 - View analytics and insights
 
+### Watch Commands
+
+Watch files for changes and show diffs in real-time:
+
+```bash
+# Watch all providers with verbose output
+retrochat watch all --verbose
+
+# Watch specific providers
+retrochat watch claude cursor --verbose
+
+# Watch a specific path
+retrochat watch --path /path/to/chat/directory --verbose
+
+# Use with make
+make watch
+```
+
+The watch command monitors file changes and displays:
+- File system events (create, modify, delete)
+- Provider detection for each file
+- Detailed diffs for JSON/JSONL files (with --verbose)
+- Parsed session information (with --verbose)
+
 ### Import Commands
 
 RetroChat provides a unified import command that can import from a specific path or from provider-specific default directories.

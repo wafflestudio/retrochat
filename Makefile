@@ -17,7 +17,7 @@ ifeq (cli,$(firstword $(MAKECMDGOALS)))
   $(eval $(CLI_ARGS):;@:)
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli ci
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli watch ci
 
 help:
 	@echo "Available targets:"
@@ -35,7 +35,8 @@ help:
 	@echo "  make e2e-import      - Generate and import example files from all providers"
 	@echo "  make e2e             - Run end-to-end tests"
 	@echo "  make cli <args>      - Run retrochat CLI (e.g., make cli import claude)"
-	@echo "                         Use 'make -- cli <args>' for flags (e.g., make -- cli import --watch claude)"
+	@echo "                         Use 'make -- cli <args>' for flags (e.g., make -- cli watch --verbose all)"
+	@echo "  make watch           - Watch all providers with verbose output (make watch)"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -87,6 +88,9 @@ e2e: e2e-import
 
 cli:
 	$(CARGO_BIN) run -- $(CLI_ARGS)
+
+watch:
+	$(CARGO_BIN) run -- watch all --verbose
 
 ci: fmt clippy test
 	@echo "CI checks passed locally"

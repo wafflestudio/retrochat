@@ -8,41 +8,13 @@ use crate::models::provider::config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
 };
 use crate::models::Provider;
-use crate::services::{collect_provider_paths, watch_paths_for_changes, ImportService};
+use crate::services::ImportService;
 
 pub async fn handle_import_command(
     path: Option<String>,
     providers: Vec<Provider>,
     overwrite: bool,
-    watch: bool,
-    verbose: bool,
 ) -> Result<()> {
-    if watch {
-        // Collect all paths to watch
-        let mut watch_paths = Vec::new();
-
-        // Add explicit path if provided
-        if let Some(path_str) = &path {
-            watch_paths.push(path_str.clone());
-        }
-
-        // Add provider directories if specified
-        if !providers.is_empty() {
-            let provider_paths = collect_provider_paths(&providers)?;
-            watch_paths.extend(provider_paths);
-        }
-
-        if watch_paths.is_empty() {
-            help::print_import_usage();
-            return Err(anyhow::anyhow!(
-                "No paths to watch. Provide --path or specify providers."
-            ));
-        }
-
-        return watch_paths_for_changes(watch_paths, verbose).await;
-    }
-
-    // Non-watch mode: original behavior (verbose not used)
     // Check if user provided a path
     if let Some(path_str) = path {
         return import_path(path_str, overwrite).await;

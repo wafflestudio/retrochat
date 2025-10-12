@@ -1,6 +1,7 @@
 pub mod analytics_service;
 pub mod google_ai;
 pub mod import_service;
+pub mod parser_service;
 pub mod query_service;
 pub mod retrospection_service;
 pub mod watch_service;
@@ -16,6 +17,7 @@ pub use import_service::{
     BatchImportRequest, BatchImportResponse, ChatFile, ImportFileRequest, ImportFileResponse,
     ImportService, ScanRequest, ScanResponse,
 };
+pub use parser_service::ParserService;
 pub use query_service::{
     DateRange, QueryService, SearchRequest, SearchResponse, SearchResult, SessionDetailRequest,
     SessionDetailResponse, SessionFilters, SessionSummary, SessionsQueryRequest,
