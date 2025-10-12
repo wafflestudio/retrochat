@@ -17,7 +17,7 @@ help:
 	@echo "  make clippy          - Run clippy with -D warnings (like CI)"
 	@echo "  make fmt             - Check formatting with rustfmt --check (like CI)"
 	@echo "  make fmt-fix         - Apply formatting changes with rustfmt"
-	@echo "  make clippy-fix      - Apply clippy auto-fixes"
+	@echo "  make clippy-fix      - Apply clippy auto-fixes (with -D warnings)"
 	@echo "  make fix             - Apply rustfmt and clippy fixes, then verify"
 	@echo "  make check           - Cargo check"
 	@echo "  make build           - Cargo build"
@@ -43,7 +43,7 @@ fmt-fix:
 # Apply clippy auto-fixes
 clippy-fix:
 	@echo "Applying clippy auto-fixes..."
-	@$(CARGO_BIN) clippy --fix --allow-dirty --allow-staged
+	@$(CARGO_BIN) clippy --fix --allow-dirty --allow-staged -- -D warnings
 
 # Apply automatic fixes: rustfmt, clippy --fix, then verify
 fix: fmt-fix clippy-fix
