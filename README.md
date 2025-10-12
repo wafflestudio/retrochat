@@ -205,6 +205,32 @@ The application stores:
 
 ### Build and Test
 
+The project includes a Makefile for convenient development workflows that replicate CI checks locally:
+
+```bash
+# Show all available commands
+make help
+
+# Run full CI validation locally (format check, clippy, tests)
+make ci
+
+# Individual checks
+make fmt           # Check code formatting
+make clippy        # Run clippy with strict warnings
+make test          # Run all tests
+
+# Quick fixes
+make fmt-fix       # Auto-format code
+make fix           # Auto-format + auto-fix clippy issues (requires nightly)
+
+# Build commands
+make check         # Quick compilation check
+make build         # Debug build
+make build-release # Optimized release build
+```
+
+You can also use cargo directly:
+
 ```bash
 # Check code quality
 cargo check && cargo test && cargo clippy
@@ -212,6 +238,12 @@ cargo check && cargo test && cargo clippy
 # Run specific test suites
 cargo test --test test_import_file
 cargo test --test test_import_batch
+
+# Format code
+cargo fmt
+
+# Run clippy
+cargo clippy
 ```
 
 ### Project Structure

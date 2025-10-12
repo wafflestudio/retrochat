@@ -23,13 +23,30 @@ tests/
 ```
 
 ## Commands
+
+### Development & Testing (using Makefile)
+```bash
+make help          # Show all available targets
+make test          # Run test suite (like CI)
+make clippy        # Run clippy with -D warnings (like CI)
+make fmt           # Check formatting with rustfmt --check
+make fmt-fix       # Apply formatting changes
+make fix           # Apply rustfmt and clippy fixes (requires nightly for clippy --fix)
+make check         # Cargo check
+make build         # Cargo build
+make build-release # Cargo build --release
+make ci            # Run fmt, clippy, then tests (full CI validation)
+```
+
+### Direct Cargo Commands
+```bash
 # Build and test commands
 cargo check && cargo test && cargo clippy
 cargo run -- tui                                      # Launch TUI interface
 
 # Import commands
-cargo run -- import --claude --cursor-agent                 # Import from provider directories
-cargo run -- import --gemini --codex                  # Import from other providers
+cargo run -- import claude cursor                     # Import from provider directories
+cargo run -- import gemini codex                      # Import from other providers
 cargo run -- import --path /path/to/files             # Import from specific path
 cargo run -- import --path /path/to/file.jsonl        # Import a single file
 
@@ -43,6 +60,7 @@ cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze s
 cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
 cargo run -- retrospect status [--all|--history]      # Check analysis status
 cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
+```
 
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
