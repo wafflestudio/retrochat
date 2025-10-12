@@ -2,43 +2,13 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::cli::help;
 use crate::database::DatabaseManager;
 use crate::models::provider::config::{
     ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
 };
 use crate::models::Provider;
 use crate::services::ImportService;
-
-fn print_import_usage() {
-    eprintln!("Usage: retrochat import [OPTIONS] [PROVIDERS]...");
-    eprintln!();
-    eprintln!("Import chat histories from LLM providers or specific paths");
-    eprintln!();
-    eprintln!("Options:");
-    eprintln!("  --path <PATH>      Import from a specific file or directory");
-    eprintln!("  --overwrite        Overwrite existing sessions");
-    eprintln!();
-    eprintln!("Available Providers:");
-    eprintln!("  all                Import from all configured providers");
-    eprintln!("  claude             Import from Claude Code directories");
-    eprintln!("  gemini             Import from Gemini CLI directories");
-    eprintln!("  codex              Import from Codex directories");
-    eprintln!("  cursor             Import from Cursor Agent directories");
-    eprintln!();
-    eprintln!("Examples:");
-    eprintln!("  retrochat import claude cursor           # Import from multiple providers");
-    eprintln!("  retrochat import all                     # Import from all providers");
-    eprintln!("  retrochat import --path ~/.claude/projects");
-    eprintln!("  retrochat import claude --overwrite      # Overwrite existing sessions");
-    eprintln!();
-    eprintln!("Environment Variables:");
-    eprintln!("  RETROCHAT_CLAUDE_DIRS  - Claude Code directories (default: ~/.claude/projects)");
-    eprintln!("  RETROCHAT_GEMINI_DIRS  - Gemini CLI directories (default: ~/.gemini/tmp)");
-    eprintln!("  RETROCHAT_CODEX_DIRS   - Codex directories (default: ~/.codex/sessions)");
-    eprintln!("  RETROCHAT_CURSOR_DIRS  - Cursor directories (default: ~/.cursor/chats)");
-    eprintln!();
-    eprintln!("Note: Use colon (:) to separate multiple directories in environment variables");
-}
 
 pub async fn handle_import_command(
     path: Option<String>,
@@ -56,7 +26,7 @@ pub async fn handle_import_command(
     }
 
     // No arguments provided - show help message
-    print_import_usage();
+    help::print_import_usage();
     Err(anyhow::anyhow!("No import source specified"))
 }
 

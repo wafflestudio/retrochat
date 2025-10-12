@@ -1,8 +1,8 @@
 /// Centralized help and usage information for the CLI
 ///
 /// This module provides consistent help messages across different CLI commands.
-/// It now uses the `Provider` enum from the models module to drive examples and
-/// supported provider listings.
+/// It uses the ProviderRegistry to get provider information dynamically.
+use crate::models::provider::ProviderRegistry;
 use crate::models::Provider;
 
 // Helper: list providers supported via CLI (excluding `All` aggregate)
@@ -10,38 +10,45 @@ fn supported_providers() -> Vec<Provider> {
     Provider::all_concrete()
 }
 
+// Helper: get provider information from registry
+fn get_provider_info(p: &Provider) -> Option<(String, Option<String>, Option<String>)> {
+    let registry = ProviderRegistry::new();
+    registry.get_provider(p).map(|config| {
+        (
+            config.description().to_string(),
+            config.env_var_name().map(|s| s.to_string()),
+            config.default_directory().map(|s| s.to_string()),
+        )
+    })
+}
+
 // Helper: map Provider to human-friendly description
-fn provider_description(p: &Provider) -> &'static str {
-    match p {
-        Provider::ClaudeCode => "Claude Code (.jsonl files)",
-        Provider::GeminiCLI => "Gemini CLI (.json files)",
-        Provider::Codex => "Codex (various formats)",
-        Provider::CursorAgent => "Cursor Agent (store.db files)",
-        Provider::All => "All providers",
-        Provider::Other(_) => "Unknown provider",
+fn provider_description(p: &Provider) -> String {
+    if matches!(p, Provider::All) {
+        return "All providers".to_string();
     }
+
+    get_provider_info(p)
+        .map(|(desc, _, _)| desc)
+        .unwrap_or_else(|| "Unknown provider".to_string())
 }
 
 // Helper: map Provider to environment variable name (if any)
-fn provider_env_var(p: &Provider) -> Option<&'static str> {
-    match p {
-        Provider::ClaudeCode => Some("RETROCHAT_CLAUDE_DIRS"),
-        Provider::GeminiCLI => Some("RETROCHAT_GEMINI_DIRS"),
-        Provider::Codex => Some("RETROCHAT_CODEX_DIRS"),
-        Provider::CursorAgent => Some("RETROCHAT_CURSOR_DIRS"),
-        Provider::All | Provider::Other(_) => None,
+fn provider_env_var(p: &Provider) -> Option<String> {
+    if matches!(p, Provider::All | Provider::Other(_)) {
+        return None;
     }
+
+    get_provider_info(p).and_then(|(_, env_var, _)| env_var)
 }
 
 // Helper: map Provider to a default directory hint (if any)
-fn provider_default_dir(p: &Provider) -> Option<&'static str> {
-    match p {
-        Provider::ClaudeCode => Some("~/.claude/projects"),
-        Provider::GeminiCLI => Some("~/.gemini/tmp"),
-        Provider::Codex => Some("~/.codex/sessions"),
-        Provider::CursorAgent => Some("~/.cursor/chats"),
-        Provider::All | Provider::Other(_) => None,
+fn provider_default_dir(p: &Provider) -> Option<String> {
+    if matches!(p, Provider::All | Provider::Other(_)) {
+        return None;
     }
+
+    get_provider_info(p).and_then(|(_, _, default_dir)| default_dir)
 }
 
 /// Print getting started guide with import examples
@@ -54,6 +61,58 @@ pub fn print_getting_started() {
     println!();
     println!("  3. Generate insights:");
     println!("     retrochat analyze insights");
+}
+
+/// Print comprehensive import command usage (for command errors)
+pub fn print_import_usage() {
+    eprintln!("Usage: retrochat import [OPTIONS] [PROVIDERS]...");
+    eprintln!();
+    eprintln!("Import chat histories from LLM providers or specific paths");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --path <PATH>      Import from a specific file or directory");
+    eprintln!("  --overwrite        Overwrite existing sessions");
+    eprintln!();
+    eprintln!("Available Providers:");
+    eprintln!("  all                Import from all configured providers");
+    for provider in supported_providers() {
+        let arg = format_provider_arg(&provider);
+        let desc = provider_description(&provider);
+        eprintln!("  {:<18} {}", arg, desc);
+    }
+    eprintln!();
+    eprintln!("Examples:");
+    let args: Vec<String> = supported_providers()
+        .into_iter()
+        .take(2)
+        .map(|p| format_provider_arg(&p))
+        .collect();
+    eprintln!(
+        "  retrochat import {}           # Import from multiple providers",
+        args.join(" ")
+    );
+    eprintln!("  retrochat import all                     # Import from all providers");
+    eprintln!("  retrochat import --path ~/.claude/projects");
+    if let Some(first_provider) = supported_providers().first() {
+        eprintln!(
+            "  retrochat import {} --overwrite      # Overwrite existing sessions",
+            format_provider_arg(first_provider)
+        );
+    }
+    eprintln!();
+    eprintln!("Environment Variables:");
+    for provider in supported_providers() {
+        if let Some(env_var) = provider_env_var(&provider) {
+            let desc = provider_description(&provider);
+            if let Some(default_path) = provider_default_dir(&provider) {
+                eprintln!("  {:<23} - {} (default: {})", env_var, desc, default_path);
+            } else {
+                eprintln!("  {:<23} - {} (no default)", env_var, desc);
+            }
+        }
+    }
+    eprintln!();
+    eprintln!("Note: Use colon (:) to separate multiple directories in environment variables");
 }
 
 /// Print import command usage examples
@@ -93,18 +152,13 @@ pub fn print_environment_config() {
     println!("Environment Variables:");
     for provider in supported_providers() {
         if let Some(env_var) = provider_env_var(&provider) {
+            let desc = provider_description(&provider);
             if let Some(default_path) = provider_default_dir(&provider) {
-                println!(
-                    "  {:<25} - {} (default: {})",
-                    env_var,
-                    provider_description(&provider),
-                    default_path
-                );
+                println!("  {:<25} - {} (default: {})", env_var, desc, default_path);
             } else {
                 println!(
                     "  {:<25} - {} (no default, must be configured)",
-                    env_var,
-                    provider_description(&provider)
+                    env_var, desc
                 );
             }
         }
