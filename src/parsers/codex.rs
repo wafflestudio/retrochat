@@ -43,6 +43,21 @@ pub struct EventMsgPayload {
     #[serde(rename = "type")]
     pub msg_type: String,
     pub message: Option<String>,
+    pub info: Option<TokenInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenInfo {
+    pub total_token_usage: Option<TotalTokenUsage>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TotalTokenUsage {
+    pub input_tokens: Option<u32>,
+    pub cached_input_tokens: Option<u32>,
+    pub output_tokens: Option<u32>,
+    pub reasoning_output_tokens: Option<u32>,
+    pub total_tokens: Option<u32>,
 }
 
 pub struct CodexParser {
@@ -78,6 +93,7 @@ impl CodexParser {
     ) -> Result<(ChatSession, Vec<Message>)> {
         let mut session_meta: Option<SessionMetaPayload> = None;
         let mut messages: Vec<(String, MessageRole, String)> = Vec::new(); // (timestamp, role, content)
+        let mut total_tokens: Option<u32> = None;
 
         for line in lines {
             let line = line.with_context(|| "Failed to read line from file")?;
@@ -100,7 +116,7 @@ impl CodexParser {
                     }
                 }
                 "event_msg" => {
-                    // Parse event messages (user_message or agent_message)
+                    // Parse event messages (user_message, agent_message, or token_count)
                     if let Ok(msg) = serde_json::from_value::<EventMsgPayload>(event.payload) {
                         match msg.msg_type.as_str() {
                             "user_message" => {
@@ -121,6 +137,16 @@ impl CodexParser {
                                     ));
                                 }
                             }
+                            "token_count" => {
+                                // Extract total token usage
+                                if let Some(info) = msg.info {
+                                    if let Some(usage) = info.total_token_usage {
+                                        if let Some(total) = usage.total_tokens {
+                                            total_tokens = Some(total);
+                                        }
+                                    }
+                                }
+                            }
                             _ => {} // Ignore other event message types
                         }
                     }
@@ -132,13 +158,14 @@ impl CodexParser {
         // If no session metadata found, return error
         let meta = session_meta.ok_or_else(|| anyhow!("No session_meta found in Codex file"))?;
 
-        self.convert_session(&meta, messages)
+        self.convert_session(&meta, messages, total_tokens)
     }
 
     fn convert_session(
         &self,
         meta: &SessionMetaPayload,
         messages: Vec<(String, MessageRole, String)>,
+        parsed_total_tokens: Option<u32>,
     ) -> Result<(ChatSession, Vec<Message>)> {
         let session_id = Uuid::parse_str(&meta.id)
             .with_context(|| format!("Invalid UUID format: {}", meta.id))?;
@@ -178,7 +205,7 @@ impl CodexParser {
         }
 
         let mut converted_messages = Vec::new();
-        let mut total_tokens = 0u32;
+        let mut estimated_total_tokens = 0u32;
 
         for (index, (timestamp_str, role, content)) in messages.iter().enumerate() {
             let timestamp = self.parse_timestamp(timestamp_str)?;
@@ -196,19 +223,23 @@ impl CodexParser {
             let mut message = Message::new(session_id, role.clone(), content, timestamp, (index + 1) as u32);
             message.id = message_id;
 
-            // Estimate token count based on content length
+            // Estimate token count based on content length (for individual message tracking)
             let estimated_tokens = (message.content.len() / 4) as u32; // Rough estimate: 4 chars per token
             if estimated_tokens > 0 {
                 message = message.with_token_count(estimated_tokens);
-                total_tokens += estimated_tokens;
+                estimated_total_tokens += estimated_tokens;
             }
 
             converted_messages.push(message);
         }
 
         chat_session.message_count = converted_messages.len() as u32;
-        if total_tokens > 0 {
-            chat_session = chat_session.with_token_count(total_tokens);
+
+        // Use parsed token count if available, otherwise use estimated
+        if let Some(total) = parsed_total_tokens {
+            chat_session = chat_session.with_token_count(total);
+        } else if estimated_total_tokens > 0 {
+            chat_session = chat_session.with_token_count(estimated_total_tokens);
         }
 
         // Calculate end time from last message timestamp
@@ -378,6 +409,29 @@ mod tests {
         assert_eq!(messages[0].content, "hello");
         assert_eq!(messages[1].role, MessageRole::Assistant);
         assert_eq!(messages[1].content, "Hey there! What can I help you with today?");
+        assert_eq!(session.project_name, Some("test-project".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_parse_codex_session_with_token_count() {
+        let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+        let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"0199d8c1-ffeb-7b21-9ebe-f35fbbcf7a59","timestamp":"2025-10-12T14:10:16.683Z","cwd":"/Users/test/project","git":{"commit_hash":"abc123","branch":"main","repository_url":"git@github.com:user/test-project.git"}}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
+{"timestamp":"2025-10-12T17:53:43.040Z","type":"event_msg","payload":{"type":"agent_message","message":"Hey there! What can I help you with today?"}}
+{"timestamp":"2025-10-12T17:59:44.860Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":6062,"cached_input_tokens":3968,"output_tokens":92,"reasoning_output_tokens":64,"total_tokens":6154}}}}"#;
+
+        temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+        let parser = CodexParser::new(temp_file.path());
+        let result = parser.parse().await;
+
+        assert!(result.is_ok());
+        let (session, messages) = result.unwrap();
+
+        assert_eq!(session.provider, Provider::Codex);
+        assert_eq!(session.message_count, 2);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(session.token_count, Some(6154)); // Token count should be parsed
         assert_eq!(session.project_name, Some("test-project".to_string()));
     }
 
