@@ -22,7 +22,7 @@ use super::{
 pub use super::state::{FilterOptions, SortBy, SortOrder as SessionListSortOrder};
 
 pub struct SessionListWidget {
-    state: SessionListState,
+    pub state: SessionListState,
     query_service: QueryService,
 }
 

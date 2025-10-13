@@ -1,6 +1,7 @@
 pub mod analytics;
 pub mod app;
 pub mod components;
+pub mod events;
 pub mod retrospection;
 pub mod session_detail;
 pub mod session_list;

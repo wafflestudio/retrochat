@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{self, Event, KeyEvent};
 use ratatui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -21,6 +21,7 @@ use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 use super::{
     analytics::AnalyticsWidget,
     components::dialog::{Dialog, DialogType},
+    events::{AppEvent, EventHandler, UserAction},
     session_detail::SessionDetailWidget,
     session_list::SessionListWidget,
 };
@@ -145,6 +146,7 @@ pub struct App {
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
     pub retrospection_service: Option<Arc<RetrospectionService>>,
+    pub event_handler: EventHandler,
 }
 
 impl App {
@@ -174,6 +176,7 @@ impl App {
             query_service,
             analytics_service,
             retrospection_service,
+            event_handler: EventHandler::new(),
         })
     }
 
@@ -225,147 +228,220 @@ impl App {
     }
 
     async fn handle_event(&mut self, event: Event) -> Result<bool> {
-        match event {
-            Event::Key(key_event) => self.handle_key_event(key_event).await,
-            Event::Resize(_, _) => {
-                // Force refresh on resize
-                self.refresh_current_view().await?;
-                Ok(true)
-            }
-            _ => Ok(true),
-        }
-    }
+        // Convert crossterm event to AppEvent
+        let app_event = match event {
+            Event::Key(key) => AppEvent::Input(key),
+            Event::Resize(w, h) => AppEvent::Resize(w, h),
+            _ => return Ok(true),
+        };
 
-    async fn handle_key_event(&mut self, key: KeyEvent) -> Result<bool> {
-        // Global key bindings
-        match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
-                self.state.quit();
+        // Get user actions from event handler
+        let mut actions = self.event_handler.handle_event(
+            &app_event,
+            &self.state.mode,
+            self.state.show_help,
+            self.state.error_dialog.is_some(),
+        );
+
+        // If no actions were generated and it's a key event, check widget-specific handlers
+        if actions.is_empty() {
+            if let AppEvent::Input(key) = &app_event {
+                actions = self.handle_widget_specific_keys(*key).await?;
+            }
+        }
+
+        // Dispatch each action
+        for action in actions {
+            if !self.dispatch_action(action).await? {
                 return Ok(false);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('q')) => {
-                if !self.state.show_help {
-                    self.state.quit();
-                    return Ok(false);
-                }
-            }
-            (KeyModifiers::NONE, KeyCode::Char('?')) | (KeyModifiers::NONE, KeyCode::F(1)) => {
-                self.state.toggle_help();
-                return Ok(true);
-            }
-            (KeyModifiers::NONE, KeyCode::Esc) => {
-                if self.state.show_help {
-                    self.state.toggle_help();
-                } else {
-                    match self.state.mode {
-                        AppMode::SessionDetail => self.state.back_to_list(),
-                        AppMode::Analytics => self.state.set_mode(AppMode::SessionList),
-                        _ => {}
-                    }
-                }
-                return Ok(true);
-            }
-            _ => {}
-        }
-
-        // Help screen - consume all other inputs
-        if self.state.show_help {
-            return Ok(true);
-        }
-
-        // Error dialog - dismiss on any key
-        if self.state.error_dialog.is_some() {
-            self.state.dismiss_error();
-            return Ok(true);
-        }
-
-        // Tab navigation
-        match key.code {
-            KeyCode::Tab => {
-                self.next_tab().await?;
-                return Ok(true);
-            }
-            KeyCode::BackTab => {
-                self.previous_tab().await?;
-                return Ok(true);
-            }
-            _ => {}
-        }
-
-        // Mode-specific key bindings
-        match self.state.mode {
-            AppMode::SessionList => {
-                if let Some(action) = self.session_list.handle_key(key).await? {
-                    if action.starts_with("ANALYZE:") {
-                        // Extract session ID and start analysis
-                        let session_id = action.strip_prefix("ANALYZE:").unwrap().to_string();
-                        // TODO: Show analysis type selection dialog
-                        // For now, use default analysis type
-                        use crate::models::RetrospectionAnalysisType;
-
-                        if let Some(ref service) = self.retrospection_service {
-                            // Start actual analysis
-                            match service
-                                .create_analysis_request(
-                                    session_id.clone(),
-                                    RetrospectionAnalysisType::UserInteractionAnalysis,
-                                    None,
-                                    None,
-                                )
-                                .await
-                            {
-                                Ok(request) => {
-                                    self.state.start_retrospection(request.id.clone());
-
-                                    // Immediately refresh UI to show user acknowledgment
-                                    if let Err(e) = self.session_list.refresh().await {
-                                        tracing::error!(error = %e, "Failed to refresh session list after analysis start");
-                                    }
-
-                                    // Execute the analysis in background task
-                                    let service_clone = service.clone();
-                                    let request_id = request.id.clone();
-                                    task::spawn(async move {
-                                        if let Err(e) =
-                                            service_clone.execute_analysis(request_id).await
-                                        {
-                                            tracing::error!(error = %e, "Background analysis failed");
-                                        }
-                                    });
-                                }
-                                Err(e) => {
-                                    self.state
-                                        .show_error(format!("Failed to start analysis: {e}"));
-                                }
-                            }
-                        } else {
-                            // Show message that Google AI API key is required
-                            self.state.show_error(format!(
-                                "Google AI API key not configured. Set {} environment variable.",
-                                env_vars::GOOGLE_AI_API_KEY
-                            ));
-                        }
-                    } else {
-                        // Normal session selection
-                        self.state.select_session(action);
-                        self.session_detail
-                            .set_session_id(self.state.selected_session_id.clone())
-                            .await?;
-                    }
-                }
-            }
-            AppMode::SessionDetail => {
-                self.session_detail.handle_key(key).await?;
-            }
-            AppMode::Analytics => {
-                self.analytics.handle_key(key).await?;
-            }
-            AppMode::Help => {
-                // Help is handled above
             }
         }
 
         Ok(true)
+    }
+
+    async fn handle_widget_specific_keys(&mut self, key: KeyEvent) -> Result<Vec<UserAction>> {
+        // Handle widget-specific keys that require context (e.g., selected session)
+        if self.state.mode == AppMode::SessionList {
+            if let Some(action_str) = self.session_list.handle_key(key).await? {
+                if action_str.starts_with("ANALYZE:") {
+                    let session_id = action_str.strip_prefix("ANALYZE:").unwrap().to_string();
+                    return Ok(vec![UserAction::StartAnalysis(session_id)]);
+                } else {
+                    // Normal session selection
+                    return Ok(vec![UserAction::SelectSession(action_str)]);
+                }
+            }
+        }
+
+        Ok(vec![])
+    }
+
+    async fn dispatch_action(&mut self, action: UserAction) -> Result<bool> {
+        use super::events::UserAction::*;
+
+        match action {
+            // Application-level actions
+            Quit => {
+                self.state.quit();
+                return Ok(false);
+            }
+            ToggleHelp => {
+                self.state.toggle_help();
+            }
+            DismissDialog => {
+                self.state.dismiss_error();
+            }
+
+            // Navigation actions
+            NavigateBack => {
+                self.state.back_to_list();
+            }
+            SwitchTab(direction) => {
+                use super::events::TabDirection;
+                match direction {
+                    TabDirection::Next => self.next_tab().await?,
+                    TabDirection::Previous => self.previous_tab().await?,
+                }
+            }
+
+            // Session list actions
+            SelectSession(session_id) => {
+                self.state.select_session(session_id);
+                self.session_detail
+                    .set_session_id(self.state.selected_session_id.clone())
+                    .await?;
+            }
+            StartAnalysis(session_id) => {
+                self.handle_start_analysis(session_id).await?;
+            }
+            SessionListNavigate(direction) => {
+                use super::events::NavigationDirection;
+                match direction {
+                    NavigationDirection::Up => self.session_list.state.previous_session(),
+                    NavigationDirection::Down => self.session_list.state.next_session(),
+                }
+            }
+            SessionListPageUp => {
+                if self.session_list.state.previous_page() {
+                    self.session_list.refresh().await?;
+                }
+            }
+            SessionListPageDown => {
+                if self.session_list.state.next_page() {
+                    self.session_list.refresh().await?;
+                }
+            }
+            SessionListHome => {
+                self.session_list.state.first_session();
+            }
+            SessionListEnd => {
+                self.session_list.state.last_session();
+            }
+            SessionListCycleSortBy => {
+                self.session_list.state.cycle_sort_by();
+                self.session_list.refresh().await?;
+            }
+            SessionListToggleSortOrder => {
+                self.session_list.state.toggle_sort_order();
+                self.session_list.refresh().await?;
+            }
+
+            // Session detail actions
+            SessionDetailScrollUp => {
+                self.session_detail.state.scroll_up();
+            }
+            SessionDetailScrollDown => {
+                let max_scroll = self.session_detail.get_max_scroll();
+                self.session_detail.state.scroll_down(max_scroll);
+            }
+            SessionDetailPageUp => {
+                let page_size = 10;
+                self.session_detail.state.scroll_page_up(page_size);
+            }
+            SessionDetailPageDown => {
+                let page_size = 10;
+                let max_scroll = self.session_detail.get_max_scroll();
+                self.session_detail
+                    .state
+                    .scroll_page_down(page_size, max_scroll);
+            }
+            SessionDetailHome => {
+                self.session_detail.state.scroll_to_top();
+            }
+            SessionDetailEnd => {
+                let max_scroll = self.session_detail.get_max_scroll();
+                self.session_detail.state.scroll_to_bottom(max_scroll);
+            }
+            SessionDetailToggleWrap => {
+                self.session_detail.state.toggle_wrap();
+            }
+            SessionDetailToggleRetrospection => {
+                self.session_detail.state.toggle_retrospection();
+            }
+
+            // Analytics actions
+            AnalyticsNavigate(_direction) => {
+                // TODO: Implement analytics navigation
+            }
+            AnalyticsRefresh => {
+                self.analytics.refresh().await?;
+            }
+
+            // Data refresh actions
+            RefreshCurrentView => {
+                self.refresh_current_view().await?;
+            }
+        }
+
+        Ok(true)
+    }
+
+    async fn handle_start_analysis(&mut self, session_id: String) -> Result<()> {
+        use crate::models::RetrospectionAnalysisType;
+
+        if let Some(ref service) = self.retrospection_service {
+            // Start actual analysis
+            match service
+                .create_analysis_request(
+                    session_id.clone(),
+                    RetrospectionAnalysisType::UserInteractionAnalysis,
+                    None,
+                    None,
+                )
+                .await
+            {
+                Ok(request) => {
+                    self.state.start_retrospection(request.id.clone());
+
+                    // Immediately refresh UI to show user acknowledgment
+                    if let Err(e) = self.session_list.refresh().await {
+                        tracing::error!(error = %e, "Failed to refresh session list after analysis start");
+                    }
+
+                    // Execute the analysis in background task
+                    let service_clone = service.clone();
+                    let request_id = request.id.clone();
+                    task::spawn(async move {
+                        if let Err(e) = service_clone.execute_analysis(request_id).await {
+                            tracing::error!(error = %e, "Background analysis failed");
+                        }
+                    });
+                }
+                Err(e) => {
+                    self.state
+                        .show_error(format!("Failed to start analysis: {e}"));
+                }
+            }
+        } else {
+            // Show message that Google AI API key is required
+            self.state.show_error(format!(
+                "Google AI API key not configured. Set {} environment variable.",
+                env_vars::GOOGLE_AI_API_KEY
+            ));
+        }
+
+        Ok(())
     }
 
     async fn next_tab(&mut self) -> Result<()> {
