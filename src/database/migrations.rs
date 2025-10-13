@@ -117,7 +117,7 @@ impl MigrationManager {
     async fn get_latest_version(&self) -> AnyhowResult<u32> {
         // For now, we'll use a hardcoded value
         // In a real implementation, you might scan the migrations directory
-        Ok(1)
+        Ok(5)
     }
 
     pub async fn get_migration_status(&self) -> AnyhowResult<Vec<MigrationStatus>> {
@@ -181,7 +181,6 @@ impl MigrationManager {
             "projects",
             "chat_sessions",
             "messages",
-            "usage_analyses",
             "llm_providers",
             "messages_fts",
         ];
