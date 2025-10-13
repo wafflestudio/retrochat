@@ -4,61 +4,44 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, Wrap},
     Frame,
 };
 use std::sync::Arc;
 
 use crate::database::{DatabaseManager, RetrospectionRepository};
-use crate::models::{ChatSession, Message, MessageRole, Retrospection};
+use crate::models::MessageRole;
 use crate::services::{QueryService, SessionDetailRequest};
 
+use super::state::SessionDetailState;
 use super::utils::text::{truncate_text, wrap_text};
 
 pub struct SessionDetailWidget {
-    session: Option<ChatSession>,
-    messages: Vec<Message>,
-    retrospections: Vec<Retrospection>,
-    scroll_state: ScrollbarState,
-    current_scroll: usize,
+    state: SessionDetailState,
     query_service: QueryService,
     retrospection_repo: RetrospectionRepository,
-    session_id: Option<String>,
-    loading: bool,
-    message_wrap: bool,
-    show_retrospection: bool,
-    retrospection_scroll: usize,
 }
 
 impl SessionDetailWidget {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
-            session: None,
-            messages: Vec::new(),
-            retrospections: Vec::new(),
-            scroll_state: ScrollbarState::default(),
-            current_scroll: 0,
+            state: SessionDetailState::new(),
             query_service: QueryService::with_database(db_manager.clone()),
             retrospection_repo: RetrospectionRepository::new(db_manager),
-            session_id: None,
-            loading: false,
-            message_wrap: true,
-            show_retrospection: false,
-            retrospection_scroll: 0,
         }
     }
 
     pub async fn set_session_id(&mut self, session_id: Option<String>) -> Result<()> {
-        self.session_id = session_id;
-        if self.session_id.is_some() {
+        self.state.set_session_id(session_id.clone());
+        if session_id.is_some() {
             self.refresh().await?;
         }
         Ok(())
     }
 
     pub async fn refresh(&mut self) -> Result<()> {
-        if let Some(session_id) = &self.session_id {
-            self.loading = true;
+        if let Some(session_id) = &self.state.session_id.clone() {
+            self.state.loading = true;
 
             let request = SessionDetailRequest {
                 session_id: session_id.clone(),
@@ -69,9 +52,8 @@ impl SessionDetailWidget {
 
             match self.query_service.get_session_detail(request).await {
                 Ok(response) => {
-                    self.session = Some(response.session);
-                    self.messages = response.messages;
-                    self.current_scroll = 0;
+                    self.state
+                        .update_session(response.session, response.messages);
                     self.update_scroll_state();
 
                     // Load retrospection results for this session
@@ -82,7 +64,7 @@ impl SessionDetailWidget {
                 }
             }
 
-            self.loading = false;
+            self.state.loading = false;
         }
         Ok(())
     }
@@ -90,36 +72,47 @@ impl SessionDetailWidget {
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Up => {
-                self.scroll_up();
+                self.state.scroll_up();
+                self.update_scroll_state();
             }
             KeyCode::Down => {
-                self.scroll_down();
+                let max_scroll = self.get_max_scroll();
+                self.state.scroll_down(max_scroll);
+                self.update_scroll_state();
             }
             KeyCode::PageUp => {
-                self.scroll_page_up();
+                let page_size = 10;
+                self.state.scroll_page_up(page_size);
+                self.update_scroll_state();
             }
             KeyCode::PageDown => {
-                self.scroll_page_down();
+                let page_size = 10;
+                let max_scroll = self.get_max_scroll();
+                self.state.scroll_page_down(page_size, max_scroll);
+                self.update_scroll_state();
             }
             KeyCode::Home => {
-                self.scroll_to_top();
+                self.state.scroll_to_top();
+                self.update_scroll_state();
             }
             KeyCode::End => {
-                self.scroll_to_bottom();
+                let max_scroll = self.get_max_scroll();
+                self.state.scroll_to_bottom(max_scroll);
+                self.update_scroll_state();
             }
             KeyCode::Char('w') => {
-                self.toggle_wrap();
+                self.state.toggle_wrap();
             }
             KeyCode::Char('r') => {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     // Ctrl+R: Toggle retrospection view
-                    self.toggle_retrospection();
+                    self.state.toggle_retrospection();
                 }
                 // Removed manual refresh - auto-refresh is now handled by the app
             }
             KeyCode::Char('t') => {
                 // T: Toggle retrospection view
-                self.toggle_retrospection();
+                self.state.toggle_retrospection();
             }
             KeyCode::Char('a') => {
                 // A: Start retrospection analysis for current session
@@ -145,7 +138,7 @@ impl SessionDetailWidget {
         self.render_session_header(f, chunks[0]);
 
         // Render main content area
-        if self.show_retrospection && !self.retrospections.is_empty() {
+        if self.state.show_retrospection && !self.state.retrospections.is_empty() {
             // Split horizontally for messages and retrospection
             let main_chunks = Layout::default()
                 .direction(Direction::Horizontal)
@@ -164,9 +157,9 @@ impl SessionDetailWidget {
     }
 
     fn render_session_header(&self, f: &mut Frame, area: Rect) {
-        let content = if self.loading {
+        let content = if self.state.loading {
             "Loading session details...".to_string()
-        } else if let Some(session) = &self.session {
+        } else if let Some(session) = &self.state.session {
             let project_str = session.project_name.as_deref().unwrap_or("No Project");
             let _duration = if let Some(_end_time) = &session.end_time {
                 // Calculate duration between start and end time
@@ -175,10 +168,10 @@ impl SessionDetailWidget {
                 "Ongoing"
             };
 
-            let retrospection_info = if self.retrospections.is_empty() {
+            let retrospection_info = if self.state.retrospections.is_empty() {
                 "No retrospections".to_string()
             } else {
-                format!("{} retrospections", self.retrospections.len())
+                format!("{} retrospections", self.state.retrospections.len())
             };
 
             format!(
@@ -208,8 +201,8 @@ impl SessionDetailWidget {
     }
 
     fn render_messages(&mut self, f: &mut Frame, area: Rect) {
-        if self.messages.is_empty() {
-            let empty_msg = if self.loading {
+        if self.state.messages.is_empty() {
+            let empty_msg = if self.state.loading {
                 "Loading messages..."
             } else {
                 "No messages in this session"
@@ -229,13 +222,13 @@ impl SessionDetailWidget {
 
         let visible_lines: Vec<Line> = message_lines
             .into_iter()
-            .skip(self.current_scroll)
+            .skip(self.state.current_scroll)
             .take(available_height)
             .collect();
 
         let messages_block = Paragraph::new(visible_lines)
             .block(Block::default().borders(Borders::ALL).title("Messages"))
-            .wrap(if self.message_wrap {
+            .wrap(if self.state.message_wrap {
                 Wrap { trim: true }
             } else {
                 Wrap { trim: false }
@@ -258,14 +251,14 @@ impl SessionDetailWidget {
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"));
 
-            f.render_stateful_widget(scrollbar, scrollbar_area, &mut self.scroll_state);
+            f.render_stateful_widget(scrollbar, scrollbar_area, &mut self.state.scroll_state);
         }
     }
 
     fn calculate_message_lines(&self, width: usize) -> Vec<Line<'_>> {
         let mut lines = Vec::new();
 
-        for (i, message) in self.messages.iter().enumerate() {
+        for (i, message) in self.state.messages.iter().enumerate() {
             // Add separator between messages (except for first)
             if i > 0 {
                 lines.push(Line::from(vec![Span::styled(
@@ -296,7 +289,7 @@ impl SessionDetailWidget {
             ]));
 
             // Message content - wrap if needed
-            let content_lines = if self.message_wrap {
+            let content_lines = if self.state.message_wrap {
                 wrap_text(&message.content, width.saturating_sub(2))
             } else {
                 vec![message.content.clone()]
@@ -346,48 +339,6 @@ impl SessionDetailWidget {
         lines
     }
 
-    fn scroll_up(&mut self) {
-        if self.current_scroll > 0 {
-            self.current_scroll -= 1;
-            self.update_scroll_state();
-        }
-    }
-
-    fn scroll_down(&mut self) {
-        let max_scroll = self.get_max_scroll();
-        if self.current_scroll < max_scroll {
-            self.current_scroll += 1;
-            self.update_scroll_state();
-        }
-    }
-
-    fn scroll_page_up(&mut self) {
-        let page_size = 10; // Lines per page
-        self.current_scroll = self.current_scroll.saturating_sub(page_size);
-        self.update_scroll_state();
-    }
-
-    fn scroll_page_down(&mut self) {
-        let page_size = 10; // Lines per page
-        let max_scroll = self.get_max_scroll();
-        self.current_scroll = (self.current_scroll + page_size).min(max_scroll);
-        self.update_scroll_state();
-    }
-
-    fn scroll_to_top(&mut self) {
-        self.current_scroll = 0;
-        self.update_scroll_state();
-    }
-
-    fn scroll_to_bottom(&mut self) {
-        self.current_scroll = self.get_max_scroll();
-        self.update_scroll_state();
-    }
-
-    fn toggle_wrap(&mut self) {
-        self.message_wrap = !self.message_wrap;
-    }
-
     fn get_total_lines(&self) -> usize {
         self.calculate_message_lines(80).len() // Use standard width for calculation
     }
@@ -400,30 +351,25 @@ impl SessionDetailWidget {
 
     fn update_scroll_state(&mut self) {
         let total_lines = self.get_total_lines();
-        self.scroll_state = self.scroll_state.content_length(total_lines);
-        self.scroll_state = self.scroll_state.position(self.current_scroll);
+        self.state.update_scroll_state(total_lines);
     }
 
     async fn load_retrospections(&mut self) {
-        if let Some(session_id) = &self.session_id {
+        if let Some(session_id) = &self.state.session_id.clone() {
             match self.retrospection_repo.get_by_session_id(session_id).await {
                 Ok(retrospections) => {
-                    self.retrospections = retrospections;
+                    self.state.update_retrospections(retrospections);
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to load retrospections");
-                    self.retrospections.clear();
+                    self.state.update_retrospections(Vec::new());
                 }
             }
         }
     }
 
-    fn toggle_retrospection(&mut self) {
-        self.show_retrospection = !self.show_retrospection;
-    }
-
     fn render_retrospections(&mut self, f: &mut Frame, area: Rect) {
-        if self.retrospections.is_empty() {
+        if self.state.retrospections.is_empty() {
             let empty_msg = Paragraph::new("No retrospection analysis available\n\nUse 'retrochat retrospect execute' to analyze this session")
                 .block(Block::default().borders(Borders::ALL).title("Retrospection"))
                 .style(Style::default().fg(Color::Gray))
@@ -435,7 +381,7 @@ impl SessionDetailWidget {
 
         // For now, show the most recent retrospection
         // TODO: Allow user to navigate between multiple retrospections
-        if let Some(retrospection) = self.retrospections.first() {
+        if let Some(retrospection) = self.state.retrospections.first() {
             let lines = vec![
                 Line::from(vec![Span::styled(
                     "Retrospection Analysis",
@@ -487,7 +433,7 @@ impl SessionDetailWidget {
             let available_height = area.height.saturating_sub(2) as usize;
             let visible_lines: Vec<Line> = all_lines
                 .into_iter()
-                .skip(self.retrospection_scroll)
+                .skip(self.state.retrospection_scroll)
                 .take(available_height)
                 .collect();
 

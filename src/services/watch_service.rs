@@ -379,11 +379,8 @@ fn print_diff(old: &str, new: &str) {
         println!(
             "    {} {}",
             "...".with(Color::DarkGrey),
-            format!(
-                "({} earlier lines omitted, showing last {} lines)",
-                skip_count, MAX_DIFF_LINES
-            )
-            .with(Color::DarkGrey)
+            format!("({skip_count} earlier lines omitted, showing last {MAX_DIFF_LINES} lines)")
+                .with(Color::DarkGrey)
         );
     }
 

@@ -42,21 +42,21 @@ impl ParserService {
 
             // Log session details
             if let Some(project) = &session.project_name {
-                println!("   Project: {}", project);
+                println!("   Project: {project}");
             }
             println!("   Start time: {}", session.start_time);
             if let Some(end_time) = session.end_time {
-                println!("   End time: {}", end_time);
+                println!("   End time: {end_time}");
             }
             println!("   Message count: {}", session.message_count);
             if let Some(token_count) = session.token_count {
-                println!("   Token count: {}", token_count);
+                println!("   Token count: {token_count}");
             }
 
             // Log last few messages
             let preview_count = 3.min(messages.len());
             if preview_count > 0 {
-                println!("   Last {} messages:", preview_count);
+                println!("   Last {preview_count} messages:");
                 let start_index = messages.len().saturating_sub(preview_count);
                 for msg in messages.iter().skip(start_index) {
                     let content_preview = if msg.content.len() > 50 {
