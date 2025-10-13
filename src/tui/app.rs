@@ -20,7 +20,7 @@ use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
 use super::{
     analytics::AnalyticsWidget, session_detail::SessionDetailWidget,
-    session_list::SessionListWidget,
+    session_list::SessionListWidget, utils::layout::centered_rect,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -541,7 +541,7 @@ impl App {
             .style(Style::default().fg(Color::White));
 
         // Center the help dialog
-        let popup_area = self.centered_rect(80, 70, area);
+        let popup_area = centered_rect(80, 70, area);
         f.render_widget(Clear, popup_area);
         f.render_widget(help_paragraph, popup_area);
     }
@@ -572,28 +572,8 @@ impl App {
             .wrap(ratatui::widgets::Wrap { trim: true });
 
         // Center the error dialog
-        let popup_area = self.centered_rect(60, 40, area);
+        let popup_area = centered_rect(60, 40, area);
         f.render_widget(Clear, popup_area);
         f.render_widget(error_paragraph, popup_area);
-    }
-
-    fn centered_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-        let popup_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage((100 - percent_y) / 2),
-                Constraint::Percentage(percent_y),
-                Constraint::Percentage((100 - percent_y) / 2),
-            ])
-            .split(r);
-
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ])
-            .split(popup_layout[1])[1]
     }
 }
