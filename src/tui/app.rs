@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Tabs},
+    widgets::{Block, Borders, Paragraph, Tabs},
     Frame, Terminal,
 };
 use std::sync::Arc;
@@ -19,8 +19,10 @@ use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use crate::services::{AnalyticsService, QueryService, RetrospectionService};
 
 use super::{
-    analytics::AnalyticsWidget, session_detail::SessionDetailWidget,
-    session_list::SessionListWidget, utils::layout::centered_rect,
+    analytics::AnalyticsWidget,
+    components::dialog::{Dialog, DialogType},
+    session_detail::SessionDetailWidget,
+    session_list::SessionListWidget,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -490,7 +492,7 @@ impl App {
     }
 
     fn render_help(&self, f: &mut Frame, area: Rect) {
-        let help_text = vec![
+        let content = vec![
             Line::from(vec![Span::styled(
                 "RetroChat - LLM Chat History Analysis",
                 Style::default()
@@ -527,53 +529,23 @@ impl App {
             Line::from("  Enter/d        - Toggle details view"),
             Line::from("  c              - Cancel selected request"),
             Line::from("  (Auto-refreshes every 2 seconds)"),
-            Line::from(""),
-            Line::from("Press any key to close this help screen"),
         ];
 
-        let help_paragraph = Paragraph::new(help_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Help")
-                    .style(Style::default().fg(Color::Cyan)),
-            )
-            .style(Style::default().fg(Color::White));
-
-        // Center the help dialog
-        let popup_area = centered_rect(80, 70, area);
-        f.render_widget(Clear, popup_area);
-        f.render_widget(help_paragraph, popup_area);
+        let dialog = Dialog::new(DialogType::Help, content).size(80, 70);
+        dialog.render(f, area);
     }
 
     fn render_error_dialog(&self, f: &mut Frame, area: Rect, error_message: &str) {
-        let error_text = vec![
+        let content = vec![
             Line::from(vec![Span::styled(
                 "Error",
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(error_message),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Press any key to continue",
-                Style::default().fg(Color::Gray),
-            )]),
         ];
 
-        let error_paragraph = Paragraph::new(error_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Error")
-                    .style(Style::default().fg(Color::Red)),
-            )
-            .style(Style::default().fg(Color::White))
-            .wrap(ratatui::widgets::Wrap { trim: true });
-
-        // Center the error dialog
-        let popup_area = centered_rect(60, 40, area);
-        f.render_widget(Clear, popup_area);
-        f.render_widget(error_paragraph, popup_area);
+        let dialog = Dialog::new(DialogType::Error, content).size(60, 40);
+        dialog.render(f, area);
     }
 }
