@@ -53,7 +53,8 @@ impl SessionListWidget {
 
         match self.query_service.query_sessions(request).await {
             Ok(response) => {
-                self.state.update_sessions(response.sessions, response.total_count);
+                self.state
+                    .update_sessions(response.sessions, response.total_count);
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to load sessions");

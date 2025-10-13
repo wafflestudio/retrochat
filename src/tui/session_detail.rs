@@ -52,7 +52,8 @@ impl SessionDetailWidget {
 
             match self.query_service.get_session_detail(request).await {
                 Ok(response) => {
-                    self.state.update_session(response.session, response.messages);
+                    self.state
+                        .update_session(response.session, response.messages);
                     self.update_scroll_state();
 
                     // Load retrospection results for this session
@@ -337,7 +338,6 @@ impl SessionDetailWidget {
 
         lines
     }
-
 
     fn get_total_lines(&self) -> usize {
         self.calculate_message_lines(80).len() // Use standard width for calculation
