@@ -66,28 +66,6 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Usage analysis table
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS usage_analyses (
-            id TEXT PRIMARY KEY,
-            analysis_type TEXT NOT NULL,
-            time_period_start TEXT NOT NULL,
-            time_period_end TEXT NOT NULL,
-            provider_filter TEXT,
-            project_filter TEXT,
-            total_sessions INTEGER NOT NULL DEFAULT 0,
-            total_messages INTEGER NOT NULL DEFAULT 0,
-            total_tokens INTEGER NOT NULL DEFAULT 0,
-            average_session_length REAL NOT NULL DEFAULT 0,
-            most_active_day TEXT,
-            purpose_categories TEXT, -- JSON object
-            quality_scores TEXT,     -- JSON object
-            recommendations TEXT,    -- JSON array
-            generated_at TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
-        )",
-        [],
-    )?;
-
     // Provider configuration table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS llm_providers (
@@ -148,17 +126,6 @@ pub fn create_indexes(conn: &Connection) -> Result<()> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_messages_sequence ON messages(session_id, sequence_number)",
-        [],
-    )?;
-
-    // Analysis queries
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_analysis_type_period ON usage_analyses(analysis_type, time_period_start, time_period_end)", [])?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_analysis_provider ON usage_analyses(provider_filter)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_analysis_project ON usage_analyses(project_filter)",
         [],
     )?;
 
@@ -318,7 +285,6 @@ pub fn create_fts_table(conn: &Connection) -> Result<()> {
 pub fn drop_schema(conn: &Connection) -> Result<()> {
     // Drop tables in reverse dependency order
     conn.execute("DROP TABLE IF EXISTS messages_fts", [])?;
-    conn.execute("DROP TABLE IF EXISTS usage_analyses", [])?;
     conn.execute("DROP TABLE IF EXISTS messages", [])?;
     conn.execute("DROP TABLE IF EXISTS chat_sessions", [])?;
     conn.execute("DROP TABLE IF EXISTS projects", [])?;
@@ -351,7 +317,6 @@ mod tests {
         assert!(table_names.contains(&"chat_sessions".to_string()));
         assert!(table_names.contains(&"messages".to_string()));
         assert!(table_names.contains(&"projects".to_string()));
-        assert!(table_names.contains(&"usage_analyses".to_string()));
         assert!(table_names.contains(&"llm_providers".to_string()));
         assert!(table_names.contains(&"messages_fts".to_string()));
     }
