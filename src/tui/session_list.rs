@@ -8,13 +8,14 @@ use ratatui::{
     Frame,
 };
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::database::DatabaseManager;
 use crate::models::OperationStatus;
 use crate::services::{
     DateRange, QueryService, SessionFilters, SessionSummary, SessionsQueryRequest,
 };
+
+use super::utils::text::{get_spinner_char, truncate_text};
 
 #[derive(Debug, Clone)]
 pub enum SortBy {
@@ -218,7 +219,7 @@ impl SessionListWidget {
             return;
         }
 
-        let spinner_char = self.get_spinner_char();
+        let spinner_char = get_spinner_char();
         let items: Vec<ListItem> = self
             .sessions
             .iter()
@@ -340,27 +341,10 @@ impl SessionListWidget {
             ),
             Span::raw(" │ "),
             Span::styled(
-                Self::truncate_text(&session.first_message_preview, 40),
+                truncate_text(&session.first_message_preview, 40),
                 preview_style,
             ),
         ])
-    }
-
-    fn truncate_text(text: &str, max_len: usize) -> String {
-        if text.len() <= max_len {
-            text.to_string()
-        } else if max_len <= 3 {
-            "...".to_string()
-        } else {
-            let truncate_len = max_len.saturating_sub(3);
-            if truncate_len == 0 || text.is_empty() {
-                "...".to_string()
-            } else {
-                // Use chars() to safely truncate at character boundaries
-                let truncated: String = text.chars().take(truncate_len).collect();
-                format!("{truncated}...")
-            }
-        }
     }
 
     fn next_session(&mut self) {
@@ -458,15 +442,5 @@ impl SessionListWidget {
             SortOrder::Ascending => "asc".to_string(),
             SortOrder::Descending => "desc".to_string(),
         }
-    }
-
-    fn get_spinner_char(&self) -> char {
-        const SPINNER_CHARS: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-        let now_millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let frame = (now_millis / 100) % 8; // Change frame every 100ms
-        SPINNER_CHARS[frame as usize]
     }
 }

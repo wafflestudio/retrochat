@@ -13,6 +13,8 @@ use crate::database::{DatabaseManager, RetrospectionRepository};
 use crate::models::{ChatSession, Message, MessageRole, Retrospection};
 use crate::services::{QueryService, SessionDetailRequest};
 
+use super::utils::text::{truncate_text, wrap_text};
+
 pub struct SessionDetailWidget {
     session: Option<ChatSession>,
     messages: Vec<Message>,
@@ -295,7 +297,7 @@ impl SessionDetailWidget {
 
             // Message content - wrap if needed
             let content_lines = if self.message_wrap {
-                self.wrap_text(&message.content, width.saturating_sub(2))
+                wrap_text(&message.content, width.saturating_sub(2))
             } else {
                 vec![message.content.clone()]
             };
@@ -319,8 +321,8 @@ impl SessionDetailWidget {
 
                     // Parse and display tool calls (simplified)
                     let tools_preview =
-                        self.truncate_text(&format!("{tool_calls:?}"), width.saturating_sub(4));
-                    for tool_line in self.wrap_text(&tools_preview, width.saturating_sub(4)) {
+                        truncate_text(&format!("{tool_calls:?}"), width.saturating_sub(4));
+                    for tool_line in wrap_text(&tools_preview, width.saturating_sub(4)) {
                         lines.push(Line::from(vec![Span::styled(
                             format!("    {tool_line}"),
                             Style::default().fg(Color::DarkGray),
@@ -342,68 +344,6 @@ impl SessionDetailWidget {
         }
 
         lines
-    }
-
-    fn wrap_text(&self, text: &str, width: usize) -> Vec<String> {
-        if width == 0 {
-            return vec![text.to_string()];
-        }
-
-        let mut lines = Vec::new();
-        let mut current_line = String::new();
-
-        for word in text.split_whitespace() {
-            if current_line.len() + word.len() < width {
-                if !current_line.is_empty() {
-                    current_line.push(' ');
-                }
-                current_line.push_str(word);
-            } else {
-                if !current_line.is_empty() {
-                    lines.push(current_line);
-                    current_line = String::new();
-                }
-                if word.len() <= width {
-                    current_line = word.to_string();
-                } else {
-                    // Handle very long words by breaking them
-                    let mut remaining = word;
-                    while remaining.chars().count() > width {
-                        if width > 0 {
-                            let mut chars = remaining.chars();
-                            let chunk: String = chars.by_ref().take(width).collect();
-                            lines.push(chunk);
-                            remaining = chars.as_str();
-                        } else {
-                            break;
-                        }
-                    }
-                    if !remaining.is_empty() {
-                        current_line = remaining.to_string();
-                    }
-                }
-            }
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-
-        if lines.is_empty() {
-            lines.push(String::new());
-        }
-
-        lines
-    }
-
-    fn truncate_text(&self, text: &str, max_len: usize) -> String {
-        if text.chars().count() <= max_len {
-            text.to_string()
-        } else {
-            let truncate_len = max_len.saturating_sub(3);
-            let truncated: String = text.chars().take(truncate_len).collect();
-            format!("{truncated}...")
-        }
     }
 
     fn scroll_up(&mut self) {
