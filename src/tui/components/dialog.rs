@@ -138,7 +138,7 @@ impl<'a> Dialog<'a> {
 }
 
 /// Helper function to create an error dialog with a simple message
-pub fn error_dialog(message: &str) -> Dialog {
+pub fn error_dialog(message: &str) -> Dialog<'_> {
     use ratatui::text::Span;
 
     let content = vec![
@@ -154,7 +154,7 @@ pub fn error_dialog(message: &str) -> Dialog {
 }
 
 /// Helper function to create an info dialog with a simple message
-pub fn info_dialog(message: &str) -> Dialog {
+pub fn info_dialog(message: &str) -> Dialog<'_> {
     use ratatui::text::Span;
 
     let content = vec![
