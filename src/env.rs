@@ -42,6 +42,12 @@ pub mod system {
     pub const HOME: &str = "HOME";
 }
 
+/// Database configuration
+pub mod database {
+    /// Database file path (overrides default ~/.retrochat/retrochat.db)
+    pub const RETROCHAT_DB: &str = "RETROCHAT_DB";
+}
+
 /// Retrospection operation configuration (from specs)
 pub mod retrospection {
     /// Default timeout for operations (seconds)

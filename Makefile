@@ -17,10 +17,12 @@ ifeq (cli,$(firstword $(MAKECMDGOALS)))
   $(eval $(CLI_ARGS):;@:)
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli watch ci
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli watch tui ci doctor init
 
 help:
 	@echo "Available targets:"
+	@echo "  make doctor          - Check system dependencies (rustc, cargo, python)"
+	@echo "  make init            - Initialize retrochat (run init command)"
 	@echo "  make test            - Run test suite (like CI)"
 	@echo "  make clippy          - Run clippy with -D warnings (like CI)"
 	@echo "  make fmt             - Check formatting with rustfmt --check (like CI)"
@@ -37,6 +39,7 @@ help:
 	@echo "  make cli <args>      - Run retrochat CLI (e.g., make cli import claude)"
 	@echo "                         Use 'make -- cli <args>' for flags (e.g., make -- cli watch --verbose all)"
 	@echo "  make watch           - Watch all providers with verbose output (make watch)"
+	@echo "  make tui             - Launch retrochat TUI interface"
 	@echo "  make ci              - Run fmt, clippy, then tests"
 
 test:
@@ -78,11 +81,16 @@ generate-example:
 
 e2e-import: generate-example
 	@echo "Importing example files..."
-	@$(CARGO_BIN) run -- import --path examples/local_claude.jsonl --overwrite || true
-	@$(CARGO_BIN) run -- import --path examples/local_codex.jsonl --overwrite || true
-	@$(CARGO_BIN) run -- import --path examples/local_cursor.db --overwrite || true
-	@$(CARGO_BIN) run -- import --path examples/local_gemini.json --overwrite || true
+	@echo "Using test database: ~/.retrochat/retrochat_e2e.db"
+	@RETROCHAT_DB=~/.retrochat/retrochat_e2e.db $(CARGO_BIN) run -- init
+	@RETROCHAT_DB=~/.retrochat/retrochat_e2e.db $(CARGO_BIN) run -- import --path examples/local_claude.jsonl --overwrite || true
+	@RETROCHAT_DB=~/.retrochat/retrochat_e2e.db $(CARGO_BIN) run -- import --path examples/local_codex.jsonl --overwrite || true
+	@RETROCHAT_DB=~/.retrochat/retrochat_e2e.db $(CARGO_BIN) run -- import --path examples/local_cursor.db --overwrite || true
+	@RETROCHAT_DB=~/.retrochat/retrochat_e2e.db $(CARGO_BIN) run -- import --path examples/local_gemini.json --overwrite || true
 	@echo "Example import complete"
+	@echo "Cleaning up test database..."
+	@rm -f ~/.retrochat/retrochat_e2e.db
+	@echo "Test database (~/.retrochat/retrochat_e2e.db) removed"
 
 e2e: e2e-import
 
@@ -92,5 +100,29 @@ cli:
 watch:
 	$(CARGO_BIN) run -- watch all --verbose
 
+tui:
+	$(CARGO_BIN) run -- tui
+
 ci: fmt clippy test
 	@echo "CI checks passed locally"
+
+doctor:
+	@echo "Checking system dependencies..."
+	@echo ""
+	@echo "=== Mandatory Dependencies ==="
+	@which $(RUSTC_BIN) > /dev/null 2>&1 && \
+		echo "✓ rustc: $$($(RUSTC_BIN) --version)" || \
+		(echo "✗ rustc: NOT FOUND (required)" && exit 1)
+	@which $(CARGO_BIN) > /dev/null 2>&1 && \
+		echo "✓ cargo: $$($(CARGO_BIN) --version)" || \
+		(echo "✗ cargo: NOT FOUND (required)" && exit 1)
+	@echo ""
+	@echo "=== Optional Dependencies ==="
+	@which python3 > /dev/null 2>&1 && \
+		echo "✓ python: $$(python3 --version)" || \
+		echo "✗ python: NOT FOUND (optional, needed for generate-example)"
+	@echo ""
+	@echo "All mandatory dependencies are installed!"
+
+init:
+	$(CARGO_BIN) run -- init
