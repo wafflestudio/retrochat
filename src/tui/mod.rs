@@ -4,6 +4,7 @@ pub mod components;
 pub mod retrospection;
 pub mod session_detail;
 pub mod session_list;
+pub mod state;
 pub mod utils;
 
 pub use analytics::AnalyticsWidget;

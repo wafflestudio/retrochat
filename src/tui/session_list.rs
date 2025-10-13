@@ -4,156 +4,109 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
 use crate::models::OperationStatus;
-use crate::services::{
-    DateRange, QueryService, SessionFilters, SessionSummary, SessionsQueryRequest,
+use crate::services::{QueryService, SessionFilters, SessionSummary, SessionsQueryRequest};
+
+use super::{
+    state::{SessionListState, SortOrder},
+    utils::text::{get_spinner_char, truncate_text},
 };
 
-use super::utils::text::{get_spinner_char, truncate_text};
-
-#[derive(Debug, Clone)]
-pub enum SortBy {
-    StartTime,
-    MessageCount,
-    Provider,
-    Project,
-}
-
-#[derive(Debug, Clone)]
-pub enum SortOrder {
-    Ascending,
-    Descending,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct FilterOptions {
-    pub provider: Option<String>,
-    pub project: Option<String>,
-    pub date_range: Option<DateRange>,
-    pub min_messages: Option<i32>,
-}
+// Re-export types for backward compatibility
+pub use super::state::{FilterOptions, SortBy, SortOrder as SessionListSortOrder};
 
 pub struct SessionListWidget {
-    sessions: Vec<SessionSummary>,
-    list_state: ListState,
+    state: SessionListState,
     query_service: QueryService,
-    sort_by: SortBy,
-    sort_order: SortOrder,
-    filters: FilterOptions,
-    page: i32,
-    page_size: i32,
-    total_count: i32,
-    loading: bool,
 }
 
 impl SessionListWidget {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
-        let mut list_state = ListState::default();
-        list_state.select(Some(0));
-
         Self {
-            sessions: Vec::new(),
-            list_state,
+            state: SessionListState::new(),
             query_service: QueryService::with_database(db_manager),
-            sort_by: SortBy::StartTime,
-            sort_order: SortOrder::Descending,
-            filters: FilterOptions::default(),
-            page: 1,
-            page_size: 50,
-            total_count: 0,
-            loading: false,
         }
     }
 
     pub async fn refresh(&mut self) -> Result<()> {
-        self.loading = true;
+        self.state.loading = true;
 
         let request = SessionsQueryRequest {
-            page: Some(self.page),
-            page_size: Some(self.page_size),
-            sort_by: Some(self.sort_by_string()),
-            sort_order: Some(self.sort_order_string()),
+            page: Some(self.state.page),
+            page_size: Some(self.state.page_size),
+            sort_by: Some(self.state.sort_by.as_str().to_string()),
+            sort_order: Some(self.state.sort_order.as_str().to_string()),
             filters: Some(SessionFilters {
-                provider: self.filters.provider.clone(),
-                project: self.filters.project.clone(),
-                date_range: self.filters.date_range.clone(),
-                min_messages: self.filters.min_messages,
+                provider: self.state.filters.provider.clone(),
+                project: self.state.filters.project.clone(),
+                date_range: self.state.filters.date_range.clone(),
+                min_messages: self.state.filters.min_messages,
                 max_messages: None,
             }),
         };
 
         match self.query_service.query_sessions(request).await {
             Ok(response) => {
-                self.sessions = response.sessions;
-                self.total_count = response.total_count;
-
-                // Ensure selection is valid
-                if !self.sessions.is_empty() {
-                    if let Some(selected) = self.list_state.selected() {
-                        if selected >= self.sessions.len() {
-                            self.list_state.select(Some(0));
-                        }
-                    } else {
-                        self.list_state.select(Some(0));
-                    }
-                }
+                self.state.update_sessions(response.sessions, response.total_count);
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to load sessions");
             }
         }
 
-        self.loading = false;
+        self.state.loading = false;
         Ok(())
     }
 
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<Option<String>> {
         match key.code {
             KeyCode::Up => {
-                self.previous_session();
+                self.state.previous_session();
             }
             KeyCode::Down => {
-                self.next_session();
+                self.state.next_session();
             }
             KeyCode::Enter => {
-                if let Some(selected) = self.list_state.selected() {
-                    if let Some(session) = self.sessions.get(selected) {
-                        return Ok(Some(session.session_id.clone()));
-                    }
+                if let Some(session) = self.state.selected_session() {
+                    return Ok(Some(session.session_id.clone()));
                 }
             }
             KeyCode::PageUp => {
-                self.previous_page().await?;
+                if self.state.previous_page() {
+                    self.refresh().await?;
+                }
             }
             KeyCode::PageDown => {
-                self.next_page().await?;
+                if self.state.next_page() {
+                    self.refresh().await?;
+                }
             }
             KeyCode::Home => {
-                self.first_session();
+                self.state.first_session();
             }
             KeyCode::End => {
-                self.last_session();
+                self.state.last_session();
             }
             KeyCode::Char('s') => {
-                self.cycle_sort_by().await?;
+                self.state.cycle_sort_by();
+                self.refresh().await?;
             }
             KeyCode::Char('o') => {
-                self.toggle_sort_order().await?;
+                self.state.toggle_sort_order();
+                self.refresh().await?;
             }
             KeyCode::Char('a') => {
                 // Start retrospection analysis for selected session
-                if let Some(selected) = self.list_state.selected() {
-                    if let Some(session) = self.sessions.get(selected) {
-                        // Return a special signal that we want to start analysis
-                        // This will be handled by the main app
-                        return Ok(Some(format!("ANALYZE:{}", session.session_id)));
-                    }
+                if let Some(session) = self.state.selected_session() {
+                    // Return a special signal that we want to start analysis
+                    // This will be handled by the main app
+                    return Ok(Some(format!("ANALYZE:{}", session.session_id)));
                 }
             }
             KeyCode::Char('f') => {
@@ -181,18 +134,18 @@ impl SessionListWidget {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let total_pages = (self.total_count + self.page_size - 1) / self.page_size;
+        let total_pages = self.state.total_pages();
 
-        let header_text = if self.loading {
+        let header_text = if self.state.loading {
             "Loading sessions...".to_string()
         } else {
             format!(
                 "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
-                self.total_count,
-                self.page,
+                self.state.total_count,
+                self.state.page,
                 total_pages.max(1),
-                self.sort_by_string(),
-                if matches!(self.sort_order, SortOrder::Ascending) { "↑" } else { "↓" }
+                self.state.sort_by.as_str(),
+                if matches!(self.state.sort_order, SortOrder::Ascending) { "↑" } else { "↓" }
             )
         };
 
@@ -204,8 +157,8 @@ impl SessionListWidget {
     }
 
     fn render_session_list(&mut self, f: &mut Frame, area: Rect) {
-        if self.sessions.is_empty() {
-            let empty_msg = if self.loading {
+        if self.state.sessions.is_empty() {
+            let empty_msg = if self.state.loading {
                 "Loading sessions..."
             } else {
                 "No sessions found. Import some chat history files first."
@@ -221,6 +174,7 @@ impl SessionListWidget {
 
         let spinner_char = get_spinner_char();
         let items: Vec<ListItem> = self
+            .state
             .sessions
             .iter()
             .enumerate()
@@ -239,7 +193,7 @@ impl SessionListWidget {
             )
             .highlight_symbol("▶ ");
 
-        f.render_stateful_widget(list, area, &mut self.list_state);
+        f.render_stateful_widget(list, area, &mut self.state.list_state);
     }
 
     fn format_session_line_with_spinner(
@@ -345,102 +299,5 @@ impl SessionListWidget {
                 preview_style,
             ),
         ])
-    }
-
-    fn next_session(&mut self) {
-        if self.sessions.is_empty() {
-            return;
-        }
-
-        let selected = self.list_state.selected().unwrap_or(0);
-        let next = if selected >= self.sessions.len() - 1 {
-            0
-        } else {
-            selected + 1
-        };
-        self.list_state.select(Some(next));
-    }
-
-    fn previous_session(&mut self) {
-        if self.sessions.is_empty() {
-            return;
-        }
-
-        let selected = self.list_state.selected().unwrap_or(0);
-        let previous = if selected == 0 {
-            self.sessions.len() - 1
-        } else {
-            selected - 1
-        };
-        self.list_state.select(Some(previous));
-    }
-
-    fn first_session(&mut self) {
-        if !self.sessions.is_empty() {
-            self.list_state.select(Some(0));
-        }
-    }
-
-    fn last_session(&mut self) {
-        if !self.sessions.is_empty() {
-            self.list_state.select(Some(self.sessions.len() - 1));
-        }
-    }
-
-    async fn next_page(&mut self) -> Result<()> {
-        let total_pages = (self.total_count + self.page_size - 1) / self.page_size;
-        if self.page < total_pages {
-            self.page += 1;
-            self.refresh().await?;
-            self.list_state.select(Some(0));
-        }
-        Ok(())
-    }
-
-    async fn previous_page(&mut self) -> Result<()> {
-        if self.page > 1 {
-            self.page -= 1;
-            self.refresh().await?;
-            self.list_state.select(Some(0));
-        }
-        Ok(())
-    }
-
-    async fn cycle_sort_by(&mut self) -> Result<()> {
-        self.sort_by = match self.sort_by {
-            SortBy::StartTime => SortBy::MessageCount,
-            SortBy::MessageCount => SortBy::Provider,
-            SortBy::Provider => SortBy::Project,
-            SortBy::Project => SortBy::StartTime,
-        };
-        self.page = 1; // Reset to first page
-        self.refresh().await?;
-        Ok(())
-    }
-
-    async fn toggle_sort_order(&mut self) -> Result<()> {
-        self.sort_order = match self.sort_order {
-            SortOrder::Ascending => SortOrder::Descending,
-            SortOrder::Descending => SortOrder::Ascending,
-        };
-        self.page = 1; // Reset to first page
-        self.refresh().await?;
-        Ok(())
-    }
-
-    fn sort_by_string(&self) -> String {
-        match self.sort_by {
-            SortBy::StartTime => "start_time".to_string(),
-            SortBy::MessageCount => "message_count".to_string(),
-            SortBy::Provider => "provider".to_string(),
-            SortBy::Project => "project".to_string(),
-        }
-    }
-
-    fn sort_order_string(&self) -> String {
-        match self.sort_order {
-            SortOrder::Ascending => "asc".to_string(),
-            SortOrder::Descending => "desc".to_string(),
-        }
     }
 }
