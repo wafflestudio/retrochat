@@ -17,7 +17,7 @@ use super::state::SessionDetailState;
 use super::utils::text::{truncate_text, wrap_text};
 
 pub struct SessionDetailWidget {
-    state: SessionDetailState,
+    pub state: SessionDetailState,
     query_service: QueryService,
     retrospection_repo: RetrospectionRepository,
 }
@@ -343,7 +343,7 @@ impl SessionDetailWidget {
         self.calculate_message_lines(80).len() // Use standard width for calculation
     }
 
-    fn get_max_scroll(&self) -> usize {
+    pub fn get_max_scroll(&self) -> usize {
         let total_lines = self.get_total_lines();
         let visible_lines = 20; // Approximate visible lines
         total_lines.saturating_sub(visible_lines)
