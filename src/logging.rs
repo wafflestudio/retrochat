@@ -2,9 +2,8 @@ use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
 use tracing::Level;
-use tracing_subscriber::{
-    filter::LevelFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry,
-};
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{filter::LevelFilter, fmt, Registry};
 
 use crate::env::logging as env_vars;
 
@@ -125,16 +124,45 @@ impl LoggingConfig {
 
 /// Initialize logging with the given configuration
 pub fn init_logging(config: LoggingConfig) -> Result<()> {
-    let registry = Registry::default();
+    use tracing_subscriber::prelude::*;
 
-    // Simple implementation - just use stdout for now
-    let layer = fmt::layer()
-        .with_ansi(config.use_colors)
-        .with_level(true)
-        .with_target(true)
-        .with_filter(LevelFilter::from_level(config.level));
+    let mut layers = Vec::new();
 
-    registry.with(layer).init();
+    // Add stdout layer only if enabled
+    if config.stdout {
+        let stdout_layer = fmt::layer()
+            .with_ansi(config.use_colors)
+            .with_level(true)
+            .with_target(true)
+            .with_filter(LevelFilter::from_level(config.level));
+        layers.push(stdout_layer.boxed());
+    }
+
+    // Add file layer if path is set
+    if let Some(path) = &config.file_path {
+        let parent_dir = path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid log path"))?;
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid log filename"))?;
+
+        // Ensure parent directory exists
+        std::fs::create_dir_all(parent_dir)?;
+
+        let file_appender = RollingFileAppender::new(Rotation::DAILY, parent_dir, file_name);
+
+        let file_layer = fmt::layer()
+            .with_writer(file_appender)
+            .with_ansi(false)
+            .with_level(true)
+            .with_target(true)
+            .with_filter(LevelFilter::from_level(config.level));
+        layers.push(file_layer.boxed());
+    }
+
+    // Initialize the subscriber with all layers
+    Registry::default().with(layers).init();
 
     // Log initialization
     tracing::info!(
