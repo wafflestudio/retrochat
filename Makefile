@@ -17,7 +17,7 @@ ifeq (cli,$(firstword $(MAKECMDGOALS)))
   $(eval $(CLI_ARGS):;@:)
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean generate-example e2e-import e2e cli watch tui ci doctor init
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean clean-db generate-example e2e-import e2e cli watch tui ci doctor init
 
 help:
 	@echo "Available targets:"
@@ -33,6 +33,7 @@ help:
 	@echo "  make build           - Cargo build"
 	@echo "  make build-release   - Cargo build --release"
 	@echo "  make clean           - Remove build artifacts"
+	@echo "  make clean-db        - Remove retrochat database (~/.retrochat/retrochat.db)"
 	@echo "  make generate-example - Generate example files from provider directories"
 	@echo "  make e2e-import      - Generate and import example files from all providers"
 	@echo "  make e2e             - Run end-to-end tests"
@@ -75,6 +76,11 @@ build-release:
 
 clean:
 	$(CARGO_BIN) clean
+
+clean-db:
+	@echo "Removing retrochat database..."
+	@rm -f ~/.retrochat/retrochat.db
+	@echo "Database removed: ~/.retrochat/retrochat.db"
 
 generate-example:
 	@python3 scripts/generate-example.py
