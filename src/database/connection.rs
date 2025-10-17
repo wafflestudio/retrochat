@@ -38,12 +38,15 @@ impl DatabaseManager {
         // Create SQLite connection string
         let database_url = format!("sqlite://{}", db_path.display());
 
-        // Create connection pool
+        // Create connection pool with optimized settings
         let pool = SqlitePool::connect(&database_url)
             .await
             .with_context(|| format!("Failed to connect to database at: {}", db_path.display()))?;
 
         let manager = Self { db_path, pool };
+
+        // Optimize database for performance
+        manager.optimize_for_performance().await?;
 
         // Run migrations
         manager.run_migrations().await?;
@@ -70,6 +73,36 @@ impl DatabaseManager {
 
         debug!("SQLx in-memory database initialized");
         Ok(manager)
+    }
+
+    async fn optimize_for_performance(&self) -> AnyhowResult<()> {
+        // Enable WAL mode for better concurrency
+        sqlx::query("PRAGMA journal_mode = WAL")
+            .execute(&self.pool)
+            .await
+            .context("Failed to set WAL mode")?;
+
+        // Increase cache size to 64MB for better performance
+        sqlx::query("PRAGMA cache_size = -64000")
+            .execute(&self.pool)
+            .await
+            .context("Failed to set cache size")?;
+
+        // Use memory for temp store
+        sqlx::query("PRAGMA temp_store = MEMORY")
+            .execute(&self.pool)
+            .await
+            .context("Failed to set temp store")?;
+
+        // Optimize synchronous mode for better write performance
+        // NORMAL is safe with WAL mode and much faster than FULL
+        sqlx::query("PRAGMA synchronous = NORMAL")
+            .execute(&self.pool)
+            .await
+            .context("Failed to set synchronous mode")?;
+
+        debug!("Database optimized for performance");
+        Ok(())
     }
 
     async fn run_migrations(&self) -> AnyhowResult<()> {

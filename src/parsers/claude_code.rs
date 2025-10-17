@@ -138,18 +138,27 @@ impl ClaudeCodeParser {
         &self,
         entries: Vec<ClaudeCodeConversationEntry>,
     ) -> Result<(ChatSession, Vec<Message>)> {
+        use tracing::warn;
+
         if entries.is_empty() {
             return Err(anyhow!("No conversation entries found"));
         }
 
         // Find the session ID from any entry that has one
-        let session_id_str = entries
-            .iter()
-            .find_map(|e| e.session_id.as_ref())
-            .ok_or_else(|| anyhow!("No session ID found in conversation"))?;
-
-        let session_id = Uuid::parse_str(session_id_str)
-            .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?;
+        let session_id =
+            if let Some(session_id_str) = entries.iter().find_map(|e| e.session_id.as_ref()) {
+                // Parse existing session ID
+                Uuid::parse_str(session_id_str)
+                    .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?
+            } else {
+                // Generate a new session ID if none found
+                let generated_id = Uuid::new_v4();
+                warn!(
+                    "No session ID found in conversation file: {}. Generated new ID: {}",
+                    self.file_path, generated_id
+                );
+                generated_id
+            };
 
         // Summary entries are parsed elsewhere if needed; not used for project naming
 
