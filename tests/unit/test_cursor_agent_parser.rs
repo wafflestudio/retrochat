@@ -212,3 +212,174 @@ async fn test_cursor_parser_missing_metadata() {
 
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn test_cursor_parser_tool_call_extraction() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create Cursor directory structure
+    let chats_dir = base_path.join("chats");
+    let hash_dir = chats_dir.join("53460df9022de1a66445a5b78b067dd9");
+    let uuid_dir = hash_dir.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+    fs::create_dir_all(&uuid_dir).unwrap();
+
+    let store_db = uuid_dir.join("store.db");
+
+    // Create database
+    let conn = rusqlite::Connection::open(&store_db).unwrap();
+    conn.execute("CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)", [])
+        .unwrap();
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+
+    // Insert metadata
+    let test_metadata = r#"{"agentId":"557abc41-6f00-41e7-bf7b-696c80d4ee94","latestRootBlobId":"test","name":"Test","mode":"default","createdAt":1758872189097,"lastUsedModel":"claude-3-5-sonnet"}"#;
+    let hex_metadata = hex::encode(test_metadata.as_bytes());
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('0', ?)",
+        [&hex_metadata],
+    )
+    .unwrap();
+
+    // Create blob with JSON that includes tool-call
+    let json_content = r#"{"role":"assistant","content":[{"type":"text","text":"Running a command"},{"type":"tool-call","toolName":"Bash","args":{"command":"ls -la"}}]}"#;
+
+    // Encode as field 4 (protobuf field number 4, wire type 2 = length-delimited)
+    let field_key = (4 << 3) | 2; // Field 4, wire type 2
+    let mut blob_data = vec![field_key as u8];
+
+    // Properly encode length as varint
+    let len = json_content.len();
+    if len < 128 {
+        blob_data.push(len as u8);
+    } else {
+        // Two-byte varint for lengths 128-16383
+        blob_data.push(((len & 0x7f) | 0x80) as u8);
+        blob_data.push((len >> 7) as u8);
+    }
+
+    blob_data.extend_from_slice(json_content.as_bytes());
+
+    conn.execute(
+        "INSERT INTO blobs (id, data) VALUES ('test_blob', ?)",
+        [&blob_data],
+    )
+    .unwrap();
+
+    let parser = CursorAgentParser::new(&store_db);
+    let (_session, messages) = parser.parse().await?;
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that content includes text and tool placeholder
+    assert!(message.content.contains("Running a command"));
+    assert!(message.content.contains("[Tool: Bash]"));
+
+    // Check that tool_uses were extracted
+    assert!(message.tool_uses.is_some());
+    let tool_uses = message.tool_uses.as_ref().unwrap();
+    assert_eq!(tool_uses.len(), 1);
+
+    let tool_use = &tool_uses[0];
+    assert!(tool_use.id.starts_with("test_blob-tool-"));
+    assert_eq!(tool_use.name, "Bash");
+    assert_eq!(tool_use.vendor_type, "tool-call");
+    assert_eq!(
+        tool_use.input.get("command").and_then(|v| v.as_str()),
+        Some("ls -la")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_cursor_parser_multiple_tool_calls() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    let chats_dir = base_path.join("chats");
+    let hash_dir = chats_dir.join("53460df9022de1a66445a5b78b067dd9");
+    let uuid_dir = hash_dir.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+    fs::create_dir_all(&uuid_dir).unwrap();
+
+    let store_db = uuid_dir.join("store.db");
+
+    let conn = rusqlite::Connection::open(&store_db).unwrap();
+    conn.execute("CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)", [])
+        .unwrap();
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+
+    let test_metadata = r#"{"agentId":"557abc41-6f00-41e7-bf7b-696c80d4ee94","latestRootBlobId":"test","name":"Test","mode":"default","createdAt":1758872189097,"lastUsedModel":"claude-3-5-sonnet"}"#;
+    let hex_metadata = hex::encode(test_metadata.as_bytes());
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('0', ?)",
+        [&hex_metadata],
+    )
+    .unwrap();
+
+    // Create blob with multiple tool-calls
+    let json_content = r#"{"role":"assistant","content":[{"type":"text","text":"Running commands"},{"type":"tool-call","toolName":"Bash","args":{"command":"pwd"}},{"type":"tool-call","toolName":"Read","args":{"file_path":"/test/file"}}]}"#;
+
+    let field_key = (4 << 3) | 2;
+    let mut blob_data = vec![field_key as u8];
+
+    // Properly encode length as varint
+    let len = json_content.len();
+    if len < 128 {
+        blob_data.push(len as u8);
+    } else {
+        // Two-byte varint for lengths 128-16383
+        blob_data.push(((len & 0x7f) | 0x80) as u8);
+        blob_data.push((len >> 7) as u8);
+    }
+
+    blob_data.extend_from_slice(json_content.as_bytes());
+
+    conn.execute(
+        "INSERT INTO blobs (id, data) VALUES ('multi_tool', ?)",
+        [&blob_data],
+    )
+    .unwrap();
+
+    let parser = CursorAgentParser::new(&store_db);
+    let (_session, messages) = parser.parse().await?;
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that tool_uses were extracted
+    assert!(message.tool_uses.is_some());
+    let tool_uses = message.tool_uses.as_ref().unwrap();
+    assert_eq!(tool_uses.len(), 2);
+
+    assert_eq!(tool_uses[0].name, "Bash");
+    assert_eq!(tool_uses[0].id, "multi_tool-tool-0");
+
+    assert_eq!(tool_uses[1].name, "Read");
+    assert_eq!(tool_uses[1].id, "multi_tool-tool-1");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_cursor_parser_no_tools() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let store_db = create_cursor_test_database(temp_dir.path());
+
+    let parser = CursorAgentParser::new(&store_db);
+    let (_session, messages) = parser.parse().await?;
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Should not have any tools
+    assert!(message.tool_uses.is_none() || message.tool_uses.as_ref().unwrap().is_empty());
+    assert!(
+        message.tool_results.is_none() || message.tool_results.as_ref().unwrap().is_empty()
+    );
+
+    Ok(())
+}
