@@ -7,6 +7,7 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::Path;
 use uuid::Uuid;
 
+use crate::models::message::{ToolResult, ToolUse};
 use crate::models::{ChatSession, Message, MessageRole};
 use crate::models::{Provider, SessionState};
 
@@ -210,7 +211,8 @@ impl ClaudeCodeParser {
                         _ => continue, // Skip unknown roles
                     };
 
-                    let content = self.extract_content_from_value(&conv_message.content);
+                    let (content, tool_uses, tool_results) =
+                        self.extract_tools_and_content(&conv_message.content);
 
                     let timestamp = entry
                         .timestamp
@@ -221,6 +223,14 @@ impl ClaudeCodeParser {
                     let mut message = Message::new(session_id, role, content, timestamp, sequence);
 
                     message.id = message_id;
+
+                    // Attach tool uses and results if any
+                    if !tool_uses.is_empty() {
+                        message = message.with_tool_uses(tool_uses);
+                    }
+                    if !tool_results.is_empty() {
+                        message = message.with_tool_results(tool_results);
+                    }
 
                     // Estimate token count based on content length
                     let estimated_tokens = (message.content.len() / 4) as u32;
@@ -245,43 +255,100 @@ impl ClaudeCodeParser {
         Ok((chat_session, messages))
     }
 
-    fn extract_content_from_value(&self, value: &Value) -> String {
+    /// Extract tools and content from a Claude Code message value
+    /// Returns (content_string, tool_uses, tool_results)
+    fn extract_tools_and_content(
+        &self,
+        value: &Value,
+    ) -> (String, Vec<ToolUse>, Vec<ToolResult>) {
+        let mut tool_uses = Vec::new();
+        let mut tool_results = Vec::new();
+
         let content = match value {
             Value::String(s) => s.clone(),
             Value::Array(arr) => {
                 let mut content_parts = Vec::new();
                 for item in arr {
                     if let Some(obj) = item.as_object() {
+                        let item_type = obj.get("type").and_then(|v| v.as_str());
+
                         // Handle thinking content blocks
-                        if obj.get("type").and_then(|v| v.as_str()) == Some("thinking") {
-                            if let Some(thinking_text) =
-                                obj.get("thinking").and_then(|v| v.as_str())
+                        if item_type == Some("thinking") {
+                            if let Some(thinking_text) = obj.get("thinking").and_then(|v| v.as_str())
                             {
                                 content_parts.push(thinking_text.to_string());
                             }
                             continue;
                         }
+
+                        // Handle tool_use blocks
+                        if item_type == Some("tool_use") {
+                            if let (Some(id), Some(name)) = (
+                                obj.get("id").and_then(|v| v.as_str()),
+                                obj.get("name").and_then(|v| v.as_str()),
+                            ) {
+                                tool_uses.push(ToolUse {
+                                    id: id.to_string(),
+                                    name: name.to_string(),
+                                    input: obj.get("input").cloned().unwrap_or(Value::Object(
+                                        serde_json::Map::new(),
+                                    )),
+                                    vendor_type: "tool_use".to_string(),
+                                    raw: Value::Object(obj.clone()),
+                                });
+
+                                // Add placeholder text
+                                content_parts.push(format!("[Tool Use: {name}]"));
+                            }
+                            continue;
+                        }
+
+                        // Handle tool_result blocks
+                        if item_type == Some("tool_result") {
+                            if let Some(tool_use_id) =
+                                obj.get("tool_use_id").and_then(|v| v.as_str())
+                            {
+                                let content_text = match obj.get("content") {
+                                    Some(Value::String(s)) => s.clone(),
+                                    Some(Value::Array(arr)) => {
+                                        arr.iter()
+                                            .filter_map(|v| match v {
+                                                Value::String(s) => Some(s.clone()),
+                                                Value::Object(o) => o
+                                                    .get("text")
+                                                    .and_then(|t| t.as_str())
+                                                    .map(String::from),
+                                                _ => None,
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join(" ")
+                                    }
+                                    _ => String::new(),
+                                };
+
+                                let is_error = obj.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+
+                                tool_results.push(ToolResult {
+                                    tool_use_id: tool_use_id.to_string(),
+                                    content: content_text.clone(),
+                                    is_error,
+                                    details: obj.get("content").cloned(),
+                                    raw: Value::Object(obj.clone()),
+                                });
+
+                                // Add placeholder text
+                                if !content_text.is_empty() {
+                                    content_parts.push(format!("[Tool Result: {content_text}]"));
+                                } else {
+                                    content_parts.push("[Tool Result]".to_string());
+                                }
+                            }
+                            continue;
+                        }
+
                         // Handle text content
                         if let Some(text) = obj.get("text").and_then(|v| v.as_str()) {
                             content_parts.push(text.to_string());
-                        }
-                        // Handle tool use content
-                        else if obj.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
-                            if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
-                                content_parts.push(format!("[Tool Use: {name}]"));
-                            } else {
-                                content_parts.push("[Tool Use]".to_string());
-                            }
-                        }
-                        // Handle tool result content
-                        else if obj.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
-                            if let Some(result_content) =
-                                obj.get("content").and_then(|v| v.as_str())
-                            {
-                                content_parts.push(format!("[Tool Result: {result_content}]"));
-                            } else {
-                                content_parts.push("[Tool Result]".to_string());
-                            }
                         }
                     } else if let Some(text) = item.as_str() {
                         content_parts.push(text.to_string());
@@ -300,11 +367,13 @@ impl ClaudeCodeParser {
         };
 
         // Ensure content is never empty to satisfy database constraint
-        if content.trim().is_empty() {
+        let final_content = if content.trim().is_empty() {
             "[No content]".to_string()
         } else {
             content
-        }
+        };
+
+        (final_content, tool_uses, tool_results)
     }
 
     fn convert_session(
@@ -387,47 +456,22 @@ impl ClaudeCodeParser {
             _ => return Err(anyhow!("Unknown message role: {}", claude_message.role)),
         };
 
-        let content = match &claude_message.content {
-            Value::String(s) => s.clone(),
-            Value::Array(arr) => {
-                // Handle complex content structure
-                let mut content_parts = Vec::new();
-                for item in arr {
-                    // Handle thinking content blocks
-                    if let Some(obj) = item.as_object() {
-                        if obj.get("type").and_then(|v| v.as_str()) == Some("thinking") {
-                            if let Some(thinking_text) =
-                                obj.get("thinking").and_then(|v| v.as_str())
-                            {
-                                content_parts.push(thinking_text.to_string());
-                            }
-                            continue;
-                        }
-                    }
-
-                    if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                        content_parts.push(text.to_string());
-                    } else if let Some(content_str) = item.as_str() {
-                        content_parts.push(content_str.to_string());
-                    }
-                }
-                content_parts.join(" ")
-            }
-            Value::Object(obj) => {
-                if let Some(text) = obj.get("text").and_then(|v| v.as_str()) {
-                    text.to_string()
-                } else {
-                    serde_json::to_string(obj).unwrap_or_default()
-                }
-            }
-            _ => claude_message.content.to_string(),
-        };
+        let (content, tool_uses, tool_results) =
+            self.extract_tools_and_content(&claude_message.content);
 
         let timestamp = self.parse_timestamp(&claude_message.created_at)?;
 
         let mut message = Message::new(session_id, role, content, timestamp, sequence as u32);
 
         message.id = message_id;
+
+        // Attach tool uses and results if any
+        if !tool_uses.is_empty() {
+            message = message.with_tool_uses(tool_uses);
+        }
+        if !tool_results.is_empty() {
+            message = message.with_tool_results(tool_results);
+        }
 
         // Estimate token count based on content length
         let estimated_tokens = (message.content.len() / 4) as u32; // Rough estimate: 4 chars per token
