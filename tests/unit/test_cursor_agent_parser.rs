@@ -285,7 +285,7 @@ async fn test_cursor_parser_tool_call_extraction() -> Result<()> {
     let tool_use = &tool_uses[0];
     assert!(tool_use.id.starts_with("test_blob-tool-"));
     assert_eq!(tool_use.name, "Bash");
-    assert_eq!(tool_use.vendor_type, "tool-call");
+    // vendor_type removed; ensure name and args are parsed
     assert_eq!(
         tool_use.input.get("command").and_then(|v| v.as_str()),
         Some("ls -la")

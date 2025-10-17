@@ -57,16 +57,16 @@ impl ToolDisplayFormatter {
             let tool_lines = match self.parsing_service.parse_tool(tool_use) {
                 Ok(parsed_tool) => match parsed_tool.data {
                     ToolData::Bash(data) => {
-                        self.format_bash_tool(&data, result, config, &tool_use.vendor_type)
+                        self.format_bash_tool(&data, result, config, &tool_use.name)
                     }
                     ToolData::Read(data) => {
-                        self.format_read_tool(&data, result, config, &tool_use.vendor_type)
+                        self.format_read_tool(&data, result, config, &tool_use.name)
                     }
                     ToolData::Write(data) => {
-                        self.format_write_tool(&data, result, config, &tool_use.vendor_type)
+                        self.format_write_tool(&data, result, config, &tool_use.name)
                     }
                     ToolData::Edit(data) => {
-                        self.format_edit_tool(&data, result, config, &tool_use.vendor_type)
+                        self.format_edit_tool(&data, result, config, &tool_use.name)
                     }
                     ToolData::Unknown => self.format_unknown_tool(tool_use, result, config),
                 },
@@ -86,7 +86,7 @@ impl ToolDisplayFormatter {
         data: &BashData,
         result: Option<&ToolResult>,
         config: &ToolDisplayConfig,
-        vendor_type: &str,
+        tool_label: &str,
     ) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
@@ -179,7 +179,7 @@ impl ToolDisplayFormatter {
 
         // Vendor badge on bottom border
         let bottom_line =
-            self.create_tool_border(&format!(" {} ", vendor_type), border_width, false);
+            self.create_tool_border(&format!(" {} ", tool_label), border_width, false);
         lines.push(bottom_line);
 
         lines
@@ -191,7 +191,7 @@ impl ToolDisplayFormatter {
         data: &ReadData,
         _result: Option<&ToolResult>,
         config: &ToolDisplayConfig,
-        vendor_type: &str,
+        tool_label: &str,
     ) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
@@ -217,7 +217,7 @@ impl ToolDisplayFormatter {
         ]));
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", vendor_type), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
 
         lines
     }
@@ -228,7 +228,7 @@ impl ToolDisplayFormatter {
         data: &WriteData,
         _result: Option<&ToolResult>,
         config: &ToolDisplayConfig,
-        vendor_type: &str,
+        tool_label: &str,
     ) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
@@ -258,7 +258,7 @@ impl ToolDisplayFormatter {
         ]));
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", vendor_type), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
 
         lines
     }
@@ -269,7 +269,7 @@ impl ToolDisplayFormatter {
         data: &EditData,
         _result: Option<&ToolResult>,
         config: &ToolDisplayConfig,
-        vendor_type: &str,
+        tool_label: &str,
     ) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
@@ -318,7 +318,7 @@ impl ToolDisplayFormatter {
         }
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", vendor_type), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
 
         lines
     }
@@ -347,7 +347,7 @@ impl ToolDisplayFormatter {
 
         // Bottom border
         lines.push(self.create_tool_border(
-            &format!(" {} ", tool_use.vendor_type),
+            &format!(" {} ", tool_use.name),
             border_width,
             false,
         ));
@@ -461,7 +461,6 @@ mod tests {
                 "command": "cargo test",
                 "description": "Run tests"
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }

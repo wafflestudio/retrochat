@@ -297,7 +297,6 @@ impl CursorAgentParser {
                                                         serde_json::Map::new(),
                                                     ),
                                                 ),
-                                                vendor_type: "tool-call".to_string(),
                                                 raw: item.clone(),
                                             });
 

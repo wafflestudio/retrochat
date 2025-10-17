@@ -227,7 +227,7 @@ async fn test_claude_code_parser_tool_use_extraction() -> Result<()> {
     let tool_use = &tool_uses[0];
     assert_eq!(tool_use.id, "toolu_123");
     assert_eq!(tool_use.name, "Bash");
-    assert_eq!(tool_use.vendor_type, "tool_use");
+    // vendor_type removed; ensure name and args are parsed
     assert_eq!(
         tool_use.input.get("command").and_then(|v| v.as_str()),
         Some("ls -la")
@@ -323,10 +323,7 @@ async fn test_claude_code_parser_tool_result_with_error() -> Result<()> {
 
     Ok(())
 }
-use anyhow::Result;
-use retrochat::parsers::ClaudeCodeParser;
-use std::io::Write;
-use tempfile::NamedTempFile;
+// duplicate imports removed (already imported above)
 
 /// Test that toolUseResult metadata from Claude Code conversation format
 /// is properly enriched into ToolResult details
@@ -453,7 +450,7 @@ async fn test_claude_conversation_multiple_tool_results() -> Result<()> {
     );
 
     // Second result should not have details (toolUseResult only applies to first)
-    let second_result = &tool_results[1];
+    let _second_result = &tool_results[1];
     // It might have None or the raw content, depending on implementation
 
     Ok(())

@@ -96,7 +96,6 @@ mod tests {
                 "command": command,
                 "description": "Test command"
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }

@@ -303,7 +303,6 @@ impl ClaudeCodeParser {
                                         .get("input")
                                         .cloned()
                                         .unwrap_or(Value::Object(serde_json::Map::new())),
-                                    vendor_type: "tool_use".to_string(),
                                     raw: Value::Object(obj.clone()),
                                 });
 
