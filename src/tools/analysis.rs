@@ -121,14 +121,14 @@ pub fn extract_file_paths(messages: &[Message]) -> Vec<String> {
     paths
 }
 
-/// Count tool uses by vendor type
-pub fn count_by_vendor(messages: &[Message]) -> HashMap<String, usize> {
+/// Count tool uses by tool name
+pub fn count_by_tool_name(messages: &[Message]) -> HashMap<String, usize> {
     let mut counts = HashMap::new();
 
     for message in messages {
         if let Some(tool_uses) = &message.tool_uses {
             for tool_use in tool_uses {
-                *counts.entry(tool_use.vendor_type.clone()).or_insert(0) += 1;
+                *counts.entry(tool_use.name.clone()).or_insert(0) += 1;
             }
         }
     }
@@ -155,12 +155,11 @@ mod tests {
         .with_tool_uses(tools)
     }
 
-    fn create_tool_use(name: &str, vendor_type: &str) -> ToolUse {
+    fn create_tool_use(name: &str, _vendor_type: &str) -> ToolUse {
         ToolUse {
             id: Uuid::new_v4().to_string(),
             name: name.to_string(),
             input: json!({}),
-            vendor_type: vendor_type.to_string(),
             raw: json!({}),
         }
     }
@@ -220,7 +219,6 @@ mod tests {
             id: "test".to_string(),
             name: "Read".to_string(),
             input: json!({"file_path": "/path/to/file.rs"}),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }];
 
@@ -240,9 +238,9 @@ mod tests {
 
         let messages = vec![create_test_message_with_tools(tools)];
 
-        let counts = count_by_vendor(&messages);
-        assert_eq!(*counts.get("tool_use").unwrap(), 1);
-        assert_eq!(*counts.get("tool-call").unwrap(), 1);
+        let counts = count_by_tool_name(&messages);
+        assert_eq!(*counts.get("Bash").unwrap(), 1);
+        assert_eq!(*counts.get("Read").unwrap(), 1);
     }
 
     #[test]

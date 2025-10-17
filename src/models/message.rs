@@ -50,8 +50,6 @@ pub struct ToolUse {
     pub name: String,
     /// Tool-specific input parameters
     pub input: Value,
-    /// Original vendor type: "tool_use", "tool-call", etc.
-    pub vendor_type: String,
     /// Complete original JSON for future reference
     pub raw: Value,
 }

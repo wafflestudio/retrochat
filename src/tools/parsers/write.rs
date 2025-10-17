@@ -93,7 +93,6 @@ mod tests {
                 "file_path": file_path,
                 "content": content
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }

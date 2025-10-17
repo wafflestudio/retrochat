@@ -49,6 +49,9 @@ pub struct ClaudeCodeConversationEntry {
     pub leaf_uuid: Option<String>,
     #[serde(rename = "parentUuid")]
     pub parent_uuid: Option<String>,
+    /// Tool use result metadata (stdout, stderr, etc.) for tool_result messages
+    #[serde(rename = "toolUseResult")]
+    pub tool_use_result: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -211,8 +214,16 @@ impl ClaudeCodeParser {
                         _ => continue, // Skip unknown roles
                     };
 
-                    let (content, tool_uses, tool_results) =
+                    let (content, tool_uses, mut tool_results) =
                         self.extract_tools_and_content(&conv_message.content);
+
+                    // Enrich tool_results with toolUseResult metadata if available
+                    if let Some(tool_use_result_data) = &entry.tool_use_result {
+                        if let Some(tool_result) = tool_results.first_mut() {
+                            // Merge toolUseResult into details
+                            tool_result.details = Some(tool_use_result_data.clone());
+                        }
+                    }
 
                     let timestamp = entry
                         .timestamp
@@ -292,7 +303,6 @@ impl ClaudeCodeParser {
                                         .get("input")
                                         .cloned()
                                         .unwrap_or(Value::Object(serde_json::Map::new())),
-                                    vendor_type: "tool_use".to_string(),
                                     raw: Value::Object(obj.clone()),
                                 });
 
@@ -337,12 +347,8 @@ impl ClaudeCodeParser {
                                     raw: Value::Object(obj.clone()),
                                 });
 
-                                // Add placeholder text
-                                if !content_text.is_empty() {
-                                    content_parts.push(format!("[Tool Result: {content_text}]"));
-                                } else {
-                                    content_parts.push("[Tool Result]".to_string());
-                                }
+                                // Add simple placeholder text (actual content is in tool_results column)
+                                content_parts.push("[Tool Result]".to_string());
                             }
                             continue;
                         }

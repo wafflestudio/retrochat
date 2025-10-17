@@ -87,7 +87,6 @@ mod tests {
             input: json!({
                 "file_path": file_path
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }

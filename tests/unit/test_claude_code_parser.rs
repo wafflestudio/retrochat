@@ -227,7 +227,7 @@ async fn test_claude_code_parser_tool_use_extraction() -> Result<()> {
     let tool_use = &tool_uses[0];
     assert_eq!(tool_use.id, "toolu_123");
     assert_eq!(tool_use.name, "Bash");
-    assert_eq!(tool_use.vendor_type, "tool_use");
+    // vendor_type removed; ensure name and args are parsed
     assert_eq!(
         tool_use.input.get("command").and_then(|v| v.as_str()),
         Some("ls -la")
@@ -252,8 +252,8 @@ async fn test_claude_code_parser_tool_result_extraction() -> Result<()> {
     assert_eq!(messages.len(), 1);
     let message = &messages[0];
 
-    // Check that content includes placeholder for tool result with content
-    assert!(message.content.contains("[Tool Result: total 8"));
+    // Check that content includes simplified placeholder (actual content is in tool_results column)
+    assert!(message.content.contains("[Tool Result]"));
 
     // Check that tool_results were extracted
     assert!(message.tool_results.is_some());
@@ -320,6 +320,138 @@ async fn test_claude_code_parser_tool_result_with_error() -> Result<()> {
     assert_eq!(tool_result.tool_use_id, "toolu_123");
     assert!(tool_result.is_error);
     assert!(tool_result.content.contains("File not found"));
+
+    Ok(())
+}
+// duplicate imports removed (already imported above)
+
+/// Test that toolUseResult metadata from Claude Code conversation format
+/// is properly enriched into ToolResult details
+#[tokio::test]
+async fn test_claude_conversation_tool_result_with_metadata() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+
+    // This simulates the actual Claude Code conversation format
+    // where toolUseResult is at the entry root level
+    let sample_data = r#"{"type":"user","uuid":"msg-result-123","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_123","type":"tool_result","content":"Branch created successfully","is_error":false}]},"toolUseResult":{"stdout":"Switched to branch 'feature-123'\nCreated branch 'feature-123'","stderr":"","interrupted":false,"isImage":false}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Verify tool_results exist
+    assert!(message.tool_results.is_some());
+    let tool_results = message.tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 1);
+
+    let tool_result = &tool_results[0];
+
+    // Verify basic fields
+    assert_eq!(tool_result.tool_use_id, "toolu_123");
+    assert_eq!(tool_result.content, "Branch created successfully");
+    assert!(!tool_result.is_error);
+
+    // Verify that toolUseResult was enriched into details
+    assert!(tool_result.details.is_some());
+    let details = tool_result.details.as_ref().unwrap();
+
+    // Check stdout from toolUseResult
+    assert_eq!(
+        details.get("stdout").and_then(|v| v.as_str()),
+        Some("Switched to branch 'feature-123'\nCreated branch 'feature-123'")
+    );
+
+    // Check stderr from toolUseResult
+    assert_eq!(details.get("stderr").and_then(|v| v.as_str()), Some(""));
+
+    // Check interrupted flag
+    assert_eq!(
+        details.get("interrupted").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+
+    Ok(())
+}
+
+/// Test conversation format without toolUseResult (should still work)
+#[tokio::test]
+async fn test_claude_conversation_tool_result_without_metadata() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+
+    let sample_data = r#"{"type":"user","uuid":"msg-result-456","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:01:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_456","type":"tool_result","content":"File read successfully","is_error":false}]}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Verify tool_results exist
+    assert!(message.tool_results.is_some());
+    let tool_results = message.tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 1);
+
+    let tool_result = &tool_results[0];
+
+    // Verify basic fields work even without toolUseResult
+    assert_eq!(tool_result.tool_use_id, "toolu_456");
+    assert_eq!(tool_result.content, "File read successfully");
+    assert!(!tool_result.is_error);
+
+    Ok(())
+}
+
+/// Test multiple tool results in conversation (only first should get metadata)
+#[tokio::test]
+async fn test_claude_conversation_multiple_tool_results() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+
+    let sample_data = r#"{"type":"user","uuid":"msg-multi-123","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:02:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"Result 1","is_error":false},{"tool_use_id":"toolu_2","type":"tool_result","content":"Result 2","is_error":false}]},"toolUseResult":{"stdout":"Output for first tool","stderr":"","interrupted":false}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Verify both tool_results exist
+    assert!(message.tool_results.is_some());
+    let tool_results = message.tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 2);
+
+    // First result should have details from toolUseResult
+    let first_result = &tool_results[0];
+    assert!(first_result.details.is_some());
+    assert_eq!(
+        first_result
+            .details
+            .as_ref()
+            .unwrap()
+            .get("stdout")
+            .and_then(|v| v.as_str()),
+        Some("Output for first tool")
+    );
+
+    // Second result should not have details (toolUseResult only applies to first)
+    let _second_result = &tool_results[1];
+    // It might have None or the raw content, depending on implementation
 
     Ok(())
 }

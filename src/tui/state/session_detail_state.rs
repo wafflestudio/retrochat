@@ -25,6 +25,8 @@ pub struct SessionDetailState {
     pub message_wrap: bool,
     /// Whether to show the retrospection panel
     pub show_retrospection: bool,
+    /// Whether to show detailed tool output (expanded view)
+    pub show_tool_details: bool,
 }
 
 impl SessionDetailState {
@@ -41,6 +43,7 @@ impl SessionDetailState {
             loading: false,
             message_wrap: true,
             show_retrospection: false,
+            show_tool_details: false,
         }
     }
 
@@ -124,6 +127,11 @@ impl SessionDetailState {
         self.show_retrospection = !self.show_retrospection;
     }
 
+    /// Toggle tool details visibility
+    pub fn toggle_tool_details(&mut self) {
+        self.show_tool_details = !self.show_tool_details;
+    }
+
     /// Update the scrollbar state
     pub fn update_scroll_state(&mut self, total_lines: usize) {
         self.scroll_state = self.scroll_state.content_length(total_lines);
@@ -150,6 +158,7 @@ mod tests {
         assert_eq!(state.current_scroll, 0);
         assert!(state.message_wrap);
         assert!(!state.show_retrospection);
+        assert!(!state.show_tool_details);
         assert!(!state.loading);
     }
 

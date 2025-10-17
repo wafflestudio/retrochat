@@ -6,6 +6,7 @@ pub mod retrospection;
 pub mod session_detail;
 pub mod session_list;
 pub mod state;
+pub mod tool_display;
 pub mod utils;
 
 pub use analytics::AnalyticsWidget;

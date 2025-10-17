@@ -72,7 +72,6 @@ mod tests {
             input: json!({
                 "command": "ls -la"
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }

@@ -124,7 +124,6 @@ mod tests {
                 "old_string": old,
                 "new_string": new
             }),
-            vendor_type: "tool_use".to_string(),
             raw: json!({}),
         }
     }
