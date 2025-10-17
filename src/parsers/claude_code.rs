@@ -138,10 +138,15 @@ impl ClaudeCodeParser {
         &self,
         entries: Vec<ClaudeCodeConversationEntry>,
     ) -> Result<(ChatSession, Vec<Message>)> {
-        use tracing::warn;
-
         if entries.is_empty() {
             return Err(anyhow!("No conversation entries found"));
+        }
+
+        // Check if all entries are summary-only (no actual conversation messages)
+        let has_actual_messages = entries.iter().any(|e| e.message.is_some());
+        if !has_actual_messages {
+            // Skip summary-only files silently
+            return Err(anyhow!("File contains only summary entries, skipping"));
         }
 
         // Find the session ID from any entry that has one
@@ -151,13 +156,10 @@ impl ClaudeCodeParser {
                 Uuid::parse_str(session_id_str)
                     .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?
             } else {
-                // Generate a new session ID if none found
-                let generated_id = Uuid::new_v4();
-                warn!(
-                    "No session ID found in conversation file: {}. Generated new ID: {}",
-                    self.file_path, generated_id
-                );
-                generated_id
+                // This shouldn't happen for files with actual messages, but handle it gracefully
+                return Err(anyhow!(
+                    "File contains messages but no session ID, cannot import"
+                ));
             };
 
         // Summary entries are parsed elsewhere if needed; not used for project naming

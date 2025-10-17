@@ -312,8 +312,19 @@ impl ImportService {
         let sessions = match ParserRegistry::parse_file(path).await {
             Ok(sessions) => sessions,
             Err(e) => {
-                warnings.push(format!("Failed to parse file: {e}"));
-                return Err(anyhow!("Failed to parse file: {e}"));
+                let error_msg = e.to_string();
+                // Skip summary-only files silently (these are just metadata, not actual conversations)
+                if error_msg.contains("only summary entries") {
+                    return Ok(ImportFileResponse {
+                        sessions_imported: 0,
+                        messages_imported: 0,
+                        import_duration_ms: start_time.elapsed().as_millis() as i32,
+                        file_size_bytes,
+                        warnings: vec![],
+                    });
+                }
+                warnings.push(format!("Failed to parse file: {error_msg}"));
+                return Err(anyhow!("Failed to parse file: {error_msg}"));
             }
         };
 
