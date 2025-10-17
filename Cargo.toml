@@ -115,6 +115,10 @@ name = "test_codex_parser"
 path = "tests/unit/test_codex_parser.rs"
 
 [[test]]
+name = "test_message_pairing"
+path = "tests/unit/test_message_pairing.rs"
+
+[[test]]
 name = "test_first_time_setup"
 path = "tests/integration/test_first_time_setup.rs"
 

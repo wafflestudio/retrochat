@@ -6,7 +6,7 @@ pub mod retrospect_request;
 pub mod retrospection;
 
 pub use chat_session::{ChatSession, SessionState};
-pub use message::{Message, MessageRole, ToolCall};
+pub use message::{Message, MessageRole, ToolCall, ToolResult, ToolUse};
 pub use project::Project;
 pub use provider::{ParserType, Provider, ProviderConfig, ProviderRegistry};
 pub use retrospect_request::{
