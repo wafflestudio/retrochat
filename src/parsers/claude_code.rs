@@ -257,10 +257,7 @@ impl ClaudeCodeParser {
 
     /// Extract tools and content from a Claude Code message value
     /// Returns (content_string, tool_uses, tool_results)
-    fn extract_tools_and_content(
-        &self,
-        value: &Value,
-    ) -> (String, Vec<ToolUse>, Vec<ToolResult>) {
+    fn extract_tools_and_content(&self, value: &Value) -> (String, Vec<ToolUse>, Vec<ToolResult>) {
         let mut tool_uses = Vec::new();
         let mut tool_results = Vec::new();
 
@@ -274,7 +271,8 @@ impl ClaudeCodeParser {
 
                         // Handle thinking content blocks
                         if item_type == Some("thinking") {
-                            if let Some(thinking_text) = obj.get("thinking").and_then(|v| v.as_str())
+                            if let Some(thinking_text) =
+                                obj.get("thinking").and_then(|v| v.as_str())
                             {
                                 content_parts.push(thinking_text.to_string());
                             }
@@ -290,9 +288,10 @@ impl ClaudeCodeParser {
                                 tool_uses.push(ToolUse {
                                     id: id.to_string(),
                                     name: name.to_string(),
-                                    input: obj.get("input").cloned().unwrap_or(Value::Object(
-                                        serde_json::Map::new(),
-                                    )),
+                                    input: obj
+                                        .get("input")
+                                        .cloned()
+                                        .unwrap_or(Value::Object(serde_json::Map::new())),
                                     vendor_type: "tool_use".to_string(),
                                     raw: Value::Object(obj.clone()),
                                 });
@@ -310,23 +309,25 @@ impl ClaudeCodeParser {
                             {
                                 let content_text = match obj.get("content") {
                                     Some(Value::String(s)) => s.clone(),
-                                    Some(Value::Array(arr)) => {
-                                        arr.iter()
-                                            .filter_map(|v| match v {
-                                                Value::String(s) => Some(s.clone()),
-                                                Value::Object(o) => o
-                                                    .get("text")
-                                                    .and_then(|t| t.as_str())
-                                                    .map(String::from),
-                                                _ => None,
-                                            })
-                                            .collect::<Vec<_>>()
-                                            .join(" ")
-                                    }
+                                    Some(Value::Array(arr)) => arr
+                                        .iter()
+                                        .filter_map(|v| match v {
+                                            Value::String(s) => Some(s.clone()),
+                                            Value::Object(o) => o
+                                                .get("text")
+                                                .and_then(|t| t.as_str())
+                                                .map(String::from),
+                                            _ => None,
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join(" "),
                                     _ => String::new(),
                                 };
 
-                                let is_error = obj.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                                let is_error = obj
+                                    .get("is_error")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false);
 
                                 tool_results.push(ToolResult {
                                     tool_use_id: tool_use_id.to_string(),

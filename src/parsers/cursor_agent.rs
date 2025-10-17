@@ -285,16 +285,18 @@ impl CursorAgentParser {
                                                 .unwrap_or("unknown_tool");
 
                                             // Generate unique tool ID
-                                            let tool_id = format!("{}-tool-{}", message_id, tool_index);
+                                            let tool_id = format!("{message_id}-tool-{tool_index}");
                                             tool_index += 1;
 
                                             // Create ToolUse from Cursor tool-call
                                             tool_uses.push(ToolUse {
                                                 id: tool_id,
                                                 name: tool_name.to_string(),
-                                                input: item.get("args").cloned().unwrap_or(serde_json::Value::Object(
-                                                    serde_json::Map::new(),
-                                                )),
+                                                input: item.get("args").cloned().unwrap_or(
+                                                    serde_json::Value::Object(
+                                                        serde_json::Map::new(),
+                                                    ),
+                                                ),
                                                 vendor_type: "tool-call".to_string(),
                                                 raw: item.clone(),
                                             });
