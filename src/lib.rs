@@ -3,6 +3,7 @@ pub mod database;
 pub mod models;
 pub mod parsers;
 pub mod services;
+pub mod tools;
 pub mod tui;
 
 pub mod env;
