@@ -60,7 +60,9 @@ impl SessionDetailState {
     /// Update the session data from query result
     pub fn update_session(&mut self, session: ChatSession, messages: Vec<Message>) {
         // Only reset scroll if we're switching to a different session
-        let is_same_session = self.session.as_ref()
+        let is_same_session = self
+            .session
+            .as_ref()
             .map(|s| s.id == session.id)
             .unwrap_or(false);
 
@@ -236,8 +238,8 @@ mod tests {
 
     #[test]
     fn test_update_session_preserves_scroll_for_same_session() {
-        use chrono::Utc;
         use crate::models::{Provider, SessionState as ModelSessionState};
+        use chrono::Utc;
 
         let mut state = SessionDetailState::new();
 
@@ -262,13 +264,16 @@ mod tests {
 
         // Update with same session - scroll should be preserved
         state.update_session(session1, vec![]);
-        assert_eq!(state.current_scroll, 42, "Scroll position should be preserved for same session");
+        assert_eq!(
+            state.current_scroll, 42,
+            "Scroll position should be preserved for same session"
+        );
     }
 
     #[test]
     fn test_update_session_resets_scroll_for_different_session() {
-        use chrono::Utc;
         use crate::models::{Provider, SessionState as ModelSessionState};
+        use chrono::Utc;
 
         let mut state = SessionDetailState::new();
 
@@ -308,6 +313,9 @@ mod tests {
         };
 
         state.update_session(session2, vec![]);
-        assert_eq!(state.current_scroll, 0, "Scroll position should be reset for different session");
+        assert_eq!(
+            state.current_scroll, 0,
+            "Scroll position should be reset for different session"
+        );
     }
 }

@@ -41,6 +41,36 @@ pub struct ToolCall {
     pub result: Option<Value>,
 }
 
+/// Unified tool request structure (works across all vendors)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUse {
+    /// Tool execution ID (from vendor or generated)
+    pub id: String,
+    /// Normalized tool name: "Bash", "Read", "Write", "Edit", etc.
+    pub name: String,
+    /// Tool-specific input parameters
+    pub input: Value,
+    /// Original vendor type: "tool_use", "tool-call", etc.
+    pub vendor_type: String,
+    /// Complete original JSON for future reference
+    pub raw: Value,
+}
+
+/// Unified tool response structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResult {
+    /// Links back to ToolUse.id
+    pub tool_use_id: String,
+    /// Primary result content
+    pub content: String,
+    /// Whether this result represents an error
+    pub is_error: bool,
+    /// Structured result data (stdout, patches, etc.)
+    pub details: Option<Value>,
+    /// Complete original JSON
+    pub raw: Value,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub id: Uuid,
@@ -52,6 +82,10 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     pub metadata: Option<Value>,
     pub sequence_number: u32,
+    /// Unified tool requests (normalized across vendors)
+    pub tool_uses: Option<Vec<ToolUse>>,
+    /// Unified tool responses (normalized across vendors)
+    pub tool_results: Option<Vec<ToolResult>>,
 }
 
 impl Message {
@@ -72,6 +106,8 @@ impl Message {
             tool_calls: None,
             metadata: None,
             sequence_number,
+            tool_uses: None,
+            tool_results: None,
         }
     }
 
@@ -87,6 +123,16 @@ impl Message {
 
     pub fn with_metadata(mut self, metadata: Value) -> Self {
         self.metadata = Some(metadata);
+        self
+    }
+
+    pub fn with_tool_uses(mut self, tool_uses: Vec<ToolUse>) -> Self {
+        self.tool_uses = Some(tool_uses);
+        self
+    }
+
+    pub fn with_tool_results(mut self, tool_results: Vec<ToolResult>) -> Self {
+        self.tool_results = Some(tool_results);
         self
     }
 
