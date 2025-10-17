@@ -142,14 +142,25 @@ impl ClaudeCodeParser {
             return Err(anyhow!("No conversation entries found"));
         }
 
-        // Find the session ID from any entry that has one
-        let session_id_str = entries
-            .iter()
-            .find_map(|e| e.session_id.as_ref())
-            .ok_or_else(|| anyhow!("No session ID found in conversation"))?;
+        // Check if all entries are summary-only (no actual conversation messages)
+        let has_actual_messages = entries.iter().any(|e| e.message.is_some());
+        if !has_actual_messages {
+            // Skip summary-only files silently
+            return Err(anyhow!("File contains only summary entries, skipping"));
+        }
 
-        let session_id = Uuid::parse_str(session_id_str)
-            .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?;
+        // Find the session ID from any entry that has one
+        let session_id =
+            if let Some(session_id_str) = entries.iter().find_map(|e| e.session_id.as_ref()) {
+                // Parse existing session ID
+                Uuid::parse_str(session_id_str)
+                    .with_context(|| format!("Invalid session UUID format: {session_id_str}"))?
+            } else {
+                // This shouldn't happen for files with actual messages, but handle it gracefully
+                return Err(anyhow!(
+                    "File contains messages but no session ID, cannot import"
+                ));
+            };
 
         // Summary entries are parsed elsewhere if needed; not used for project naming
 
