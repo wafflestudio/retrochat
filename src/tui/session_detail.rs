@@ -14,12 +14,14 @@ use crate::models::MessageRole;
 use crate::services::{QueryService, SessionDetailRequest};
 
 use super::state::SessionDetailState;
+use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
 use super::utils::text::{truncate_text, wrap_text};
 
 pub struct SessionDetailWidget {
     pub state: SessionDetailState,
     query_service: QueryService,
     retrospection_repo: RetrospectionRepository,
+    tool_formatter: ToolDisplayFormatter,
 }
 
 impl SessionDetailWidget {
@@ -28,6 +30,7 @@ impl SessionDetailWidget {
             state: SessionDetailState::new(),
             query_service: QueryService::with_database(db_manager.clone()),
             retrospection_repo: RetrospectionRepository::new(db_manager),
+            tool_formatter: ToolDisplayFormatter::new(),
         }
     }
 
@@ -114,6 +117,10 @@ impl SessionDetailWidget {
                 // T: Toggle retrospection view
                 self.state.toggle_retrospection();
             }
+            KeyCode::Char('d') => {
+                // D: Toggle tool details (expand/collapse)
+                self.state.toggle_tool_details();
+            }
             KeyCode::Char('a') => {
                 // A: Start retrospection analysis for current session
                 // This would require returning a signal to the app
@@ -175,7 +182,7 @@ impl SessionDetailWidget {
             };
 
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Press 'w': wrap, 't': retrospection",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Keys: 'w'=wrap, 't'=retro, 'd'=tool-details",
                 session.provider,
                 project_str,
                 session.message_count,
@@ -302,11 +309,37 @@ impl SessionDetailWidget {
                 )]));
             }
 
-            // Show tool calls if any
-            if let Some(tool_calls) = &message.tool_calls {
+            // Show tool uses inline (new unified format)
+            if let Some(tool_uses) = &message.tool_uses {
+                if !tool_uses.is_empty() {
+                    let tool_results = message.tool_results.as_deref().unwrap_or(&[]);
+
+                    // Create tool display config
+                    let tool_config = ToolDisplayConfig {
+                        width: width.saturating_sub(4),
+                        show_details: self.state.show_tool_details,
+                        max_output_lines: 10,
+                    };
+
+                    // Format and add tool display lines
+                    let tool_lines =
+                        self.tool_formatter
+                            .format_tools(tool_uses, tool_results, &tool_config);
+
+                    // Indent tool lines
+                    for tool_line in tool_lines {
+                        let indented_spans: Vec<Span> = std::iter::once(Span::raw("  "))
+                            .chain(tool_line.spans.into_iter())
+                            .collect();
+                        lines.push(Line::from(indented_spans));
+                    }
+                }
+            }
+            // Show old tool calls format for backwards compatibility (if no tool_uses)
+            else if let Some(tool_calls) = &message.tool_calls {
                 if !tool_calls.is_empty() {
                     lines.push(Line::from(vec![Span::styled(
-                        "  [Tool Calls]",
+                        "  [Tool Calls - Legacy Format]",
                         Style::default()
                             .fg(Color::Magenta)
                             .add_modifier(Modifier::ITALIC),
