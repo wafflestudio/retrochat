@@ -335,6 +335,62 @@ impl SessionDetailWidget {
                     }
                 }
             }
+            // Show tool results if present without tool uses (separate message pattern)
+            else if let Some(tool_results) = &message.tool_results {
+                if !tool_results.is_empty() {
+                    lines.push(Line::from(vec![Span::styled(
+                        "  [Tool Results]",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::ITALIC),
+                    )]));
+
+                    // Display each tool result
+                    for result in tool_results {
+                        let status_icon = if result.is_error { "✗" } else { "✓" };
+                        let status_color = if result.is_error {
+                            Color::Red
+                        } else {
+                            Color::Green
+                        };
+
+                        lines.push(Line::from(vec![
+                            Span::raw("    "),
+                            Span::styled(status_icon, Style::default().fg(status_color)),
+                            Span::raw(" "),
+                            Span::styled(
+                                format!("Tool: {}", result.tool_use_id),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]));
+
+                        // Show result content preview if show_details is enabled
+                        if self.state.show_tool_details && !result.content.is_empty() {
+                            let preview_lines: Vec<&str> = result.content.lines().take(5).collect();
+                            for line in preview_lines {
+                                lines.push(Line::from(vec![
+                                    Span::raw("      "),
+                                    Span::styled(
+                                        line.to_string(),
+                                        Style::default().fg(Color::Gray),
+                                    ),
+                                ]));
+                            }
+                            if result.content.lines().count() > 5 {
+                                lines.push(Line::from(vec![
+                                    Span::raw("      "),
+                                    Span::styled(
+                                        "...",
+                                        Style::default()
+                                            .fg(Color::DarkGray)
+                                            .add_modifier(Modifier::ITALIC),
+                                    ),
+                                ]));
+                            }
+                        }
+                    }
+                }
+            }
             // Show old tool calls format for backwards compatibility (if no tool_uses)
             else if let Some(tool_calls) = &message.tool_calls {
                 if !tool_calls.is_empty() {

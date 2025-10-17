@@ -347,12 +347,8 @@ impl ClaudeCodeParser {
                                     raw: Value::Object(obj.clone()),
                                 });
 
-                                // Add placeholder text
-                                if !content_text.is_empty() {
-                                    content_parts.push(format!("[Tool Result: {content_text}]"));
-                                } else {
-                                    content_parts.push("[Tool Result]".to_string());
-                                }
+                                // Add simple placeholder text (actual content is in tool_results column)
+                                content_parts.push("[Tool Result]".to_string());
                             }
                             continue;
                         }

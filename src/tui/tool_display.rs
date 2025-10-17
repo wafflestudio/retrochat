@@ -178,8 +178,7 @@ impl ToolDisplayFormatter {
         }
 
         // Vendor badge on bottom border
-        let bottom_line =
-            self.create_tool_border(&format!(" {} ", tool_label), border_width, false);
+        let bottom_line = self.create_tool_border(&format!(" {tool_label} "), border_width, false);
         lines.push(bottom_line);
 
         lines
@@ -217,7 +216,7 @@ impl ToolDisplayFormatter {
         ]));
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {tool_label} "), border_width, false));
 
         lines
     }
@@ -242,7 +241,7 @@ impl ToolDisplayFormatter {
             if size > 1024 {
                 format!("{:.1} KB", size as f64 / 1024.0)
             } else {
-                format!("{} bytes", size)
+                format!("{size} bytes")
             }
         } else {
             "unknown size".to_string()
@@ -252,13 +251,13 @@ impl ToolDisplayFormatter {
             Span::raw("┃ "),
             Span::styled("📝 ", Style::default().fg(Color::Yellow)),
             Span::styled(
-                format!("Write file ({})", size_info),
+                format!("Write file ({size_info})"),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {tool_label} "), border_width, false));
 
         lines
     }
@@ -318,7 +317,7 @@ impl ToolDisplayFormatter {
         }
 
         // Bottom border
-        lines.push(self.create_tool_border(&format!(" {} ", tool_label), border_width, false));
+        lines.push(self.create_tool_border(&format!(" {tool_label} "), border_width, false));
 
         lines
     }
@@ -346,11 +345,7 @@ impl ToolDisplayFormatter {
         ]));
 
         // Bottom border
-        lines.push(self.create_tool_border(
-            &format!(" {} ", tool_use.name),
-            border_width,
-            false,
-        ));
+        lines.push(self.create_tool_border(&format!(" {} ", tool_use.name), border_width, false));
 
         lines
     }

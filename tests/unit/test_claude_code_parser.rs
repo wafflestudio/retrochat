@@ -252,8 +252,8 @@ async fn test_claude_code_parser_tool_result_extraction() -> Result<()> {
     assert_eq!(messages.len(), 1);
     let message = &messages[0];
 
-    // Check that content includes placeholder for tool result with content
-    assert!(message.content.contains("[Tool Result: total 8"));
+    // Check that content includes simplified placeholder (actual content is in tool_results column)
+    assert!(message.content.contains("[Tool Result]"));
 
     // Check that tool_results were extracted
     assert!(message.tool_results.is_some());
@@ -333,7 +333,7 @@ async fn test_claude_conversation_tool_result_with_metadata() -> Result<()> {
 
     // This simulates the actual Claude Code conversation format
     // where toolUseResult is at the entry root level
-    let sample_data = r#"{"type":"user","uuid":"msg-result-123","sessionId":"session-123","timestamp":"2024-01-01T10:00:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_123","type":"tool_result","content":"Branch created successfully","is_error":false}]},"toolUseResult":{"stdout":"Switched to branch 'feature-123'\nCreated branch 'feature-123'","stderr":"","interrupted":false,"isImage":false}}"#;
+    let sample_data = r#"{"type":"user","uuid":"msg-result-123","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_123","type":"tool_result","content":"Branch created successfully","is_error":false}]},"toolUseResult":{"stdout":"Switched to branch 'feature-123'\nCreated branch 'feature-123'","stderr":"","interrupted":false,"isImage":false}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -385,7 +385,7 @@ async fn test_claude_conversation_tool_result_with_metadata() -> Result<()> {
 async fn test_claude_conversation_tool_result_without_metadata() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
 
-    let sample_data = r#"{"type":"user","uuid":"msg-result-456","sessionId":"session-123","timestamp":"2024-01-01T10:01:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_456","type":"tool_result","content":"File read successfully","is_error":false}]}}"#;
+    let sample_data = r#"{"type":"user","uuid":"msg-result-456","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:01:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_456","type":"tool_result","content":"File read successfully","is_error":false}]}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 
@@ -418,7 +418,7 @@ async fn test_claude_conversation_tool_result_without_metadata() -> Result<()> {
 async fn test_claude_conversation_multiple_tool_results() -> Result<()> {
     let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
 
-    let sample_data = r#"{"type":"user","uuid":"msg-multi-123","sessionId":"session-123","timestamp":"2024-01-01T10:02:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"Result 1","is_error":false},{"tool_use_id":"toolu_2","type":"tool_result","content":"Result 2","is_error":false}]},"toolUseResult":{"stdout":"Output for first tool","stderr":"","interrupted":false}}"#;
+    let sample_data = r#"{"type":"user","uuid":"msg-multi-123","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:02:00Z","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"Result 1","is_error":false},{"tool_use_id":"toolu_2","type":"tool_result","content":"Result 2","is_error":false}]},"toolUseResult":{"stdout":"Output for first tool","stderr":"","interrupted":false}}"#;
 
     temp_file.write_all(sample_data.as_bytes()).unwrap();
 

@@ -231,7 +231,10 @@ mod tests {
 
     #[test]
     fn test_count_by_vendor() {
-        let tools = vec![create_tool_use("Bash", "tool_use"), create_tool_use("Read", "tool-call")];
+        let tools = vec![
+            create_tool_use("Bash", "tool_use"),
+            create_tool_use("Read", "tool-call"),
+        ];
 
         let messages = vec![create_test_message_with_tools(tools)];
 
