@@ -59,9 +59,18 @@ impl SessionDetailState {
 
     /// Update the session data from query result
     pub fn update_session(&mut self, session: ChatSession, messages: Vec<Message>) {
+        // Only reset scroll if we're switching to a different session
+        let is_same_session = self.session.as_ref()
+            .map(|s| s.id == session.id)
+            .unwrap_or(false);
+
         self.session = Some(session);
         self.messages = messages;
-        self.current_scroll = 0;
+
+        // Only reset scroll position when switching to a different session
+        if !is_same_session {
+            self.current_scroll = 0;
+        }
     }
 
     /// Update retrospections from query result
@@ -223,5 +232,82 @@ mod tests {
 
         state.toggle_retrospection();
         assert!(!state.show_retrospection);
+    }
+
+    #[test]
+    fn test_update_session_preserves_scroll_for_same_session() {
+        use chrono::Utc;
+        use crate::models::{Provider, SessionState as ModelSessionState};
+
+        let mut state = SessionDetailState::new();
+
+        // Create first session and set scroll position
+        let session1 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 5,
+            token_count: Some(100),
+            file_path: "/test/path.jsonl".to_string(),
+            file_hash: "test_hash".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session1.clone(), vec![]);
+        state.current_scroll = 42;
+
+        // Update with same session - scroll should be preserved
+        state.update_session(session1, vec![]);
+        assert_eq!(state.current_scroll, 42, "Scroll position should be preserved for same session");
+    }
+
+    #[test]
+    fn test_update_session_resets_scroll_for_different_session() {
+        use chrono::Utc;
+        use crate::models::{Provider, SessionState as ModelSessionState};
+
+        let mut state = SessionDetailState::new();
+
+        // Create first session and set scroll position
+        let session1 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 5,
+            token_count: Some(100),
+            file_path: "/test/path1.jsonl".to_string(),
+            file_hash: "test_hash_1".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session1, vec![]);
+        state.current_scroll = 42;
+
+        // Update with different session - scroll should be reset
+        let session2 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 3,
+            token_count: Some(50),
+            file_path: "/test/path2.jsonl".to_string(),
+            file_hash: "test_hash_2".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session2, vec![]);
+        assert_eq!(state.current_scroll, 0, "Scroll position should be reset for different session");
     }
 }
