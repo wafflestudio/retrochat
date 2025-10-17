@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use uuid::Uuid;
 
+use crate::models::message::{ToolResult, ToolUse};
 use crate::models::{ChatSession, Message, MessageRole};
 use crate::models::{Provider, SessionState};
 
@@ -181,12 +182,23 @@ impl CursorAgentParser {
             // Parse the protobuf blob
             match blob_decoder::parse_message(&blob_data) {
                 Ok(fields) => {
-                    // Try to extract message content
-                    if let Some(content) = self.extract_message_content(&fields) {
+                    // Try to extract message content and tools
+                    if let Some((content, tool_uses, tool_results)) =
+                        self.extract_message_content_and_tools(&fields, &blob_id)
+                    {
                         let role = self.infer_message_role(&content, &fields);
 
-                        let message =
+                        let mut message =
                             Message::new(session_id, role, content, default_time, message_index);
+
+                        // Attach tools if any
+                        if !tool_uses.is_empty() {
+                            message = message.with_tool_uses(tool_uses);
+                        }
+                        if !tool_results.is_empty() {
+                            message = message.with_tool_results(tool_results);
+                        }
+
                         messages.push(message);
                         message_index += 1;
                     }
@@ -212,11 +224,17 @@ impl CursorAgentParser {
         Ok(messages)
     }
 
-    fn extract_message_content(
+    /// Extract message content and tools from Cursor blob fields
+    /// Returns Option<(content, tool_uses, tool_results)>
+    fn extract_message_content_and_tools(
         &self,
         fields: &HashMap<u32, Vec<blob_decoder::FieldValue>>,
-    ) -> Option<String> {
+        message_id: &str,
+    ) -> Option<(String, Vec<ToolUse>, Vec<ToolResult>)> {
         use blob_decoder::FieldValue;
+
+        let mut tool_uses = Vec::new();
+        let tool_results = Vec::new(); // Cursor doesn't seem to have tool results
 
         // Try field 1 for simple message content
         if let Some(values) = fields.get(&1) {
@@ -224,7 +242,7 @@ impl CursorAgentParser {
                 if let FieldValue::String(text) = value {
                     // Skip if it looks like a blob ID (32 bytes hex or UUID)
                     if text.len() != 32 && text.len() != 36 && !text.is_empty() {
-                        return Some(text.clone());
+                        return Some((text.clone(), tool_uses, tool_results));
                     }
                 }
             }
@@ -238,11 +256,12 @@ impl CursorAgentParser {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
                         if let Some(content) = json.get("content") {
                             if let Some(content_str) = content.as_str() {
-                                return Some(content_str.to_string());
+                                return Some((content_str.to_string(), tool_uses, tool_results));
                             }
                             // Handle array of content blocks (Cursor format)
                             if let Some(content_array) = content.as_array() {
                                 let mut full_content = String::new();
+                                let mut tool_index = 0;
 
                                 for item in content_array {
                                     let block_type = item.get("type").and_then(|t| t.as_str());
@@ -260,46 +279,33 @@ impl CursorAgentParser {
                                             }
                                         }
                                         Some("tool-call") => {
-                                            // Extract tool call information
                                             let tool_name = item
                                                 .get("toolName")
                                                 .and_then(|t| t.as_str())
                                                 .unwrap_or("unknown_tool");
 
+                                            // Generate unique tool ID
+                                            let tool_id = format!("{message_id}-tool-{tool_index}");
+                                            tool_index += 1;
+
+                                            // Create ToolUse from Cursor tool-call
+                                            tool_uses.push(ToolUse {
+                                                id: tool_id,
+                                                name: tool_name.to_string(),
+                                                input: item.get("args").cloned().unwrap_or(
+                                                    serde_json::Value::Object(
+                                                        serde_json::Map::new(),
+                                                    ),
+                                                ),
+                                                vendor_type: "tool-call".to_string(),
+                                                raw: item.clone(),
+                                            });
+
+                                            // Add placeholder text
                                             if !full_content.is_empty() {
                                                 full_content.push_str("\n\n");
                                             }
                                             full_content.push_str(&format!("[Tool: {tool_name}]"));
-
-                                            // Extract tool arguments
-                                            if let Some(args) = item.get("args") {
-                                                if let Some(args_obj) = args.as_object() {
-                                                    full_content.push('\n');
-                                                    for (key, val) in args_obj {
-                                                        match val {
-                                                            serde_json::Value::String(s) => {
-                                                                full_content.push_str(&format!(
-                                                                    "  {key}: {s}\n"
-                                                                ));
-                                                            }
-                                                            serde_json::Value::Array(arr) => {
-                                                                if !arr.is_empty() {
-                                                                    full_content.push_str(
-                                                                        &format!(
-                                                                            "  {key}: {arr:?}\n"
-                                                                        ),
-                                                                    );
-                                                                }
-                                                            }
-                                                            _ => {
-                                                                full_content.push_str(&format!(
-                                                                    "  {key}: {val}\n"
-                                                                ));
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
                                         }
                                         _ => {
                                             // Unknown block type, try to extract as text
@@ -316,12 +322,12 @@ impl CursorAgentParser {
                                 }
 
                                 if !full_content.is_empty() {
-                                    return Some(full_content);
+                                    return Some((full_content, tool_uses, tool_results));
                                 }
                             }
                         }
                     }
-                    return Some(text.clone());
+                    return Some((text.clone(), tool_uses, tool_results));
                 }
             }
         }

@@ -198,3 +198,128 @@ async fn test_claude_code_parser_file_consistency() {
     assert_eq!(session1.file_hash, session2.file_hash);
     assert!(!session1.file_hash.is_empty());
 }
+
+#[tokio::test]
+async fn test_claude_code_parser_tool_use_extraction() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":[{"type":"text","text":"Let me run a command"},{"type":"tool_use","id":"toolu_123","name":"Bash","input":{"command":"ls -la"}}],"created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"assistant"}]}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that content includes both text and placeholder for tool
+    assert!(message.content.contains("Let me run a command"));
+    assert!(message.content.contains("[Tool Use: Bash]"));
+
+    // Check that tool_uses were extracted
+    assert!(message.tool_uses.is_some());
+    let tool_uses = message.tool_uses.as_ref().unwrap();
+    assert_eq!(tool_uses.len(), 1);
+
+    let tool_use = &tool_uses[0];
+    assert_eq!(tool_use.id, "toolu_123");
+    assert_eq!(tool_use.name, "Bash");
+    assert_eq!(tool_use.vendor_type, "tool_use");
+    assert_eq!(
+        tool_use.input.get("command").and_then(|v| v.as_str()),
+        Some("ls -la")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_claude_code_parser_tool_result_extraction() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":[{"type":"tool_result","tool_use_id":"toolu_123","content":"total 8\ndrwxr-xr-x 2 user user 4096"}],"created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"user"}]}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that content includes placeholder for tool result with content
+    assert!(message.content.contains("[Tool Result: total 8"));
+
+    // Check that tool_results were extracted
+    assert!(message.tool_results.is_some());
+    let tool_results = message.tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 1);
+
+    let tool_result = &tool_results[0];
+    assert_eq!(tool_result.tool_use_id, "toolu_123");
+    assert!(tool_result.content.contains("total 8"));
+    assert!(!tool_result.is_error);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_claude_code_parser_multiple_tools() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":[{"type":"text","text":"Running multiple commands"},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"pwd"}},{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/test/file.txt"}}],"created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"assistant"}]}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that tool_uses were extracted
+    assert!(message.tool_uses.is_some());
+    let tool_uses = message.tool_uses.as_ref().unwrap();
+    assert_eq!(tool_uses.len(), 2);
+
+    assert_eq!(tool_uses[0].name, "Bash");
+    assert_eq!(tool_uses[1].name, "Read");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_claude_code_parser_tool_result_with_error() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":[{"type":"tool_result","tool_use_id":"toolu_123","content":"File not found","is_error":true}],"created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"user"}]}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (_session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+
+    // Check that tool_results were extracted with error flag
+    assert!(message.tool_results.is_some());
+    let tool_results = message.tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 1);
+
+    let tool_result = &tool_results[0];
+    assert_eq!(tool_result.tool_use_id, "toolu_123");
+    assert!(tool_result.is_error);
+    assert!(tool_result.content.contains("File not found"));
+
+    Ok(())
+}
