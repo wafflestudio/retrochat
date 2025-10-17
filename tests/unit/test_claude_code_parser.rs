@@ -228,7 +228,10 @@ async fn test_claude_code_parser_tool_use_extraction() -> Result<()> {
     assert_eq!(tool_use.id, "toolu_123");
     assert_eq!(tool_use.name, "Bash");
     assert_eq!(tool_use.vendor_type, "tool_use");
-    assert_eq!(tool_use.input.get("command").and_then(|v| v.as_str()), Some("ls -la"));
+    assert_eq!(
+        tool_use.input.get("command").and_then(|v| v.as_str()),
+        Some("ls -la")
+    );
 
     Ok(())
 }

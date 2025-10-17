@@ -377,9 +377,7 @@ async fn test_cursor_parser_no_tools() -> Result<()> {
 
     // Should not have any tools
     assert!(message.tool_uses.is_none() || message.tool_uses.as_ref().unwrap().is_empty());
-    assert!(
-        message.tool_results.is_none() || message.tool_results.as_ref().unwrap().is_empty()
-    );
+    assert!(message.tool_results.is_none() || message.tool_results.as_ref().unwrap().is_empty());
 
     Ok(())
 }

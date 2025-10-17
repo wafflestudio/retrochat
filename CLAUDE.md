@@ -79,6 +79,11 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 
 ## Development Rules
 
+### Code Formatting (CRITICAL)
+- **ALWAYS run `cargo fmt` before committing**: This is mandatory and must never be forgotten
+- **Run `cargo fmt --check` during development**: Verify formatting before pushing
+- **Format first, then commit**: Make it a habit - fmt → test → commit → push
+
 ### Test-Driven Development (TDD)
 - **Sequential TDD**: Write one test at a time, then implement the corresponding functionality
 - **No bulk testing**: Do not write all tests upfront - follow the red-green-refactor cycle strictly
