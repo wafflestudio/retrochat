@@ -92,6 +92,9 @@ mod tests {
 
     #[test]
     fn test_claude_code_get_import_directories() {
+        // Ensure env var is not set for this test
+        std::env::remove_var(env_vars::CLAUDE_DIRS);
+
         let config = ClaudeCodeConfig::create();
         let dirs = config.get_import_directories();
 

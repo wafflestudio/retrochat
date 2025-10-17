@@ -24,12 +24,22 @@ impl MessageRepository {
             .as_ref()
             .and_then(|tc| serde_json::to_string(tc).ok());
 
+        let tool_uses_json = message
+            .tool_uses
+            .as_ref()
+            .and_then(|tu| serde_json::to_string(tu).ok());
+
+        let tool_results_json = message
+            .tool_results
+            .as_ref()
+            .and_then(|tr| serde_json::to_string(tr).ok());
+
         sqlx::query(
             r#"
             INSERT INTO messages (
                 id, session_id, role, content, timestamp, token_count,
-                tool_calls, metadata, sequence_number
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tool_calls, metadata, sequence_number, tool_uses, tool_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(message.id.to_string())
@@ -41,6 +51,8 @@ impl MessageRepository {
         .bind(tool_calls_json)
         .bind("{}") // metadata
         .bind(message.sequence_number)
+        .bind(tool_uses_json)
+        .bind(tool_results_json)
         .execute(&self.pool)
         .await
         .context("Failed to create message")?;
@@ -52,7 +64,7 @@ impl MessageRepository {
         let row = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   tool_calls, metadata, sequence_number
+                   tool_calls, metadata, sequence_number, tool_uses, tool_results
             FROM messages
             WHERE id = ?
             "#,
@@ -75,7 +87,7 @@ impl MessageRepository {
         let rows = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   tool_calls, metadata, sequence_number
+                   tool_calls, metadata, sequence_number, tool_uses, tool_results
             FROM messages
             WHERE session_id = ?
             ORDER BY sequence_number ASC
@@ -109,8 +121,9 @@ impl MessageRepository {
 
         let rows = sqlx::query(
             r#"
-            SELECT m.id, m.session_id, m.role, m.content, m.timestamp, 
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
+                   m.tool_uses, m.tool_results
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -143,8 +156,9 @@ impl MessageRepository {
         let limit = limit.unwrap_or(100);
 
         let mut sql = r#"
-            SELECT m.id, m.session_id, m.role, m.content, m.timestamp, 
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
+                   m.tool_uses, m.tool_results
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -223,6 +237,8 @@ impl MessageRepository {
         let token_count: Option<i64> = row.try_get("token_count")?;
         let tool_calls_json: Option<String> = row.try_get("tool_calls")?;
         let sequence_number: i64 = row.try_get("sequence_number")?;
+        let tool_uses_json: Option<String> = row.try_get("tool_uses")?;
+        let tool_results_json: Option<String> = row.try_get("tool_results")?;
 
         let id = Uuid::parse_str(&id_str).context("Invalid message ID format")?;
         let session_id = Uuid::parse_str(&session_id_str).context("Invalid session ID format")?;
@@ -233,6 +249,18 @@ impl MessageRepository {
             .with_timezone(&Utc);
 
         let tool_calls = if let Some(json) = &tool_calls_json {
+            serde_json::from_str(json).ok()
+        } else {
+            None
+        };
+
+        let tool_uses = if let Some(json) = &tool_uses_json {
+            serde_json::from_str(json).ok()
+        } else {
+            None
+        };
+
+        let tool_results = if let Some(json) = &tool_results_json {
             serde_json::from_str(json).ok()
         } else {
             None
@@ -250,6 +278,8 @@ impl MessageRepository {
             tool_calls,
             metadata,
             sequence_number: sequence_number as u32,
+            tool_uses,
+            tool_results,
         })
     }
 }
