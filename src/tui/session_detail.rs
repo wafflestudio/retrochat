@@ -10,8 +10,8 @@ use ratatui::{
 use std::sync::Arc;
 
 use crate::database::{DatabaseManager, RetrospectionRepository};
-use crate::models::MessageRole;
-use crate::services::{QueryService, SessionDetailRequest};
+use crate::models::{Message, MessageRole};
+use crate::services::{MessageGroup, QueryService, SessionDetailRequest};
 
 use super::state::SessionDetailState;
 use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
@@ -265,167 +265,277 @@ impl SessionDetailWidget {
     fn calculate_message_lines(&self, width: usize) -> Vec<Line<'_>> {
         let mut lines = Vec::new();
 
-        for (i, message) in self.state.messages.iter().enumerate() {
-            // Add separator between messages (except for first)
-            if i > 0 {
+        // Pair tool_use and tool_result messages
+        let message_groups = MessageGroup::pair_tool_messages(self.state.messages.clone());
+
+        for (group_idx, group) in message_groups.iter().enumerate() {
+            // Add separator between groups (except for first)
+            if group_idx > 0 {
                 lines.push(Line::from(vec![Span::styled(
                     "─".repeat(width.min(80)),
                     Style::default().fg(Color::DarkGray),
                 )]));
             }
 
-            // Message header
-            let role_style = match message.role {
-                MessageRole::User => Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-                MessageRole::Assistant => Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-                MessageRole::System => Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            };
-
-            let timestamp = &message.timestamp.format("%H:%M:%S").to_string(); // Just show time
-            let header = format!("[{}] {:?}", timestamp, message.role);
-
-            lines.push(Line::from(vec![
-                Span::styled(header, role_style),
-                Span::raw(format!(" ({})", message.sequence_number)),
-            ]));
-
-            // Message content - wrap if needed
-            let content_lines = if self.state.message_wrap {
-                wrap_text(&message.content, width.saturating_sub(2))
-            } else {
-                vec![message.content.clone()]
-            };
-
-            for content_line in content_lines {
-                lines.push(Line::from(vec![Span::styled(
-                    format!("  {content_line}"),
-                    Style::default().fg(Color::White),
-                )]));
-            }
-
-            // Show tool uses inline (new unified format)
-            if let Some(tool_uses) = &message.tool_uses {
-                if !tool_uses.is_empty() {
-                    let tool_results = message.tool_results.as_deref().unwrap_or(&[]);
-
-                    // Create tool display config
-                    let tool_config = ToolDisplayConfig {
-                        width: width.saturating_sub(4),
-                        show_details: self.state.show_tool_details,
-                        max_output_lines: 10,
-                    };
-
-                    // Format and add tool display lines
-                    let tool_lines =
-                        self.tool_formatter
-                            .format_tools(tool_uses, tool_results, &tool_config);
-
-                    // Indent tool lines
-                    for tool_line in tool_lines {
-                        let indented_spans: Vec<Span> = std::iter::once(Span::raw("  "))
-                            .chain(tool_line.spans.into_iter())
-                            .collect();
-                        lines.push(Line::from(indented_spans));
-                    }
+            match group {
+                MessageGroup::Single(message) => {
+                    self.render_message_block(message, width, &mut lines);
+                }
+                MessageGroup::ToolPair {
+                    tool_use_message,
+                    tool_result_message,
+                } => {
+                    self.render_tool_pair_block(
+                        tool_use_message,
+                        tool_result_message,
+                        width,
+                        &mut lines,
+                    );
                 }
             }
-            // Show tool results if present without tool uses (separate message pattern)
-            else if let Some(tool_results) = &message.tool_results {
-                if !tool_results.is_empty() {
-                    lines.push(Line::from(vec![Span::styled(
-                        "  [Tool Results]",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::ITALIC),
-                    )]));
+        }
 
-                    // Display each tool result
-                    for result in tool_results {
-                        let status_icon = if result.is_error { "✗" } else { "✓" };
-                        let status_color = if result.is_error {
-                            Color::Red
-                        } else {
-                            Color::Green
-                        };
+        lines
+    }
 
-                        lines.push(Line::from(vec![
-                            Span::raw("    "),
-                            Span::styled(status_icon, Style::default().fg(status_color)),
-                            Span::raw(" "),
-                            Span::styled(
-                                format!("Tool: {}", result.tool_use_id),
-                                Style::default().fg(Color::DarkGray),
-                            ),
-                        ]));
+    /// Renders a single message block
+    fn render_message_block(&self, message: &Message, width: usize, lines: &mut Vec<Line<'_>>) {
+        // Message header
+        let role_style = match message.role {
+            MessageRole::User => Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+            MessageRole::Assistant => Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+            MessageRole::System => Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        };
 
-                        // Show result content preview if show_details is enabled
-                        if self.state.show_tool_details && !result.content.is_empty() {
-                            let preview_lines: Vec<&str> = result.content.lines().take(5).collect();
-                            for line in preview_lines {
-                                lines.push(Line::from(vec![
-                                    Span::raw("      "),
-                                    Span::styled(
-                                        line.to_string(),
-                                        Style::default().fg(Color::Gray),
-                                    ),
-                                ]));
-                            }
-                            if result.content.lines().count() > 5 {
-                                lines.push(Line::from(vec![
-                                    Span::raw("      "),
-                                    Span::styled(
-                                        "...",
-                                        Style::default()
-                                            .fg(Color::DarkGray)
-                                            .add_modifier(Modifier::ITALIC),
-                                    ),
-                                ]));
-                            }
+        let timestamp = &message.timestamp.format("%H:%M:%S").to_string(); // Just show time
+        let header = format!("[{}] {:?}", timestamp, message.role);
+
+        lines.push(Line::from(vec![
+            Span::styled(header, role_style),
+            Span::raw(format!(" ({})", message.sequence_number)),
+        ]));
+
+        // Message content - wrap if needed
+        let content_lines = if self.state.message_wrap {
+            wrap_text(&message.content, width.saturating_sub(2))
+        } else {
+            vec![message.content.clone()]
+        };
+
+        for content_line in content_lines {
+            lines.push(Line::from(vec![Span::styled(
+                format!("  {content_line}"),
+                Style::default().fg(Color::White),
+            )]));
+        }
+
+        // Show tool uses inline (new unified format)
+        if let Some(tool_uses) = &message.tool_uses {
+            if !tool_uses.is_empty() {
+                let tool_results = message.tool_results.as_deref().unwrap_or(&[]);
+
+                // Create tool display config
+                let tool_config = ToolDisplayConfig {
+                    width: width.saturating_sub(4),
+                    show_details: self.state.show_tool_details,
+                    max_output_lines: 10,
+                };
+
+                // Format and add tool display lines
+                let tool_lines =
+                    self.tool_formatter
+                        .format_tools(tool_uses, tool_results, &tool_config);
+
+                // Indent tool lines
+                for tool_line in tool_lines {
+                    let indented_spans: Vec<Span> = std::iter::once(Span::raw("  "))
+                        .chain(tool_line.spans.into_iter())
+                        .collect();
+                    lines.push(Line::from(indented_spans));
+                }
+            }
+        }
+        // Show tool results if present without tool uses (separate message pattern)
+        else if let Some(tool_results) = &message.tool_results {
+            if !tool_results.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    "  [Tool Results]",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::ITALIC),
+                )]));
+
+                // Display each tool result
+                for result in tool_results {
+                    let status_icon = if result.is_error { "✗" } else { "✓" };
+                    let status_color = if result.is_error {
+                        Color::Red
+                    } else {
+                        Color::Green
+                    };
+
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(status_icon, Style::default().fg(status_color)),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("Tool: {}", result.tool_use_id),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+
+                    // Show result content preview if show_details is enabled
+                    if self.state.show_tool_details && !result.content.is_empty() {
+                        let preview_lines: Vec<&str> = result.content.lines().take(5).collect();
+                        for line in preview_lines {
+                            lines.push(Line::from(vec![
+                                Span::raw("      "),
+                                Span::styled(line.to_string(), Style::default().fg(Color::Gray)),
+                            ]));
+                        }
+                        if result.content.lines().count() > 5 {
+                            lines.push(Line::from(vec![
+                                Span::raw("      "),
+                                Span::styled(
+                                    "...",
+                                    Style::default()
+                                        .fg(Color::DarkGray)
+                                        .add_modifier(Modifier::ITALIC),
+                                ),
+                            ]));
                         }
                     }
                 }
             }
-            // Show old tool calls format for backwards compatibility (if no tool_uses)
-            else if let Some(tool_calls) = &message.tool_calls {
-                if !tool_calls.is_empty() {
-                    lines.push(Line::from(vec![Span::styled(
-                        "  [Tool Calls - Legacy Format]",
-                        Style::default()
-                            .fg(Color::Magenta)
-                            .add_modifier(Modifier::ITALIC),
-                    )]));
+        }
+        // Show old tool calls format for backwards compatibility (if no tool_uses)
+        else if let Some(tool_calls) = &message.tool_calls {
+            if !tool_calls.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    "  [Tool Calls - Legacy Format]",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::ITALIC),
+                )]));
 
-                    // Parse and display tool calls (simplified)
-                    let tools_preview =
-                        truncate_text(&format!("{tool_calls:?}"), width.saturating_sub(4));
-                    for tool_line in wrap_text(&tools_preview, width.saturating_sub(4)) {
-                        lines.push(Line::from(vec![Span::styled(
-                            format!("    {tool_line}"),
-                            Style::default().fg(Color::DarkGray),
-                        )]));
-                    }
+                // Parse and display tool calls (simplified)
+                let tools_preview =
+                    truncate_text(&format!("{tool_calls:?}"), width.saturating_sub(4));
+                for tool_line in wrap_text(&tools_preview, width.saturating_sub(4)) {
+                    lines.push(Line::from(vec![Span::styled(
+                        format!("    {tool_line}"),
+                        Style::default().fg(Color::DarkGray),
+                    )]));
                 }
             }
-
-            // Token count if available
-            if let Some(tokens) = message.token_count {
-                lines.push(Line::from(vec![Span::styled(
-                    format!("  [Tokens: {tokens}]"),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
-                )]));
-            }
-
-            // Add empty line for readability
-            lines.push(Line::from(""));
         }
 
-        lines
+        // Token count if available
+        if let Some(tokens) = message.token_count {
+            lines.push(Line::from(vec![Span::styled(
+                format!("  [Tokens: {tokens}]"),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+            )]));
+        }
+
+        // Add empty line for readability
+        lines.push(Line::from(""));
+    }
+
+    /// Renders a tool use/result pair as a unified block
+    fn render_tool_pair_block(
+        &self,
+        tool_use_msg: &Message,
+        tool_result_msg: &Message,
+        width: usize,
+        lines: &mut Vec<Line<'_>>,
+    ) {
+        // Render the tool use message header
+        let role_style = Style::default()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::BOLD);
+
+        let timestamp = &tool_use_msg.timestamp.format("%H:%M:%S").to_string();
+        let header = format!("[{}] {:?} → Tool Execution", timestamp, tool_use_msg.role);
+
+        lines.push(Line::from(vec![
+            Span::styled(header, role_style),
+            Span::raw(format!(
+                " ({}, {})",
+                tool_use_msg.sequence_number, tool_result_msg.sequence_number
+            )),
+        ]));
+
+        // Show tool use message content
+        let content_lines = if self.state.message_wrap {
+            wrap_text(&tool_use_msg.content, width.saturating_sub(2))
+        } else {
+            vec![tool_use_msg.content.clone()]
+        };
+
+        for content_line in content_lines {
+            lines.push(Line::from(vec![Span::styled(
+                format!("  {content_line}"),
+                Style::default().fg(Color::White),
+            )]));
+        }
+
+        // Render tool uses with their results
+        if let (Some(tool_uses), Some(tool_results)) =
+            (&tool_use_msg.tool_uses, &tool_result_msg.tool_results)
+        {
+            let tool_config = ToolDisplayConfig {
+                width: width.saturating_sub(4),
+                show_details: self.state.show_tool_details,
+                max_output_lines: 10,
+            };
+
+            // Format and add tool display lines
+            let tool_lines =
+                self.tool_formatter
+                    .format_tools(tool_uses, tool_results, &tool_config);
+
+            // Add visual indicator for paired tool execution
+            lines.push(Line::from(vec![Span::styled(
+                "  ├─ Tool Execution & Result",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+
+            // Indent tool lines
+            for tool_line in tool_lines {
+                let indented_spans: Vec<Span> = std::iter::once(Span::raw("  │  "))
+                    .chain(tool_line.spans.into_iter())
+                    .collect();
+                lines.push(Line::from(indented_spans));
+            }
+        }
+
+        // Token counts from both messages
+        if let (Some(use_tokens), Some(result_tokens)) =
+            (tool_use_msg.token_count, tool_result_msg.token_count)
+        {
+            let total = use_tokens + result_tokens;
+            lines.push(Line::from(vec![Span::styled(
+                format!("  [Tokens: {total} (use: {use_tokens}, result: {result_tokens})]"),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+            )]));
+        } else if let Some(tokens) = tool_use_msg.token_count.or(tool_result_msg.token_count) {
+            lines.push(Line::from(vec![Span::styled(
+                format!("  [Tokens: {tokens}]"),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+            )]));
+        }
+
+        // Add empty line for readability
+        lines.push(Line::from(""));
     }
 
     fn get_total_lines(&self) -> usize {

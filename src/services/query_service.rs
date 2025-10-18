@@ -5,8 +5,105 @@ use crate::models::{ChatSession, Message, OperationStatus};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Represents a message or group of related messages for display purposes
+#[derive(Debug, Clone)]
+pub enum MessageGroup {
+    /// A single standalone message
+    Single(Message),
+    /// A tool use message paired with its corresponding tool result message
+    ToolPair {
+        tool_use_message: Message,
+        tool_result_message: Message,
+    },
+}
+
+impl MessageGroup {
+    /// Pairs tool_use and tool_result messages that appear in separate messages.
+    ///
+    /// This function groups consecutive messages where:
+    /// - Message N has tool_uses
+    /// - Message N+1 has tool_results with matching tool_use_id
+    ///
+    /// Messages with both tool_uses and tool_results are kept as Single (already paired).
+    pub fn pair_tool_messages(messages: Vec<Message>) -> Vec<Self> {
+        let mut groups = Vec::new();
+        let mut i = 0;
+
+        while i < messages.len() {
+            let current = &messages[i];
+
+            // Check if this message has tool_uses but no tool_results (potential pair start)
+            let has_tool_uses = current
+                .tool_uses
+                .as_ref()
+                .is_some_and(|uses| !uses.is_empty());
+            let has_tool_results = current
+                .tool_results
+                .as_ref()
+                .is_some_and(|results| !results.is_empty());
+
+            if has_tool_uses && !has_tool_results && i + 1 < messages.len() {
+                // Check if next message has matching tool_results
+                let next = &messages[i + 1];
+
+                if let (Some(tool_uses), Some(tool_results)) =
+                    (&current.tool_uses, &next.tool_results)
+                {
+                    // Check if the next message has ONLY tool_results (no tool_uses)
+                    let next_has_tool_uses =
+                        next.tool_uses.as_ref().is_some_and(|uses| !uses.is_empty());
+
+                    if !next_has_tool_uses {
+                        // Collect all tool_use IDs from current message
+                        let tool_use_ids: HashSet<&str> =
+                            tool_uses.iter().map(|u| u.id.as_str()).collect();
+
+                        // Check if any tool_result matches any tool_use
+                        let has_matching_result = tool_results
+                            .iter()
+                            .any(|r| tool_use_ids.contains(r.tool_use_id.as_str()));
+
+                        if has_matching_result {
+                            // Create a ToolPair and skip the next message
+                            groups.push(MessageGroup::ToolPair {
+                                tool_use_message: current.clone(),
+                                tool_result_message: next.clone(),
+                            });
+                            i += 2; // Skip both messages
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // Not a pair, add as single
+            groups.push(MessageGroup::Single(current.clone()));
+            i += 1;
+        }
+
+        groups
+    }
+
+    /// Returns all messages contained in this group (for iteration)
+    pub fn messages(&self) -> Vec<&Message> {
+        match self {
+            MessageGroup::Single(msg) => vec![msg],
+            MessageGroup::ToolPair {
+                tool_use_message,
+                tool_result_message,
+            } => vec![tool_use_message, tool_result_message],
+        }
+    }
+
+    /// Returns true if this is a tool pair
+    pub fn is_tool_pair(&self) -> bool {
+        matches!(self, MessageGroup::ToolPair { .. })
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionsQueryRequest {
