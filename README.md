@@ -1,6 +1,13 @@
 # RetroChat
 
-LLM Agent Chat History Retrospect Application - A powerful tool for analyzing and exploring your LLM conversation history from multiple providers.
+<p align="center">
+  <img src="docs/assets/splash.png" alt="RetroChat - Review Your AI Chats" width="800"/>
+</p>
+
+<p align="center">
+  <strong>LLM Agent Chat History Retrospect Application</strong><br>
+  A powerful tool for analyzing and exploring your LLM conversation history from multiple providers.
+</p>
 
 ## Features
 
