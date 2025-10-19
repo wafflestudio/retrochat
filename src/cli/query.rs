@@ -180,17 +180,22 @@ pub async fn handle_timeline_command(options: TimelineOptions) -> Result<()> {
     let db_manager = DatabaseManager::new(&db_path).await?;
     let message_repo = crate::database::message_repo::MessageRepository::new(&db_manager);
 
+    // Determine if we should exclude tool messages (compact mode excludes them)
+    let exclude_tool_messages = options.format.as_str() == "compact";
+
+    // Build query
+    let query = crate::database::message_repo::TimeRangeQuery {
+        from,
+        to,
+        provider: options.provider,
+        role: options.role,
+        limit: options.limit.map(|l| l as i64),
+        reverse: options.reverse,
+        exclude_tool_messages,
+    };
+
     // Query messages
-    let messages = message_repo
-        .get_by_time_range(
-            from,
-            to,
-            options.provider.as_deref(),
-            options.role.as_deref(),
-            options.limit.map(|l| l as i64),
-            options.reverse,
-        )
-        .await?;
+    let messages = message_repo.get_by_time_range(query).await?;
 
     // Format output
     match options.format.as_str() {

@@ -13,7 +13,6 @@ const Timeline = {
         providerSelect: null,
         roleSelect: null,
         modeSelect: null,
-        limitInput: null,
         queryBtn: null,
         copyBtn: null,
         exportBtn: null,
@@ -31,7 +30,6 @@ const Timeline = {
             providerSelect: document.getElementById('timeline-provider'),
             roleSelect: document.getElementById('timeline-role'),
             modeSelect: document.getElementById('timeline-mode'),
-            limitInput: document.getElementById('timeline-limit'),
             queryBtn: document.getElementById('timeline-query-btn'),
             copyBtn: document.getElementById('timeline-copy-btn'),
             exportBtn: document.getElementById('timeline-export-btn'),
@@ -70,7 +68,7 @@ const Timeline = {
         }
 
         // Enter key in inputs
-        [this.elements.sinceInput, this.elements.untilInput, this.elements.limitInput].forEach(input => {
+        [this.elements.sinceInput, this.elements.untilInput].forEach(input => {
             if (input) {
                 input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.query();
@@ -98,13 +96,13 @@ const Timeline = {
         const until = this.elements.untilInput.value.trim();
         const provider = this.elements.providerSelect.value;
         const role = this.elements.roleSelect.value;
-        const limit = this.elements.limitInput.value;
+        const format = this.elements.modeSelect.value;
 
         if (since) params.append('since', since);
         if (until) params.append('until', until);
         if (provider) params.append('provider', provider);
         if (role) params.append('role', role);
-        if (limit) params.append('limit', limit);
+        if (format) params.append('format', format);
 
         try {
             this.showLoading();

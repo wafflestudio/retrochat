@@ -7,6 +7,18 @@ use uuid::Uuid;
 use super::connection::DatabaseManager;
 use crate::models::message::{Message, MessageRole};
 
+/// Query options for time range queries
+#[derive(Debug, Clone, Default)]
+pub struct TimeRangeQuery {
+    pub from: Option<DateTime<Utc>>,
+    pub to: Option<DateTime<Utc>>,
+    pub provider: Option<String>,
+    pub role: Option<String>,
+    pub limit: Option<i64>,
+    pub reverse: bool,
+    pub exclude_tool_messages: bool,
+}
+
 pub struct MessageRepository {
     pool: Pool<Sqlite>,
 }
@@ -229,15 +241,7 @@ impl MessageRepository {
     }
 
     /// Get messages by time range with optional filters
-    pub async fn get_by_time_range(
-        &self,
-        from: Option<DateTime<Utc>>,
-        to: Option<DateTime<Utc>>,
-        provider: Option<&str>,
-        role: Option<&str>,
-        limit: Option<i64>,
-        reverse: bool,
-    ) -> AnyhowResult<Vec<Message>> {
+    pub async fn get_by_time_range(&self, query: TimeRangeQuery) -> AnyhowResult<Vec<Message>> {
         let mut sql = String::from(
             r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
@@ -249,15 +253,15 @@ impl MessageRepository {
 
         let mut conditions = Vec::new();
 
-        if from.is_some() {
+        if query.from.is_some() {
             conditions.push("m.timestamp >= ?");
         }
 
-        if to.is_some() {
+        if query.to.is_some() {
             conditions.push("m.timestamp <= ?");
         }
 
-        if provider.is_some() {
+        if query.provider.is_some() {
             conditions.push(
                 "EXISTS (
                     SELECT 1 FROM chat_sessions cs
@@ -266,8 +270,12 @@ impl MessageRepository {
             );
         }
 
-        if role.is_some() {
+        if query.role.is_some() {
             conditions.push("m.role = ?");
+        }
+
+        if query.exclude_tool_messages {
+            conditions.push("m.tool_uses IS NULL AND m.tool_results IS NULL");
         }
 
         if !conditions.is_empty() {
@@ -276,27 +284,27 @@ impl MessageRepository {
         }
 
         sql.push_str(" ORDER BY m.timestamp ");
-        sql.push_str(if reverse { "DESC" } else { "ASC" });
+        sql.push_str(if query.reverse { "DESC" } else { "ASC" });
 
-        if let Some(lim) = limit {
+        if let Some(lim) = query.limit {
             sql.push_str(&format!(" LIMIT {}", lim));
         }
 
         let mut query_builder = sqlx::query(&sql);
 
-        if let Some(from_time) = from {
+        if let Some(from_time) = query.from {
             query_builder = query_builder.bind(from_time.to_rfc3339());
         }
 
-        if let Some(to_time) = to {
+        if let Some(to_time) = query.to {
             query_builder = query_builder.bind(to_time.to_rfc3339());
         }
 
-        if let Some(prov) = provider {
+        if let Some(prov) = &query.provider {
             query_builder = query_builder.bind(prov);
         }
 
-        if let Some(r) = role {
+        if let Some(r) = &query.role {
             query_builder = query_builder.bind(r);
         }
 

@@ -28,12 +28,16 @@ body {
     color: var(--text-primary);
     line-height: 1.5;
     min-height: 100vh;
+    overflow-y: auto;
 }
 
 .container {
     max-width: 1400px;
     margin: 0 auto;
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
 /* Header */
@@ -209,7 +213,10 @@ body {
     border-radius: var(--radius);
     border: 1px solid var(--border);
     padding: 0;
-    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 /* All views should have same structure */
@@ -218,7 +225,8 @@ body {
 .timeline-view {
     display: flex;
     flex-direction: column;
-    min-height: 500px;
+    height: 100%;
+    min-height: 0;
 }
 
 .section-header {
@@ -775,8 +783,6 @@ body {
     border: none;
     border-radius: 0;
     padding: 16px 20px;
-    min-height: 400px;
-    max-height: 70vh;
     overflow-y: auto;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
     font-size: 0.9rem;

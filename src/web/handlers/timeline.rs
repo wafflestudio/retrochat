@@ -15,8 +15,8 @@ pub struct TimelineQuery {
     pub until: Option<String>,
     pub provider: Option<String>,
     pub role: Option<String>,
-    pub limit: Option<i32>,
     pub reverse: Option<bool>,
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -75,7 +75,11 @@ pub async fn query_timeline(
             .map_err(|e| AppError::Internal(format!("Failed to connect to database: {e}")))?,
     );
 
-    // Build custom SQL query with JOIN to get provider and project
+    // Determine if we should exclude tool messages (compact mode excludes them)
+    let format = params.format.as_deref().unwrap_or("compact");
+    let exclude_tool_messages = format == "compact";
+
+    // Build SQL query with JOIN (more efficient than N+1 queries)
     let mut sql = String::from(
         r#"
         SELECT
@@ -109,6 +113,11 @@ pub async fn query_timeline(
         conditions.push("m.role = ?");
     }
 
+    // Apply tool message filtering for compact mode (same logic as MessageRepository)
+    if exclude_tool_messages {
+        conditions.push("m.tool_uses IS NULL AND m.tool_results IS NULL");
+    }
+
     if !conditions.is_empty() {
         sql.push_str(" WHERE ");
         sql.push_str(&conditions.join(" AND "));
@@ -120,10 +129,6 @@ pub async fn query_timeline(
     } else {
         "ASC"
     });
-
-    if let Some(limit) = params.limit {
-        sql.push_str(&format!(" LIMIT {}", limit));
-    }
 
     let mut query = sqlx::query_as::<_, TimelineMessage>(&sql);
 
