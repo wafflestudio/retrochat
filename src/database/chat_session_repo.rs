@@ -41,15 +41,16 @@ impl ChatSessionRepository {
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (
-                id, provider, project_name, start_time, end_time,
+                id, provider, project_name, project_path, start_time, end_time,
                 message_count, token_count, file_path, file_hash,
                 created_at, updated_at, state
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(session.id.to_string())
         .bind(session.provider.to_string())
         .bind(session.project_name.as_ref())
+        .bind(session.project_path.as_ref())
         .bind(session.start_time.to_rfc3339())
         .bind(session.end_time.map(|t| t.to_rfc3339()))
         .bind(session.message_count)
@@ -69,7 +70,7 @@ impl ChatSessionRepository {
     pub async fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<ChatSession>> {
         let row = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions WHERE id = ?
@@ -92,7 +93,7 @@ impl ChatSessionRepository {
     pub async fn get_all(&self) -> AnyhowResult<Vec<ChatSession>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions ORDER BY updated_at DESC
@@ -156,7 +157,7 @@ impl ChatSessionRepository {
     pub async fn get_by_provider(&self, provider: &Provider) -> AnyhowResult<Vec<ChatSession>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions WHERE provider = ? ORDER BY updated_at DESC
@@ -179,7 +180,7 @@ impl ChatSessionRepository {
     pub async fn get_by_project_name(&self, project_name: &str) -> AnyhowResult<Vec<ChatSession>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions WHERE project_name = ? ORDER BY updated_at DESC
@@ -202,7 +203,7 @@ impl ChatSessionRepository {
     pub async fn get_by_file_hash(&self, file_hash: &str) -> AnyhowResult<Option<ChatSession>> {
         let row = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions WHERE file_hash = ?
@@ -245,7 +246,7 @@ impl ChatSessionRepository {
     pub async fn get_recent_sessions(&self, limit: i64) -> AnyhowResult<Vec<ChatSession>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, provider, project_name, start_time, end_time,
+            SELECT id, provider, project_name, project_path, start_time, end_time,
                    message_count, token_count, file_path, file_hash,
                    created_at, updated_at, state
             FROM chat_sessions ORDER BY updated_at DESC LIMIT ?
@@ -269,6 +270,7 @@ impl ChatSessionRepository {
         let id_str: String = row.try_get("id")?;
         let provider_str: String = row.try_get("provider")?;
         let project_name: Option<String> = row.try_get("project_name")?;
+        let project_path: Option<String> = row.try_get("project_path")?;
         let start_time_str: String = row.try_get("start_time")?;
         let end_time_str: Option<String> = row.try_get("end_time")?;
         let message_count: i64 = row.try_get("message_count")?;
@@ -315,6 +317,7 @@ impl ChatSessionRepository {
             id,
             provider,
             project_name,
+            project_path,
             start_time,
             end_time,
             message_count: message_count as u32,

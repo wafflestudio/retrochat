@@ -381,3 +381,87 @@ async fn test_cursor_parser_no_tools() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_cursor_parser_project_path_inference() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create project directory structure: /path/to/myproject/.cursor/chats/{hash}/{uuid}/store.db
+    let project_dir = base_path.join("myproject");
+    let cursor_dir = project_dir.join(".cursor");
+    let chats_dir = cursor_dir.join("chats");
+    let hash_dir = chats_dir.join("53460df9022de1a66445a5b78b067dd9");
+    let uuid_dir = hash_dir.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+    fs::create_dir_all(&uuid_dir).unwrap();
+
+    let store_db = uuid_dir.join("store.db");
+
+    // Create database with metadata
+    let conn = rusqlite::Connection::open(&store_db).unwrap();
+    conn.execute("CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)", [])
+        .unwrap();
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+
+    let test_metadata = r#"{"agentId":"557abc41-6f00-41e7-bf7b-696c80d4ee94","latestRootBlobId":"test","name":"Test","mode":"default","createdAt":1758872189097,"lastUsedModel":"claude-3-5-sonnet"}"#;
+    let hex_metadata = hex::encode(test_metadata.as_bytes());
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('0', ?)",
+        [&hex_metadata],
+    )
+    .unwrap();
+
+    let parser = CursorAgentParser::new(&store_db);
+    let (session, _messages) = parser.parse().await?;
+
+    // Should have inferred project_path from directory structure
+    assert!(session.project_path.is_some());
+    let project_path = session.project_path.unwrap();
+    assert!(project_path.ends_with("myproject"));
+
+    // Should also have inferred project_name
+    assert_eq!(session.project_name, Some("myproject".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_cursor_parser_project_path_with_generic_name() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create structure where parent is "Users" (should be skipped)
+    // /Users/.cursor/chats/{hash}/{uuid}/store.db
+    let users_dir = base_path.join("Users");
+    let cursor_dir = users_dir.join(".cursor");
+    let chats_dir = cursor_dir.join("chats");
+    let hash_dir = chats_dir.join("53460df9022de1a66445a5b78b067dd9");
+    let uuid_dir = hash_dir.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
+    fs::create_dir_all(&uuid_dir).unwrap();
+
+    let store_db = uuid_dir.join("store.db");
+
+    // Create database
+    let conn = rusqlite::Connection::open(&store_db).unwrap();
+    conn.execute("CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)", [])
+        .unwrap();
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)", [])
+        .unwrap();
+
+    let test_metadata = r#"{"agentId":"557abc41-6f00-41e7-bf7b-696c80d4ee94","latestRootBlobId":"test","name":"Test","mode":"default","createdAt":1758872189097,"lastUsedModel":"claude-3-5-sonnet"}"#;
+    let hex_metadata = hex::encode(test_metadata.as_bytes());
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('0', ?)",
+        [&hex_metadata],
+    )
+    .unwrap();
+
+    let parser = CursorAgentParser::new(&store_db);
+    let (session, _messages) = parser.parse().await?;
+
+    // Should not have project_path because parent dir is "Users" (generic name)
+    assert_eq!(session.project_path, None);
+
+    Ok(())
+}

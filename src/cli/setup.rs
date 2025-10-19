@@ -1,7 +1,7 @@
 use anyhow::Result;
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use inquire::{Confirm, MultiSelect};
+use inquire::MultiSelect;
 use std::sync::Arc;
 
 use crate::database::{config, DatabaseManager};

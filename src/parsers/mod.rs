@@ -3,6 +3,7 @@ pub mod codex;
 pub mod cursor_agent;
 pub mod gemini_cli;
 pub mod project_inference;
+pub mod project_path_rainbow_table;
 
 use anyhow::{anyhow, Result};
 use std::path::Path;

@@ -156,6 +156,13 @@ impl CursorAgentParser {
             chat_session = chat_session.with_project(name);
         }
 
+        // Infer project path from database path
+        let project_path = self.infer_project_path();
+
+        if let Some(path) = project_path {
+            chat_session = chat_session.with_project_path(path);
+        }
+
         // Parse blobs to extract messages
         let messages = self.read_blobs(session_id, start_time)?;
 
@@ -409,6 +416,43 @@ impl CursorAgentParser {
                     let hash_str = hash_name.to_string_lossy();
                     if hash_str.len() >= 8 {
                         return Some(format!("cursor-{}", &hash_str[..8]));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn infer_project_path(&self) -> Option<String> {
+        use std::path::PathBuf;
+
+        let path = PathBuf::from(&self.db_path);
+
+        // Path structure: .../project_dir/.cursor/chats/{hash}/{uuid}/store.db
+        // We want to extract the full path of project_dir
+
+        if let Some(uuid_dir) = path.parent() {
+            if let Some(hash_dir) = uuid_dir.parent() {
+                if let Some(chats_dir) = hash_dir.parent() {
+                    // chats_dir is .cursor/chats
+                    if let Some(cursor_dir) = chats_dir.parent() {
+                        // cursor_dir is .cursor
+                        if let Some(project_dir) = cursor_dir.parent() {
+                            // This is the actual project directory
+                            if let Some(project_name) = project_dir.file_name() {
+                                let name = project_name.to_string_lossy().to_string();
+                                // Skip generic names like "Users", "home", etc.
+                                if !name.starts_with('.')
+                                    && name != "Users"
+                                    && name != "home"
+                                    && name.len() > 1
+                                {
+                                    // Return the full path to project directory
+                                    return Some(project_dir.to_string_lossy().to_string());
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -30,10 +30,10 @@ pub fn parse_time_spec(spec: &str) -> Result<DateTime<Utc>> {
 
     // 4. Short date: 2024-10-19
     if let Ok(date) = NaiveDate::parse_from_str(spec, "%Y-%m-%d") {
-        return Ok(Utc
+        return Utc
             .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .single()
-            .context("Ambiguous date/time")?);
+            .context("Ambiguous date/time");
     }
 
     // 5. Relative time: "7 days ago", "1 week ago", "yesterday"

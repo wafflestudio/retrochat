@@ -455,3 +455,81 @@ async fn test_claude_conversation_multiple_tool_results() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_claude_code_parser_project_path_from_single_cwd() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    // Conversation format with cwd in each entry
+    let sample_data = r#"{"type":"user","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","message":{"role":"user","content":"Hello"}}
+{"type":"assistant","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:01:00Z","message":{"role":"assistant","content":"Hi"}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (session, _messages) = result.unwrap();
+
+    // Should have extracted project_path from cwd
+    assert_eq!(
+        session.project_path,
+        Some("/Users/test/myproject".to_string())
+    );
+
+    // Note: project_name is inferred from file path (not cwd) via ProjectInference,
+    // so we don't assert it here since NamedTempFile creates random paths
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_claude_code_parser_project_path_from_multiple_cwds() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    // Multiple messages with different cwds - frequency-based selection
+    // worktree path appears 2 times, main path appears 4 times -> main should win
+    let sample_data = r#"{"type":"user","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","message":{"role":"user","content":"msg1"}}
+{"type":"assistant","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:01:00Z","message":{"role":"assistant","content":"msg2"}}
+{"type":"user","cwd":"/Users/test/myproject/.worktree/feature-x","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:02:00Z","message":{"role":"user","content":"msg3"}}
+{"type":"assistant","cwd":"/Users/test/myproject/.worktree/feature-x","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:03:00Z","message":{"role":"assistant","content":"msg4"}}
+{"type":"user","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:04:00Z","message":{"role":"user","content":"msg5"}}
+{"type":"assistant","cwd":"/Users/test/myproject","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:05:00Z","message":{"role":"assistant","content":"msg6"}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (session, messages) = result.unwrap();
+
+    assert_eq!(messages.len(), 6);
+
+    // Should have selected the most frequent cwd (main path appears 4 times)
+    assert_eq!(
+        session.project_path,
+        Some("/Users/test/myproject".to_string())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_claude_code_parser_project_path_without_cwd() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    // Old format without cwd field
+    let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":"Hello","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"user"}]}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = ClaudeCodeParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (session, _messages) = result.unwrap();
+
+    // Should not have project_path when cwd is not available
+    assert_eq!(session.project_path, None);
+
+    Ok(())
+}

@@ -249,3 +249,50 @@ async fn test_codex_parser_multiple_content_items() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_codex_parser_project_path_from_cwd() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z","cwd":"/Users/test/myproject"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = CodexParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (session, _messages) = result.unwrap();
+
+    // Should have extracted project_path from cwd
+    assert_eq!(
+        session.project_path,
+        Some("/Users/test/myproject".to_string())
+    );
+
+    // Should also have extracted project_name from cwd
+    assert_eq!(session.project_name, Some("myproject".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_codex_parser_project_path_without_cwd() -> Result<()> {
+    let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+    // No cwd in session_meta
+    let sample_data = r#"{"timestamp":"2025-10-12T14:10:16.717Z","type":"session_meta","payload":{"id":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T10:00:00Z"}}
+{"timestamp":"2025-10-12T17:53:40.556Z","type":"event_msg","payload":{"type":"user_message","message":"Hello"}}"#;
+
+    temp_file.write_all(sample_data.as_bytes()).unwrap();
+
+    let parser = CodexParser::new(temp_file.path());
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let (session, _messages) = result.unwrap();
+
+    // Should not have project_path when cwd is missing
+    assert_eq!(session.project_path, None);
+
+    Ok(())
+}

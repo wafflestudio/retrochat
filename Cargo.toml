@@ -39,6 +39,12 @@ num_cpus = "1.16"
 indicatif = "0.17"
 inquire = "0.7"
 console = "0.15"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+mime_guess = "2.0"
+regex = "1.10"
+sha2 = "0.10"
 
 [features]
 default = ["reqwest"]

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroChat - LLM Chat History Viewer</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>RetroChat</h1>
+                    <p class="subtitle">LLM Chat History Viewer</p>
+                </div>
+                <div class="header-stats" id="stats">
+                    <div class="stat">
+                        <span class="stat-label">Total Sessions</span>
+                        <span class="stat-value" id="total-sessions">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Status</span>
+                        <span class="stat-value status-indicator" id="status">
+                            <span class="status-dot"></span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="sessions">Browse</button>
+            <button class="tab-btn" data-tab="timeline">Timeline</button>
+        </nav>
+
+        <!-- Browse Tab Controls -->
+        <div class="tab-controls" id="sessions-controls">
+            <div class="search-bar">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search messages..."
+                    autocomplete="off"
+                >
+                <button id="search-btn" class="btn btn-primary">Search</button>
+                <button id="clear-search-btn" class="btn btn-secondary" style="display: none;">Clear</button>
+            </div>
+            <div class="filters">
+                <select id="provider-filter" class="filter-select">
+                    <option value="">All Providers</option>
+                    <option value="Claude">Claude</option>
+                    <option value="Cursor">Cursor</option>
+                    <option value="Gemini">Gemini</option>
+                    <option value="Codex">Codex</option>
+                </select>
+                <select id="sort-by" class="filter-select">
+                    <option value="start_time">Latest First</option>
+                    <option value="message_count">Most Messages</option>
+                    <option value="provider">Provider</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Timeline Tab Controls -->
+        <div class="tab-controls" id="timeline-controls" style="display: none;">
+            <div class="timeline-filters">
+                <div class="time-range">
+                    <div class="time-input-group">
+                        <label>Since</label>
+                        <input type="text" id="timeline-since" class="time-input" placeholder="7 days ago">
+                    </div>
+                    <div class="time-input-group">
+                        <label>Until</label>
+                        <input type="text" id="timeline-until" class="time-input" placeholder="now">
+                    </div>
+                    <div class="quick-filters">
+                        <button class="quick-filter-btn" data-since="1 hour ago">1 hour</button>
+                        <button class="quick-filter-btn" data-since="12 hours ago">12 hours</button>
+                        <button class="quick-filter-btn" data-since="today">Today</button>
+                        <button class="quick-filter-btn" data-since="yesterday">Yesterday</button>
+                        <button class="quick-filter-btn" data-since="7 days ago">7 days</button>
+                        <button class="quick-filter-btn" data-since="30 days ago">30 days</button>
+                    </div>
+                </div>
+                <div class="timeline-options">
+                    <select id="timeline-provider" class="filter-select">
+                        <option value="">All Providers</option>
+                        <option value="Claude">Claude</option>
+                        <option value="Cursor">Cursor</option>
+                        <option value="Gemini">Gemini</option>
+                        <option value="Codex">Codex</option>
+                    </select>
+                    <select id="timeline-role" class="filter-select">
+                        <option value="">All Roles</option>
+                        <option value="user">User</option>
+                        <option value="assistant">Assistant</option>
+                    </select>
+                    <select id="timeline-mode" class="filter-select">
+                        <option value="compact">Compact (no tools)</option>
+                        <option value="full">Full</option>
+                    </select>
+                </div>
+                <div class="timeline-actions">
+                    <button id="timeline-query-btn" class="btn btn-primary">Query</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sessions List -->
+            <div id="sessions-view" class="sessions-view">
+                <div class="section-header">
+                    <h2>Sessions</h2>
+                    <button id="refresh-btn" class="btn btn-icon" title="Refresh">
+                        Refresh
+                    </button>
+                </div>
+                <div id="sessions-list" class="sessions-list">
+                    <div class="loading">Loading sessions...</div>
+                </div>
+                <div class="pagination" id="pagination">
+                    <button id="prev-page" class="btn btn-secondary" disabled>← Previous</button>
+                    <span id="page-info">Page 1</span>
+                    <button id="next-page" class="btn btn-secondary">Next →</button>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div id="search-results-view" class="search-results-view" style="display: none;">
+                <div class="section-header">
+                    <h2>Search Results</h2>
+                    <span id="search-stats" class="search-stats"></span>
+                </div>
+                <div id="search-results" class="search-results">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+
+            <!-- Timeline View -->
+            <div id="timeline-view" class="timeline-view" style="display: none;">
+                <div class="section-header">
+                    <div class="timeline-header-left">
+                        <h2>Timeline</h2>
+                        <div class="timeline-header-stats">
+                            <span id="timeline-stats" class="timeline-stats"></span>
+                            <span class="timeline-stats-separator">•</span>
+                            <span id="timeline-char-count" class="timeline-stats">0 chars</span>
+                            <span class="timeline-stats-separator">•</span>
+                            <span id="timeline-token-count" class="timeline-stats">~0 tokens</span>
+                        </div>
+                    </div>
+                    <div class="timeline-header-actions">
+                        <button id="timeline-copy-btn" class="btn btn-secondary" disabled>Copy All</button>
+                        <button id="timeline-export-btn" class="btn btn-secondary" disabled>Export JSONL</button>
+                    </div>
+                </div>
+                <div id="timeline-output" class="timeline-output">
+                    <div class="timeline-empty">
+                        Configure filters above and click "Query" to view messages
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Session Detail Modal -->
+        <div id="session-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Session Details</h2>
+                    <button class="modal-close" id="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    <div class="loading">Loading session details...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/timeline.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
