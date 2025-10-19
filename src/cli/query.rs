@@ -1,5 +1,7 @@
 use crate::database::DatabaseManager;
+use crate::models::Message;
 use crate::services::{QueryService, SearchRequest, SessionDetailRequest, SessionsQueryRequest};
+use crate::utils::time_parser;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -144,4 +146,102 @@ pub async fn handle_search_command(query: String, limit: Option<i32>) -> Result<
     }
 
     Ok(())
+}
+
+pub async fn handle_timeline_command(
+    since: Option<String>,
+    until: Option<String>,
+    provider: Option<String>,
+    role: Option<String>,
+    format: String,
+    limit: Option<i32>,
+    reverse: bool,
+    no_truncate: bool,
+    truncate_head: usize,
+    truncate_tail: usize,
+) -> Result<()> {
+    // Parse time specifications
+    let from = if let Some(since_str) = since {
+        Some(time_parser::parse_time_spec(&since_str)?)
+    } else {
+        None
+    };
+
+    let to = if let Some(until_str) = until {
+        Some(time_parser::parse_time_spec(&until_str)?)
+    } else {
+        None
+    };
+
+    // Get database and repository
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = DatabaseManager::new(&db_path).await?;
+    let message_repo = crate::database::message_repo::MessageRepository::new(&db_manager);
+
+    // Query messages
+    let messages = message_repo
+        .get_by_time_range(
+            from,
+            to,
+            provider.as_deref(),
+            role.as_deref(),
+            limit.map(|l| l as i64),
+            reverse,
+        )
+        .await?;
+
+    // Format output
+    match format.as_str() {
+        "jsonl" => format_jsonl(&messages),
+        "compact" | _ => format_compact(&messages, !no_truncate, truncate_head, truncate_tail),
+    }
+
+    Ok(())
+}
+
+fn format_compact(
+    messages: &[Message],
+    truncate: bool,
+    head_chars: usize,
+    tail_chars: usize,
+) {
+    for msg in messages {
+        let content = if truncate {
+            truncate_message(&msg.content, head_chars, tail_chars)
+        } else {
+            msg.content.clone()
+        };
+
+        let preview = content.replace('\n', " ");
+        println!(
+            "{} [{:9}] {}",
+            msg.timestamp.format("%m-%d %H:%M"),
+            msg.role.to_string(),
+            preview
+        );
+    }
+}
+
+fn truncate_message(content: &str, head_chars: usize, tail_chars: usize) -> String {
+    let chars: Vec<char> = content.chars().collect();
+    let total_chars = chars.len();
+
+    // If message is short enough, return as-is
+    if total_chars <= head_chars + tail_chars {
+        return content.to_string();
+    }
+
+    // Extract head and tail
+    let head: String = chars.iter().take(head_chars).collect();
+    let tail: String = chars.iter().skip(total_chars - tail_chars).collect();
+
+    format!("{} [...] {}", head, tail)
+}
+
+fn format_jsonl(messages: &[Message]) {
+    for msg in messages {
+        if let Ok(json) = serde_json::to_string(msg) {
+            println!("{}", json);
+        }
+    }
 }

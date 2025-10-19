@@ -228,6 +228,92 @@ impl MessageRepository {
         Ok(result.rows_affected())
     }
 
+    /// Get messages by time range with optional filters
+    pub async fn get_by_time_range(
+        &self,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        provider: Option<&str>,
+        role: Option<&str>,
+        limit: Option<i64>,
+        reverse: bool,
+    ) -> AnyhowResult<Vec<Message>> {
+        let mut sql = String::from(
+            r#"
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
+                   m.tool_uses, m.tool_results
+            FROM messages m
+            "#,
+        );
+
+        let mut conditions = Vec::new();
+
+        if from.is_some() {
+            conditions.push("m.timestamp >= ?");
+        }
+
+        if to.is_some() {
+            conditions.push("m.timestamp <= ?");
+        }
+
+        if provider.is_some() {
+            conditions.push(
+                "EXISTS (
+                    SELECT 1 FROM chat_sessions cs
+                    WHERE cs.id = m.session_id AND cs.provider = ?
+                )",
+            );
+        }
+
+        if role.is_some() {
+            conditions.push("m.role = ?");
+        }
+
+        if !conditions.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&conditions.join(" AND "));
+        }
+
+        sql.push_str(" ORDER BY m.timestamp ");
+        sql.push_str(if reverse { "DESC" } else { "ASC" });
+
+        if let Some(lim) = limit {
+            sql.push_str(&format!(" LIMIT {}", lim));
+        }
+
+        let mut query_builder = sqlx::query(&sql);
+
+        if let Some(from_time) = from {
+            query_builder = query_builder.bind(from_time.to_rfc3339());
+        }
+
+        if let Some(to_time) = to {
+            query_builder = query_builder.bind(to_time.to_rfc3339());
+        }
+
+        if let Some(prov) = provider {
+            query_builder = query_builder.bind(prov);
+        }
+
+        if let Some(r) = role {
+            query_builder = query_builder.bind(r);
+        }
+
+        let rows = query_builder
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to fetch messages by time range")?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let message = self.row_to_message(&row)?;
+            messages.push(message);
+        }
+
+        Ok(messages)
+    }
+
     /// Bulk create messages within a transaction for better performance
     pub async fn bulk_create(&self, messages: &[Message]) -> AnyhowResult<()> {
         if messages.is_empty() {
