@@ -302,7 +302,7 @@ impl Cli {
                         truncate_head,
                         truncate_tail,
                     } => {
-                        query::handle_timeline_command(
+                        query::handle_timeline_command(query::TimelineOptions {
                             since,
                             until,
                             provider,
@@ -313,7 +313,7 @@ impl Cli {
                             no_truncate,
                             truncate_head,
                             truncate_tail,
-                        )
+                        })
                         .await
                     }
                 },

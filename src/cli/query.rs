@@ -5,6 +5,19 @@ use crate::utils::time_parser;
 use anyhow::Result;
 use std::sync::Arc;
 
+pub struct TimelineOptions {
+    pub since: Option<String>,
+    pub until: Option<String>,
+    pub provider: Option<String>,
+    pub role: Option<String>,
+    pub format: String,
+    pub limit: Option<i32>,
+    pub reverse: bool,
+    pub no_truncate: bool,
+    pub truncate_head: usize,
+    pub truncate_tail: usize,
+}
+
 pub async fn handle_sessions_command(
     page: Option<i32>,
     page_size: Option<i32>,
@@ -148,26 +161,15 @@ pub async fn handle_search_command(query: String, limit: Option<i32>) -> Result<
     Ok(())
 }
 
-pub async fn handle_timeline_command(
-    since: Option<String>,
-    until: Option<String>,
-    provider: Option<String>,
-    role: Option<String>,
-    format: String,
-    limit: Option<i32>,
-    reverse: bool,
-    no_truncate: bool,
-    truncate_head: usize,
-    truncate_tail: usize,
-) -> Result<()> {
+pub async fn handle_timeline_command(options: TimelineOptions) -> Result<()> {
     // Parse time specifications
-    let from = if let Some(since_str) = since {
+    let from = if let Some(since_str) = options.since {
         Some(time_parser::parse_time_spec(&since_str)?)
     } else {
         None
     };
 
-    let to = if let Some(until_str) = until {
+    let to = if let Some(until_str) = options.until {
         Some(time_parser::parse_time_spec(&until_str)?)
     } else {
         None
@@ -183,17 +185,28 @@ pub async fn handle_timeline_command(
         .get_by_time_range(
             from,
             to,
-            provider.as_deref(),
-            role.as_deref(),
-            limit.map(|l| l as i64),
-            reverse,
+            options.provider.as_deref(),
+            options.role.as_deref(),
+            options.limit.map(|l| l as i64),
+            options.reverse,
         )
         .await?;
 
     // Format output
-    match format.as_str() {
+    match options.format.as_str() {
         "jsonl" => format_jsonl(&messages),
-        "compact" | _ => format_compact(&messages, !no_truncate, truncate_head, truncate_tail),
+        "compact" => format_compact(
+            &messages,
+            !options.no_truncate,
+            options.truncate_head,
+            options.truncate_tail,
+        ),
+        _ => format_compact(
+            &messages,
+            !options.no_truncate,
+            options.truncate_head,
+            options.truncate_tail,
+        ),
     }
 
     Ok(())
