@@ -199,12 +199,7 @@ pub async fn handle_timeline_command(
     Ok(())
 }
 
-fn format_compact(
-    messages: &[Message],
-    truncate: bool,
-    head_chars: usize,
-    tail_chars: usize,
-) {
+fn format_compact(messages: &[Message], truncate: bool, head_chars: usize, tail_chars: usize) {
     for msg in messages {
         let content = if truncate {
             truncate_message(&msg.content, head_chars, tail_chars)

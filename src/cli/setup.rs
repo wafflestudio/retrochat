@@ -258,4 +258,3 @@ pub fn needs_setup() -> Result<bool> {
     // For now, just check if DB exists
     Ok(false)
 }
-

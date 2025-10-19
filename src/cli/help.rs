@@ -187,7 +187,6 @@ pub fn print_full_getting_started() {
     println!();
 }
 
-
 // Helper: format a provider as it should appear in CLI examples
 fn format_provider_arg(p: &Provider) -> String {
     match p {
