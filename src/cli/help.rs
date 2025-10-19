@@ -187,37 +187,6 @@ pub fn print_full_getting_started() {
     println!();
 }
 
-/// Print query command examples
-pub fn print_query_examples() {
-    println!("Query Commands:");
-    println!("  $ retrochat query sessions                    - List all sessions");
-    println!("  $ retrochat query sessions --provider claude  - Filter by provider");
-    println!("  $ retrochat query session <SESSION_ID>        - View session details");
-    println!("  $ retrochat query search <QUERY>              - Search messages");
-    println!();
-}
-
-/// Print analyze command examples
-pub fn print_analyze_examples() {
-    println!("Analytics Commands:");
-    println!("  $ retrochat analyze insights           - Generate usage insights");
-    println!("  $ retrochat analyze export json        - Export to JSON");
-    println!("  $ retrochat analyze export csv         - Export to CSV");
-    println!("  $ retrochat analyze export txt         - Export to text");
-    println!();
-}
-
-/// Print retrospection command examples
-pub fn print_retrospect_examples() {
-    println!("Retrospection Commands (requires GOOGLE_AI_API_KEY):");
-    println!("  $ retrochat retrospect execute <SESSION_ID>           - Analyze a session");
-    println!("  $ retrochat retrospect execute --all                  - Analyze all sessions");
-    println!("  $ retrochat retrospect show <SESSION_ID>              - View analysis results");
-    println!("  $ retrochat retrospect status                         - Check analysis status");
-    println!("  $ retrochat retrospect cancel <REQUEST_ID>            - Cancel an analysis");
-    println!();
-}
-
 // Helper: format a provider as it should appear in CLI examples
 fn format_provider_arg(p: &Provider) -> String {
     match p {

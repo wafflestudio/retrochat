@@ -186,7 +186,9 @@ impl CodexParser {
                             }
                             "response_item" => {
                                 // Handle response_item events (newer format)
-                                if let Ok(legacy_msg) = serde_json::from_value::<LegacyMessage>(event.payload.clone()) {
+                                if let Ok(legacy_msg) =
+                                    serde_json::from_value::<LegacyMessage>(event.payload.clone())
+                                {
                                     let role = match legacy_msg.role.as_str() {
                                         "user" => MessageRole::User,
                                         "assistant" => MessageRole::Assistant,

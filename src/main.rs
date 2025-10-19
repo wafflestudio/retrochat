@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
 
     // Configure logging based on command
     let logging_config = match &cli.command {
-        Commands::Tui => {
+        Some(Commands::Tui) | None => {
             // For TUI: log to file only, no stdout
             let log_dir = dirs::data_local_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
                 .with_stdout(false) // Critical: disable stdout for TUI
                 .with_file(log_file)
         }
-        Commands::Query { .. } => {
+        Some(Commands::Query { .. }) => {
             // For Query commands: disable stdout to keep output clean
             LoggingConfig::from_env().with_stdout(false)
         }

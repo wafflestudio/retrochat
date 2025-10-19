@@ -19,11 +19,8 @@ pub fn parse_time_spec(spec: &str) -> Result<DateTime<Utc>> {
 
     // 2. Unix timestamp: @1234567890
     if let Some(ts_str) = spec.strip_prefix('@') {
-        let timestamp: i64 = ts_str
-            .parse()
-            .context("Invalid unix timestamp format")?;
-        return DateTime::from_timestamp(timestamp, 0)
-            .context("Unix timestamp out of valid range");
+        let timestamp: i64 = ts_str.parse().context("Invalid unix timestamp format")?;
+        return DateTime::from_timestamp(timestamp, 0).context("Unix timestamp out of valid range");
     }
 
     // 3. ISO8601: 2024-10-19T14:23:45Z
@@ -99,6 +96,7 @@ fn parse_relative_time(spec: &str) -> Result<DateTime<Utc>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Datelike, Timelike};
 
     #[test]
     fn test_parse_now() {

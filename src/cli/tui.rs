@@ -93,11 +93,7 @@ impl TuiLauncher {
     }
 
     pub fn print_welcome_message() {
-        println!("RetroChat - LLM Agent Chat History Retrospect Application");
-        println!("=========================================================");
-        println!();
-        println!("Welcome to RetroChat! This application helps you analyze and explore");
-        println!("your chat history with various LLM providers.");
+        println!("RetroChat - LLM Chat History Analysis");
         println!();
     }
 
@@ -142,10 +138,7 @@ pub async fn handle_tui_command() -> Result<()> {
     TuiLauncher::print_keyboard_shortcuts();
 
     match launcher.launch().await {
-        Ok(()) => {
-            println!("Thank you for using RetroChat!");
-            Ok(())
-        }
+        Ok(()) => Ok(()),
         Err(e) => {
             println!("\n❌ Failed to launch TUI interface: {e}");
             println!();
