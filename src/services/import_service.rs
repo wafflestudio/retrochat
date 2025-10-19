@@ -84,9 +84,11 @@ pub struct ImportService {
 
 impl ImportService {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
+        // Use number of CPU cores, with a reasonable max
+        let max_concurrent = num_cpus::get().min(16).max(4);
         Self {
             db_manager,
-            max_concurrent_imports: 4, // Process up to 4 files concurrently
+            max_concurrent_imports: max_concurrent,
         }
     }
 
@@ -254,29 +256,24 @@ impl ImportService {
                 }
             };
 
+            // Rollback the transaction we started but won't use
+            let _ = tx.rollback().await;
+
             // Insert session
             if let Err(e) = session_repo.create(&session).await {
                 warnings.push(format!("Failed to insert session {}: {}", session.id, e));
-                let _ = tx.rollback().await;
                 continue;
             }
 
-            // Insert messages in batch within transaction
-            let mut session_messages_imported = 0;
-            for message in messages {
-                if let Err(e) = message_repo.create(&message).await {
-                    warnings.push(format!("Failed to insert message {}: {}", message.id, e));
-                    continue;
-                }
-                session_messages_imported += 1;
-            }
-
-            // Commit transaction
-            if let Err(e) = tx.commit().await {
+            // Use bulk insert for messages for better performance
+            let session_messages_imported = messages.len() as i32;
+            if let Err(e) = message_repo.bulk_create(&messages).await {
                 warnings.push(format!(
-                    "Failed to commit transaction for session {}: {}",
+                    "Failed to bulk insert messages for session {}: {}",
                     session.id, e
                 ));
+                // Try to rollback session insertion
+                let _ = session_repo.delete(&session.id).await;
                 continue;
             }
 

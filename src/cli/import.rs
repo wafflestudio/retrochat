@@ -197,10 +197,30 @@ async fn import_batch(directory: String, overwrite: bool) -> Result<()> {
         recursive: Some(true),
     };
 
+    // Use progress bar for better user experience
+    use indicatif::{ProgressBar, ProgressStyle};
+    use std::sync::Arc as StdArc;
+    let pb = StdArc::new(ProgressBar::new(0));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+            .unwrap()
+            .progress_chars("#>-"),
+    );
+
+    let pb_clone = pb.clone();
     let batch_response = import_service
-        .import_batch(batch_request)
+        .import_batch_with_progress(batch_request, move |completed, total| {
+            if pb_clone.length().unwrap_or(0) != total as u64 {
+                pb_clone.set_length(total as u64);
+                pb_clone.set_message("Importing files");
+            }
+            pb_clone.set_position(completed as u64);
+        })
         .await
         .with_context(|| format!("Failed to batch import from directory: {}", path.display()))?;
+
+    pb.finish_with_message("Import complete");
 
     println!("\nBatch import completed:");
     println!(

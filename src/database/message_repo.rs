@@ -228,6 +228,64 @@ impl MessageRepository {
         Ok(result.rows_affected())
     }
 
+    /// Bulk create messages within a transaction for better performance
+    pub async fn bulk_create(&self, messages: &[Message]) -> AnyhowResult<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        for message in messages {
+            let tool_calls_json = message
+                .tool_calls
+                .as_ref()
+                .and_then(|tc| serde_json::to_string(tc).ok());
+
+            let tool_uses_json = message
+                .tool_uses
+                .as_ref()
+                .and_then(|tu| serde_json::to_string(tu).ok());
+
+            let tool_results_json = message
+                .tool_results
+                .as_ref()
+                .and_then(|tr| serde_json::to_string(tr).ok());
+
+            sqlx::query(
+                r#"
+                INSERT INTO messages (
+                    id, session_id, role, content, timestamp, token_count,
+                    tool_calls, metadata, sequence_number, tool_uses, tool_results
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(message.id.to_string())
+            .bind(message.session_id.to_string())
+            .bind(message.role.to_string())
+            .bind(&message.content)
+            .bind(message.timestamp.to_rfc3339())
+            .bind(message.token_count)
+            .bind(tool_calls_json)
+            .bind("{}") // metadata
+            .bind(message.sequence_number)
+            .bind(tool_uses_json)
+            .bind(tool_results_json)
+            .execute(&mut *tx)
+            .await
+            .context("Failed to insert message in bulk")?;
+        }
+
+        tx.commit()
+            .await
+            .context("Failed to commit bulk insert transaction")?;
+        Ok(())
+    }
+
     fn row_to_message(&self, row: &SqliteRow) -> AnyhowResult<Message> {
         let id_str: String = row.try_get("id")?;
         let session_id_str: String = row.try_get("session_id")?;
