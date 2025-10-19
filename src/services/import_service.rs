@@ -85,7 +85,7 @@ pub struct ImportService {
 impl ImportService {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         // Use number of CPU cores, with a reasonable max
-        let max_concurrent = num_cpus::get().min(16).max(4);
+        let max_concurrent = num_cpus::get().clamp(4, 16);
         Self {
             db_manager,
             max_concurrent_imports: max_concurrent,
