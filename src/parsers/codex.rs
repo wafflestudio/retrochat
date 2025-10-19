@@ -118,6 +118,7 @@ impl CodexParser {
     ) -> Result<(ChatSession, Vec<Message>)> {
         let mut session_meta: Option<SessionMetaPayload> = None;
         let mut messages: Vec<(String, MessageRole, String)> = Vec::new(); // (timestamp, role, content)
+        let mut legacy_messages: Vec<(MessageRole, String)> = Vec::new(); // For legacy messages without timestamps
         let mut total_tokens: Option<u32> = None;
 
         for line in lines {
@@ -183,11 +184,37 @@ impl CodexParser {
                                     }
                                 }
                             }
+                            "response_item" => {
+                                // Handle response_item events (newer format)
+                                if let Ok(legacy_msg) =
+                                    serde_json::from_value::<LegacyMessage>(event.payload.clone())
+                                {
+                                    let role = match legacy_msg.role.as_str() {
+                                        "user" => MessageRole::User,
+                                        "assistant" => MessageRole::Assistant,
+                                        _ => continue,
+                                    };
+
+                                    // Extract text content from all parts
+                                    let content = legacy_msg
+                                        .content
+                                        .iter()
+                                        .filter_map(|c| c.text.as_ref())
+                                        .cloned()
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+
+                                    if !content.is_empty() {
+                                        // Use the event timestamp (NOT current time!)
+                                        messages.push((event.timestamp.clone(), role, content));
+                                    }
+                                }
+                            }
                             _ => {} // Ignore other event types
                         }
                     }
                 } else if event_type == "message" {
-                    // Legacy message format
+                    // Legacy message format (no timestamps on individual messages)
                     if let Ok(legacy_msg) = serde_json::from_value::<LegacyMessage>(json_value) {
                         let role = match legacy_msg.role.as_str() {
                             "user" => MessageRole::User,
@@ -205,9 +232,8 @@ impl CodexParser {
                             .join("\n");
 
                         if !content.is_empty() {
-                            // Use current time as timestamp for legacy messages (will be sorted by sequence)
-                            let timestamp = Utc::now().to_rfc3339();
-                            messages.push((timestamp, role, content));
+                            // Store legacy messages separately (will add timestamps later based on session start time)
+                            legacy_messages.push((role, content));
                         }
                     }
                 }
@@ -229,6 +255,16 @@ impl CodexParser {
 
         // If no session metadata found, return error
         let meta = session_meta.ok_or_else(|| anyhow!("No session_meta found in Codex file"))?;
+
+        // Convert legacy messages to timestamped messages using session start time
+        if !legacy_messages.is_empty() {
+            let session_start = self.parse_timestamp(&meta.timestamp)?;
+            for (idx, (role, content)) in legacy_messages.into_iter().enumerate() {
+                // Add 1 second per message to maintain order
+                let timestamp = session_start + chrono::Duration::seconds(idx as i64);
+                messages.push((timestamp.to_rfc3339(), role, content));
+            }
+        }
 
         self.convert_session(&meta, messages, total_tokens)
     }

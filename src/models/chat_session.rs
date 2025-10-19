@@ -7,7 +7,6 @@ use super::provider::Provider;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionState {
     Created,
-    Importing,
     Imported,
     Analyzed,
 }
@@ -16,7 +15,6 @@ impl std::fmt::Display for SessionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SessionState::Created => write!(f, "created"),
-            SessionState::Importing => write!(f, "importing"),
             SessionState::Imported => write!(f, "imported"),
             SessionState::Analyzed => write!(f, "analyzed"),
         }
@@ -29,7 +27,6 @@ impl std::str::FromStr for SessionState {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "created" => Ok(SessionState::Created),
-            "importing" => Ok(SessionState::Importing),
             "imported" => Ok(SessionState::Imported),
             "analyzed" => Ok(SessionState::Analyzed),
             _ => Err(format!("Unknown session state: {s}")),

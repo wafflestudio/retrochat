@@ -37,12 +37,12 @@ notify = "8.1.0"
 similar = "2.7"
 num_cpus = "1.16"
 indicatif = "0.17"
+inquire = "0.7"
+console = "0.15"
 axum = "0.7"
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 mime_guess = "2.0"
-sha2 = "0.10"
-regex = "1.10"
 
 [features]
 default = ["reqwest"]
@@ -127,6 +127,10 @@ name = "test_message_pairing"
 path = "tests/unit/test_message_pairing.rs"
 
 [[test]]
+name = "test_auto_detect"
+path = "tests/unit/test_auto_detect.rs"
+
+[[test]]
 name = "test_first_time_setup"
 path = "tests/integration/test_first_time_setup.rs"
 
@@ -150,6 +154,14 @@ path = "tests/integration/test_error_handling.rs"
 [[test]]
 name = "test_tui_retrospection"
 path = "tests/integration/test_tui_retrospection.rs"
+
+[[test]]
+name = "test_setup_wizard"
+path = "tests/integration/test_setup_wizard.rs"
+
+[[test]]
+name = "test_cli_add_command"
+path = "tests/contract/test_cli_add_command.rs"
 
 [profile.release]
 lto = true

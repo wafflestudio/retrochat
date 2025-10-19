@@ -5,6 +5,7 @@ pub mod parsers;
 pub mod services;
 pub mod tools;
 pub mod tui;
+pub mod utils;
 pub mod web;
 
 pub mod env;
