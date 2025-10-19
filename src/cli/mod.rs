@@ -139,6 +139,39 @@ pub enum QueryCommands {
         #[arg(short, long)]
         limit: Option<i32>,
     },
+    /// Query messages by time range
+    Timeline {
+        /// Messages since this time (e.g., "7 days ago", "2024-10-01", "yesterday")
+        #[arg(long)]
+        since: Option<String>,
+        /// Messages until this time
+        #[arg(long)]
+        until: Option<String>,
+        /// Filter by provider
+        #[arg(long)]
+        provider: Option<String>,
+        /// Filter by role (User, Assistant, System)
+        #[arg(long)]
+        role: Option<String>,
+        /// Output format: compact (default) or jsonl
+        #[arg(long, short = 'F', default_value = "compact")]
+        format: String,
+        /// Maximum number of messages
+        #[arg(long, short = 'n')]
+        limit: Option<i32>,
+        /// Reverse chronological order (newest first)
+        #[arg(long, short = 'r')]
+        reverse: bool,
+        /// Disable message truncation in compact format (show full content)
+        #[arg(long)]
+        no_truncate: bool,
+        /// Number of characters to show from the beginning (default: 400)
+        #[arg(long, default_value = "400")]
+        truncate_head: usize,
+        /// Number of characters to show from the end (default: 200)
+        #[arg(long, default_value = "200")]
+        truncate_tail: usize,
+    },
 }
 
 impl Cli {
@@ -186,6 +219,32 @@ impl Cli {
                     }
                     QueryCommands::Search { query, limit } => {
                         query::handle_search_command(query, limit).await
+                    }
+                    QueryCommands::Timeline {
+                        since,
+                        until,
+                        provider,
+                        role,
+                        format,
+                        limit,
+                        reverse,
+                        no_truncate,
+                        truncate_head,
+                        truncate_tail,
+                    } => {
+                        query::handle_timeline_command(
+                            since,
+                            until,
+                            provider,
+                            role,
+                            format,
+                            limit,
+                            reverse,
+                            no_truncate,
+                            truncate_head,
+                            truncate_tail,
+                        )
+                        .await
                     }
                 },
                 Commands::Retrospect { command } => match command {
