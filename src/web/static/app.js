@@ -33,6 +33,8 @@ async function init() {
     checkHealth();
     loadSessions();
     setupEventListeners();
+    setupTabNavigation();
+    Timeline.init();
 }
 
 // Check API health
@@ -383,6 +385,85 @@ function formatTime(dateString) {
         hour: '2-digit',
         minute: '2-digit'
     });
+}
+
+// Tab Navigation
+function setupTabNavigation() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const views = {
+        sessions: document.getElementById('sessions-view'),
+        timeline: document.getElementById('timeline-view'),
+    };
+    const controls = {
+        sessions: document.getElementById('sessions-controls'),
+        timeline: document.getElementById('timeline-controls'),
+    };
+
+    // Also handle search results view
+    const searchResultsView = document.getElementById('search-results-view');
+
+    // Function to switch to a specific tab
+    function switchTab(tab, updateHistory = true) {
+        // Update active tab button
+        tabButtons.forEach(b => b.classList.remove('active'));
+        const targetBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+        if (targetBtn) {
+            targetBtn.classList.add('active');
+        }
+
+        // Show/hide views
+        Object.values(views).forEach(v => v.style.display = 'none');
+        searchResultsView.style.display = 'none';
+
+        if (views[tab]) {
+            views[tab].style.display = 'block';
+        }
+
+        // Show/hide controls
+        Object.values(controls).forEach(c => c.style.display = 'none');
+        if (controls[tab]) {
+            controls[tab].style.display = 'block';
+        }
+
+        // Reset search state when switching tabs
+        if (tab !== 'sessions') {
+            isSearchMode = false;
+        }
+
+        // Update URL with query parameter
+        if (updateHistory) {
+            const url = tab === 'sessions' ? '/' : `/?tab=${tab}`;
+            window.history.pushState({ tab }, '', url);
+        }
+    }
+
+    // Tab button click handlers
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            switchTab(tab);
+        });
+    });
+
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (event) => {
+        if (event.state && event.state.tab) {
+            switchTab(event.state.tab, false);
+        } else {
+            // Check URL for tab parameter
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get('tab') || 'sessions';
+            switchTab(tab, false);
+        }
+    });
+
+    // Initialize based on URL query parameter
+    const params = new URLSearchParams(window.location.search);
+    const initialTab = params.get('tab') || 'sessions';
+    switchTab(initialTab, false);
+    // Set initial history state
+    const initialUrl = initialTab === 'sessions' ? '/' : `/?tab=${initialTab}`;
+    window.history.replaceState({ tab: initialTab }, '', initialUrl);
 }
 
 function escapeHtml(text) {

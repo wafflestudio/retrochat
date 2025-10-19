@@ -9,6 +9,7 @@ pub fn create_routes() -> Router {
         .route("/sessions", get(handlers::list_sessions))
         .route("/sessions/:id", get(handlers::get_session_detail))
         .route("/search", get(handlers::search_messages))
+        .route("/timeline", get(handlers::query_timeline))
         .route("/health", get(handlers::health_check));
 
     // Static files - serve from embedded directory at compile time
