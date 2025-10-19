@@ -4,6 +4,7 @@ pub mod import;
 pub mod init;
 pub mod query;
 pub mod retrospect;
+pub mod setup;
 pub mod tui;
 pub mod watch;
 
@@ -13,13 +14,13 @@ use tokio::runtime::Runtime;
 
 use crate::env::apis as env_vars;
 use crate::models::Provider;
-use retrospect::RetrospectCommands;
+use retrospect::{AnalysisTypeArg, RetrospectCommands};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -93,6 +94,45 @@ pub enum Commands {
         #[command(subcommand)]
         command: RetrospectCommands,
     },
+    /// Interactive setup wizard for first-time users
+    Setup,
+    /// [Alias for 'import'] Add chat files interactively or from providers
+    ///
+    /// This is a more intuitive alias for the import command.
+    /// Examples:
+    ///   retrochat add                 # Interactive mode
+    ///   retrochat add --path /path    # Import from path
+    Add {
+        /// A specific file or directory path to import from
+        #[arg(short, long)]
+        path: Option<String>,
+
+        /// One or more providers to import from
+        #[arg(value_enum)]
+        providers: Vec<Provider>,
+
+        /// Overwrite existing sessions if they already exist
+        #[arg(short, long)]
+        overwrite: bool,
+    },
+    /// [Alias for 'analyze insights'] Show usage statistics
+    Stats,
+    /// [Alias for 'query search'] Search messages by content
+    Search {
+        /// Search query
+        query: String,
+        /// Maximum number of results (default: 20)
+        #[arg(short, long)]
+        limit: Option<i32>,
+    },
+    /// [Alias for 'retrospect execute'] Review and analyze a chat session
+    Review {
+        /// Session ID to review (optional, will prompt if not provided)
+        session_id: Option<String>,
+        /// Analysis type
+        #[arg(short, long, value_enum)]
+        analysis_type: Option<AnalysisTypeArg>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -147,14 +187,29 @@ impl Cli {
         let rt_arc = Arc::new(rt);
 
         // Create cleanup handler for retrospection commands
-        let _cleanup_guard = if matches!(self.command, Commands::Retrospect { .. }) {
+        let _cleanup_guard = if matches!(self.command, Some(Commands::Retrospect { .. })) {
             Some(self.create_retrospection_cleanup_handler(rt_arc.clone())?)
         } else {
             None
         };
 
         rt_arc.block_on(async {
-            match self.command {
+            // Handle no subcommand - default behavior
+            let command = match self.command {
+                None => {
+                    // Check if first-time user
+                    if setup::is_first_time_user() {
+                        // Run setup wizard
+                        return setup::run_setup_wizard().await;
+                    } else {
+                        // Launch TUI by default
+                        return tui::handle_tui_command().await;
+                    }
+                }
+                Some(cmd) => cmd,
+            };
+
+            match command {
                 Commands::Init => init::handle_init_command().await,
                 Commands::Tui => tui::handle_tui_command().await,
                 Commands::Import {
@@ -223,6 +278,45 @@ impl Cli {
                         retrospect::handle_cancel_command(request_id, all).await
                     }
                 },
+                // New commands
+                Commands::Setup => setup::run_setup_wizard().await,
+                Commands::Add {
+                    path,
+                    providers,
+                    overwrite,
+                } => {
+                    // If no arguments, run interactive setup
+                    if path.is_none() && providers.is_empty() {
+                        setup::run_setup_wizard().await
+                    } else {
+                        import::handle_import_command(path, providers, overwrite).await
+                    }
+                }
+                Commands::Stats => analytics::handle_insights_command().await,
+                Commands::Search { query, limit } => {
+                    query::handle_search_command(query, limit).await
+                }
+                Commands::Review {
+                    session_id,
+                    analysis_type,
+                } => {
+                    // For now, delegate to retrospect execute
+                    // TODO: Could make this more interactive
+                    if let Some(sid) = session_id {
+                        retrospect::handle_execute_command(
+                            Some(sid),
+                            analysis_type,
+                            None,
+                            false,
+                            false,
+                        )
+                        .await
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "Session ID required. Use: retrochat review <SESSION_ID>"
+                        ))
+                    }
+                }
             }
         })
     }

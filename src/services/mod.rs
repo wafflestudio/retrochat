@@ -1,4 +1,5 @@
 pub mod analytics_service;
+pub mod auto_detect;
 pub mod google_ai;
 pub mod import_service;
 pub mod parser_service;
@@ -10,6 +11,7 @@ pub use analytics_service::{
     AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest, ExportResponse,
     MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
 };
+pub use auto_detect::{AutoDetectService, DetectedProvider};
 pub use google_ai::{
     GenerateContentRequest, GenerateContentResponse, GoogleAiClient, GoogleAiConfig, GoogleAiError,
 };

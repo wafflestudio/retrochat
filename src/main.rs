@@ -7,7 +7,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Configure logging based on command
-    let logging_config = if matches!(cli.command, Commands::Tui) {
+    let logging_config = if matches!(cli.command, Some(Commands::Tui) | None) {
         // For TUI: log to file only, no stdout
         let log_dir = dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
