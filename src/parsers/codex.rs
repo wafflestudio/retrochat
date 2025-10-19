@@ -22,6 +22,31 @@ pub struct CodexEvent {
     pub payload: Value,
 }
 
+// ===== Legacy Format Structures (for old Codex files) =====
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LegacySessionMeta {
+    pub id: String,
+    pub timestamp: String,
+    pub instructions: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LegacyMessage {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub id: Option<String>,
+    pub role: String,
+    pub content: Vec<LegacyContent>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LegacyContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionMetaPayload {
     pub id: String,
@@ -102,53 +127,104 @@ impl CodexParser {
                 continue;
             }
 
-            // Parse as event
-            let event: CodexEvent = match serde_json::from_str(&line) {
-                Ok(e) => e,
-                Err(_) => continue, // Skip lines that aren't valid events
+            // Try to parse as generic JSON first
+            let json_value: Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => continue, // Skip invalid JSON lines
             };
 
-            match event.event_type.as_str() {
-                "session_meta" => {
-                    // Parse session metadata
-                    if let Ok(meta) = serde_json::from_value::<SessionMetaPayload>(event.payload) {
-                        session_meta = Some(meta);
-                    }
-                }
-                "event_msg" => {
-                    // Parse event messages (user_message, agent_message, or token_count)
-                    if let Ok(msg) = serde_json::from_value::<EventMsgPayload>(event.payload) {
-                        match msg.msg_type.as_str() {
-                            "user_message" => {
-                                if let Some(content) = msg.message {
-                                    messages.push((event.timestamp, MessageRole::User, content));
+            // Check if this is a new event-based format
+            if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
+                // Check if this is wrapped in an event structure (has timestamp at root)
+                if json_value.get("timestamp").is_some() && json_value.get("payload").is_some() {
+                    // New event-based format
+                    if let Ok(event) = serde_json::from_value::<CodexEvent>(json_value.clone()) {
+                        match event.event_type.as_str() {
+                            "session_meta" => {
+                                if let Ok(meta) =
+                                    serde_json::from_value::<SessionMetaPayload>(event.payload)
+                                {
+                                    session_meta = Some(meta);
                                 }
                             }
-                            "agent_message" => {
-                                if let Some(content) = msg.message {
-                                    messages.push((
-                                        event.timestamp,
-                                        MessageRole::Assistant,
-                                        content,
-                                    ));
-                                }
-                            }
-                            "token_count" => {
-                                // Extract total token usage
-                                if let Some(info) = msg.info {
-                                    if let Some(usage) = info.total_token_usage {
-                                        if let Some(total) = usage.total_tokens {
-                                            total_tokens = Some(total);
+                            "event_msg" => {
+                                if let Ok(msg) =
+                                    serde_json::from_value::<EventMsgPayload>(event.payload)
+                                {
+                                    match msg.msg_type.as_str() {
+                                        "user_message" => {
+                                            if let Some(content) = msg.message {
+                                                messages.push((
+                                                    event.timestamp,
+                                                    MessageRole::User,
+                                                    content,
+                                                ));
+                                            }
                                         }
+                                        "agent_message" => {
+                                            if let Some(content) = msg.message {
+                                                messages.push((
+                                                    event.timestamp,
+                                                    MessageRole::Assistant,
+                                                    content,
+                                                ));
+                                            }
+                                        }
+                                        "token_count" => {
+                                            if let Some(info) = msg.info {
+                                                if let Some(usage) = info.total_token_usage {
+                                                    if let Some(total) = usage.total_tokens {
+                                                        total_tokens = Some(total);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
                                     }
                                 }
                             }
-                            _ => {} // Ignore other event message types
+                            _ => {} // Ignore other event types
+                        }
+                    }
+                } else if event_type == "message" {
+                    // Legacy message format
+                    if let Ok(legacy_msg) = serde_json::from_value::<LegacyMessage>(json_value) {
+                        let role = match legacy_msg.role.as_str() {
+                            "user" => MessageRole::User,
+                            "assistant" => MessageRole::Assistant,
+                            _ => continue,
+                        };
+
+                        // Extract text content from all parts
+                        let content = legacy_msg
+                            .content
+                            .iter()
+                            .filter_map(|c| c.text.as_ref())
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join("\n");
+
+                        if !content.is_empty() {
+                            // Use current time as timestamp for legacy messages (will be sorted by sequence)
+                            let timestamp = Utc::now().to_rfc3339();
+                            messages.push((timestamp, role, content));
                         }
                     }
                 }
-                _ => {} // Ignore other event types (response_item, turn_context, etc.)
+            } else if json_value.get("id").is_some() && json_value.get("timestamp").is_some() {
+                // Legacy session metadata format (first line)
+                if let Ok(legacy_meta) = serde_json::from_value::<LegacySessionMeta>(json_value) {
+                    // Convert legacy metadata to new format
+                    session_meta = Some(SessionMetaPayload {
+                        id: legacy_meta.id,
+                        timestamp: legacy_meta.timestamp,
+                        cwd: None,
+                        instructions: legacy_meta.instructions,
+                        git: None,
+                    });
+                }
             }
+            // Ignore other line types (record_type: state, etc.)
         }
 
         // If no session metadata found, return error
@@ -373,6 +449,14 @@ impl CodexParser {
                     // Check for new event-based format with session_meta
                     if parsed.get("type").and_then(|t| t.as_str()) == Some("session_meta")
                         && parsed.get("payload").is_some()
+                    {
+                        return true;
+                    }
+                    // Check for legacy format (has id and timestamp but no type field)
+                    // Old format: {"id":"...","timestamp":"...","instructions":null}
+                    if parsed.get("id").is_some()
+                        && parsed.get("timestamp").is_some()
+                        && parsed.get("type").is_none()
                     {
                         return true;
                     }
