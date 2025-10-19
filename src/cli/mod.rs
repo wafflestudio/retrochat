@@ -97,7 +97,7 @@ pub enum Commands {
     /// Launch Web UI server
     Web {
         /// Port to run the web server on
-        #[arg(short, long, default_value = "3000")]
+        #[arg(short, long, default_value = "7878")]
         port: u16,
 
         /// Host to bind to
