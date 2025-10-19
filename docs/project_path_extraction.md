@@ -40,45 +40,60 @@ pub struct ChatSession {
       └── 61ac7e7d-8fdd-46f9-8d8e-4793aeeac69b.jsonl
 ```
 
-#### 데이터 포맷
+#### 데이터 포맷 (실제 확인)
 ```json
 {
-  "type": "conversation",
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2024-01-01T10:00:00Z",
+  "type": "user",
+  "cwd": "/Users/lullu/study/retrochat",
+  "gitBranch": "main",
+  "sessionId": "01601fb2-7e83-4bb9-8fc1-c736a632fcfa",
   "message": {
     "role": "user",
     "content": "Hello"
-  }
+  },
+  "timestamp": "2025-10-19T14:49:59.496Z"
 }
 ```
 
 #### Project Path 추출 방법
 
-**✅ 가능 - 파일명 디렉토리 패턴 디코딩**
+**✅ 가능 - 메시지 메타데이터에 직접 제공!**
 
-Claude Code는 프로젝트 경로를 디렉토리명에 인코딩합니다:
-- 인코딩 패턴: `-Users-lullu-study-retrochat`
-- 원본 경로: `/Users/lullu/study/retrochat`
+Claude Code는 **모든 user/assistant 메시지에 `cwd` 필드를 포함**합니다:
+- `cwd`: 실제 작업 디렉토리 전체 경로
+- `gitBranch`: Git 브랜치 정보 (bonus!)
 
-**현재 구현**:
-- `ProjectInference` (`src/parsers/project_inference.rs`)가 이미 이 패턴을 파싱하지만, **프로젝트 이름만** 추출
-- Line 16-45: `infer_project_name()` - 마지막 디렉토리 이름만 반환
+**중요 발견**:
+- 대부분의 세션은 단일 `cwd` 사용 (90%+)
+- 일부 세션은 여러 `cwd` 사용 (예: worktree 이동)
+  ```
+  {'/Users/lullu/study/retrochat',
+   '/Users/lullu/study/retrochat/.worktree/feature-ux-improvements'}
+  ```
 
-**필요한 작업**:
+**구현 전략**:
+- **빈도 기반 선택**: 세션에서 가장 많이 등장한 `cwd`를 project_path로 사용
+- 이유: 다른 provider와 일관성 유지 (세션당 1개의 대표 경로)
+
 ```rust
-impl ProjectInference {
-    // 새로운 메서드 추가
-    pub fn infer_project_path(&self) -> Option<String> {
-        // -Users-lullu-study-retrochat → /Users/lullu/study/retrochat
-        // resolve_original_path()를 활용하여 전체 경로 반환
-    }
-}
+// 실제 구현 예시
+let cwd_counts: HashMap<String, usize> = messages
+    .iter()
+    .filter_map(|entry| entry.cwd.as_ref())
+    .fold(HashMap::new(), |mut acc, cwd| {
+        *acc.entry(cwd.clone()).or_insert(0) += 1;
+        acc
+    });
+
+let project_path = cwd_counts
+    .into_iter()
+    .max_by_key(|(_, count)| *count)
+    .map(|(cwd, _)| cwd);
 ```
 
-**구현 난이도**: ⭐ (쉬움)
-- 기존 `resolve_original_path()` 로직 활용 가능
-- 이미 파일시스템 검증 로직 존재
+**구현 난이도**: ⭐ (매우 쉬움)
+- 데이터에 직접 제공됨
+- 빈도 계산만 추가 필요
 
 ---
 
@@ -390,8 +405,8 @@ if let Some(path) = &session.project_path {
 | Provider | 데이터 가용성 | 추출 방법 | 정확도 | 구현 난이도 | 비고 |
 |----------|-------------|----------|--------|-----------|------|
 | **Codex** | ✅ 직접 제공 | `meta.cwd` 필드 | 100% | ⭐ 매우 쉬움 | `cwd` 필드에 전체 경로 포함 |
+| **Claude Code** | ✅ 직접 제공 | 메시지 `cwd` 필드 (빈도 기반) | 100% | ⭐ 매우 쉬움 | 모든 메시지에 `cwd` + `gitBranch` 포함 |
 | **Cursor** | ✅ 파일 구조 | 경로 역추적 (5x parent) | 100% | ⭐ 쉬움 | `.cursor/chats/...` 구조 활용 |
-| **Claude Code** | ✅ 파일명 패턴 | 디렉토리명 디코딩 | 95% | ⭐⭐ 중간 | `-Users-...` 패턴 파싱 |
 | **Gemini CLI** | ❌ 없음 | 파일 위치 추론 OR 수동 입력 | 30% | ⭐⭐⭐ 어려움 | 데이터에 정보 없음 |
 
 ---

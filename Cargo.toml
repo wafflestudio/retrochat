@@ -41,6 +41,8 @@ axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
 mime_guess = "2.0"
+sha2 = "0.10"
+regex = "1.10"
 
 [features]
 default = ["reqwest"]

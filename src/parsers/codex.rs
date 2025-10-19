@@ -267,6 +267,11 @@ impl CodexParser {
             chat_session = chat_session.with_project(name);
         }
 
+        // Set project_path from cwd if available
+        if let Some(cwd) = &meta.cwd {
+            chat_session = chat_session.with_project_path(cwd.clone());
+        }
+
         let mut converted_messages = Vec::new();
         let mut estimated_total_tokens = 0u32;
 

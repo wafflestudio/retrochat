@@ -300,8 +300,16 @@ impl GeminiCLIParser {
         chat_session.id = session_id;
         chat_session = chat_session.with_end_time(end_time);
 
-        // Use project_hash as project name if available
-        if let Some(project_hash) = &session.project_hash {
+        // Extract project_path from thoughts (fallback method for now)
+        // TODO: Implement Rainbow Table lookup for better accuracy
+        if let Some(project_path) = self.extract_project_path_from_thoughts(&session) {
+            chat_session = chat_session.with_project_path(project_path.clone());
+
+            // Extract project name from path
+            if let Some(project_name) = Self::extract_project_name_from_path(&project_path) {
+                chat_session = chat_session.with_project(project_name);
+            }
+        } else if let Some(project_hash) = &session.project_hash {
             // Use the full project_hash prefix as the project name
             chat_session = chat_session.with_project(project_hash.clone());
         } else {
@@ -837,6 +845,115 @@ impl GeminiCLIParser {
             serde_json::from_str(&content).with_context(|| "Failed to parse Gemini export JSON")?;
 
         Ok(gemini_export.conversations.len())
+    }
+
+    /// Extract project path from thoughts (Fallback method)
+    ///
+    /// Parses file paths from `thoughts[].description` and infers the project root
+    /// Based on research in docs/gemini_project_path_research.md
+    ///
+    /// Accuracy: ~85%, Coverage: ~70%
+    fn extract_project_path_from_thoughts(&self, session: &GeminiSession) -> Option<String> {
+        use regex::Regex;
+
+        // Regex pattern to match absolute file paths
+        let filepath_regex = Regex::new(r"/Users/[^\s]+").ok()?;
+        let function_response_regex = Regex::new(r"--- (/Users/[^\s]+) ---").ok()?;
+
+        let mut file_paths = Vec::new();
+
+        // Extract file paths from thoughts
+        for message in &session.messages {
+            if let Some(thoughts) = &message.thoughts {
+                for thought in thoughts {
+                    for cap in filepath_regex.find_iter(&thought.description) {
+                        file_paths.push(cap.as_str().to_string());
+                    }
+                }
+            }
+
+            // Also check content for Function Response patterns
+            if message.content.contains("[Function Response") {
+                for cap in function_response_regex.captures_iter(&message.content) {
+                    if let Some(path) = cap.get(1) {
+                        file_paths.push(path.as_str().to_string());
+                    }
+                }
+            }
+        }
+
+        if file_paths.is_empty() {
+            return None;
+        }
+
+        // Filter out unwanted paths
+        let filtered_paths: Vec<_> = file_paths
+            .into_iter()
+            .filter(|p| {
+                !p.contains(".venv")
+                    && !p.contains(".pyenv")
+                    && !p.contains("node_modules")
+                    && !p.contains("site-packages")
+                    && !p.contains(".cargo")
+                    && !p.contains(".local/share")
+            })
+            .collect();
+
+        if filtered_paths.is_empty() {
+            return None;
+        }
+
+        // Infer project root from file paths
+        Self::infer_project_root_from_paths(&filtered_paths)
+    }
+
+    /// Infer project root directory from file paths
+    ///
+    /// Looks for common project structure markers (src/, lib/, etc.) and
+    /// returns the parent directory as the project root
+    fn infer_project_root_from_paths(paths: &[String]) -> Option<String> {
+        use std::path::PathBuf;
+
+        let project_markers = ["src", "lib", "test", "tests", "docs", "config", "scripts"];
+
+        for path_str in paths {
+            let path = PathBuf::from(path_str);
+            let components: Vec<_> = path.components().collect();
+
+            for (i, component) in components.iter().enumerate() {
+                if let Some(name) = component.as_os_str().to_str() {
+                    if project_markers.contains(&name) && i > 0 {
+                        // Return the path up to (but not including) the marker
+                        let project_path: PathBuf = components[..i].iter().collect();
+                        return Some(project_path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+
+        // Fallback: Find the shortest common prefix
+        if let Some(first) = paths.first() {
+            let first_path = PathBuf::from(first);
+            if let Some(parent) = first_path.parent() {
+                if let Some(project_root) = parent.parent() {
+                    return Some(project_root.to_string_lossy().to_string());
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Extract project name from a project path
+    ///
+    /// Returns the last component of the path (directory name)
+    fn extract_project_name_from_path(path: &str) -> Option<String> {
+        use std::path::Path;
+
+        Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
     }
 }
 

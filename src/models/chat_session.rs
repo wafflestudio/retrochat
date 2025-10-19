@@ -42,6 +42,7 @@ pub struct ChatSession {
     pub id: Uuid,
     pub provider: Provider,
     pub project_name: Option<String>,
+    pub project_path: Option<String>,
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,
     pub message_count: u32,
@@ -65,6 +66,7 @@ impl ChatSession {
             id: Uuid::new_v4(),
             provider,
             project_name: None,
+            project_path: None,
             start_time,
             end_time: None,
             message_count: 0,
@@ -79,6 +81,11 @@ impl ChatSession {
 
     pub fn with_project(mut self, project_name: String) -> Self {
         self.project_name = Some(project_name);
+        self
+    }
+
+    pub fn with_project_path(mut self, project_path: String) -> Self {
+        self.project_path = Some(project_path);
         self
     }
 

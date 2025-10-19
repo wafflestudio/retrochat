@@ -52,6 +52,8 @@ pub struct ClaudeCodeConversationEntry {
     /// Tool use result metadata (stdout, stderr, etc.) for tool_result messages
     #[serde(rename = "toolUseResult")]
     pub tool_use_result: Option<Value>,
+    /// Working directory where the session was executed
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -203,6 +205,12 @@ impl ClaudeCodeParser {
 
         if let Some(name) = project_name {
             chat_session = chat_session.with_project(name);
+        }
+
+        // Extract project_path from cwd using frequency-based selection
+        let project_path = self.extract_most_frequent_cwd(&entries);
+        if let Some(path) = project_path {
+            chat_session = chat_session.with_project_path(path);
         }
 
         // Convert conversation entries to messages
@@ -618,6 +626,29 @@ impl ClaudeCodeParser {
         }
 
         Ok(())
+    }
+
+    /// Extract the most frequently occurring cwd from conversation entries
+    /// Uses frequency-based selection to handle sessions with multiple working directories
+    fn extract_most_frequent_cwd(&self, entries: &[ClaudeCodeConversationEntry]) -> Option<String> {
+        use std::collections::HashMap;
+
+        // Count occurrences of each cwd
+        let mut cwd_counts: HashMap<String, usize> = HashMap::new();
+
+        for entry in entries {
+            if let Some(cwd) = &entry.cwd {
+                if !cwd.is_empty() {
+                    *cwd_counts.entry(cwd.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Find the cwd with the highest frequency
+        cwd_counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(cwd, _)| cwd)
     }
 }
 

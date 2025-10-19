@@ -309,6 +309,12 @@ function renderSessionDetail(data) {
                             <span class="detail-value">${formatDate(session.end_time)}</span>
                         </div>
                     ` : ''}
+                    ${session.project_path ? `
+                        <div class="detail-item" style="grid-column: 1 / -1;">
+                            <span class="detail-label">Project Path</span>
+                            <span class="detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${escapeHtml(session.project_path)}</span>
+                        </div>
+                    ` : ''}
                     ${session.file_path ? `
                         <div class="detail-item" style="grid-column: 1 / -1;">
                             <span class="detail-label">File Path</span>

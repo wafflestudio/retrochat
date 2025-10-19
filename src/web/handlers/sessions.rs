@@ -8,9 +8,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::services::{
-    QueryService, SessionDetailRequest, SessionFilters, SessionsQueryRequest,
-};
+use crate::services::{QueryService, SessionDetailRequest, SessionFilters, SessionsQueryRequest};
 
 #[derive(Debug, Deserialize)]
 pub struct SessionsQuery {
