@@ -6,6 +6,7 @@ pub mod query;
 pub mod retrospect;
 pub mod tui;
 pub mod watch;
+pub mod web;
 
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
@@ -92,6 +93,20 @@ pub enum Commands {
     Retrospect {
         #[command(subcommand)]
         command: RetrospectCommands,
+    },
+    /// Launch Web UI server
+    Web {
+        /// Port to run the web server on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+
+        /// Host to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Open browser automatically
+        #[arg(short, long)]
+        open: bool,
     },
 }
 
@@ -223,6 +238,9 @@ impl Cli {
                         retrospect::handle_cancel_command(request_id, all).await
                     }
                 },
+                Commands::Web { port, host, open } => {
+                    web::handle_web_command(host, port, open).await
+                }
             }
         })
     }

@@ -37,6 +37,10 @@ notify = "8.1.0"
 similar = "2.7"
 num_cpus = "1.16"
 indicatif = "0.17"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+mime_guess = "2.0"
 
 [features]
 default = ["reqwest"]
