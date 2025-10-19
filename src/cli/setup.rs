@@ -259,17 +259,3 @@ pub fn needs_setup() -> Result<bool> {
     Ok(false)
 }
 
-/// Run interactive confirmation for setup
-pub fn prompt_setup() -> Result<bool> {
-    println!();
-    println!(
-        "{} It looks like this is your first time using RetroChat!",
-        style("👋").bold()
-    );
-    println!();
-
-    Confirm::new("Would you like to run the setup wizard?")
-        .with_default(true)
-        .prompt()
-        .map_err(Into::into)
-}

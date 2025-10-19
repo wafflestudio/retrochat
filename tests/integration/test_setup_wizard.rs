@@ -109,15 +109,3 @@ async fn test_database_initialization_flow() {
     );
 }
 
-#[test]
-fn test_prompt_setup_signature() {
-    // Verify the function signature is correct
-    // We can't actually test the interactive prompt without terminal mocking
-
-    // Just verify it compiles and has the right return type
-    fn _test_signature() -> anyhow::Result<bool> {
-        // Would normally call setup::prompt_setup() here
-        // but it requires terminal interaction
-        Ok(true)
-    }
-}
