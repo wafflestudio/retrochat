@@ -54,6 +54,8 @@ jobs:
       # Build the release binary
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       # Upload the binary as an artifact
       - name: Upload binary (Unix)
