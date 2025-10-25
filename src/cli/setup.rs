@@ -1,7 +1,7 @@
 use anyhow::Result;
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use inquire::{Confirm, MultiSelect};
+use inquire::MultiSelect;
 use std::sync::Arc;
 
 use crate::database::{config, DatabaseManager};
@@ -102,13 +102,13 @@ async fn ensure_database_initialized() -> Result<()> {
     let db_path = config::get_default_db_path()?;
 
     if db_path.exists() {
-        println!("{} Database already initialized", CHECK);
+        println!("{CHECK} Database already initialized");
         return Ok(());
     }
 
     println!("  Creating database at: {}", style(db_path.display()).dim());
     let _db_manager = DatabaseManager::new(&db_path).await?;
-    println!("{} Database initialized", CHECK);
+    println!("{CHECK} Database initialized");
 
     Ok(())
 }
@@ -175,7 +175,7 @@ fn select_providers_to_import(
 /// Import selected providers with progress feedback
 async fn import_selected_providers(selected: Vec<DetectedProvider>) -> Result<()> {
     println!();
-    println!("{} Starting import...", ROCKET);
+    println!("{ROCKET} Starting import...");
     println!();
 
     let db_path = config::get_default_db_path()?;
@@ -227,7 +227,7 @@ async fn import_selected_providers(selected: Vec<DetectedProvider>) -> Result<()
     pb.finish_with_message("Import complete!");
 
     println!();
-    println!("{} Import summary:", CHECK);
+    println!("{CHECK} Import summary:");
     println!(
         "  • {} sessions imported",
         style(total_imported_sessions).green().bold()

@@ -279,7 +279,7 @@ impl MessageRepository {
         sql.push_str(if reverse { "DESC" } else { "ASC" });
 
         if let Some(lim) = limit {
-            sql.push_str(&format!(" LIMIT {}", lim));
+            sql.push_str(&format!(" LIMIT {lim}"));
         }
 
         let mut query_builder = sqlx::query(&sql);

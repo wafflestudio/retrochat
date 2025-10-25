@@ -230,13 +230,13 @@ fn truncate_message(content: &str, head_chars: usize, tail_chars: usize) -> Stri
     let head: String = chars.iter().take(head_chars).collect();
     let tail: String = chars.iter().skip(total_chars - tail_chars).collect();
 
-    format!("{} [...] {}", head, tail)
+    format!("{head} [...] {tail}")
 }
 
 fn format_jsonl(messages: &[Message]) {
     for msg in messages {
         if let Ok(json) = serde_json::to_string(msg) {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }

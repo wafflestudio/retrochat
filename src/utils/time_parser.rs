@@ -30,10 +30,10 @@ pub fn parse_time_spec(spec: &str) -> Result<DateTime<Utc>> {
 
     // 4. Short date: 2024-10-19
     if let Ok(date) = NaiveDate::parse_from_str(spec, "%Y-%m-%d") {
-        return Ok(Utc
+        return Utc
             .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .single()
-            .context("Ambiguous date/time")?);
+            .context("Ambiguous date/time");
     }
 
     // 5. Relative time: "7 days ago", "1 week ago", "yesterday"
@@ -80,7 +80,7 @@ fn parse_relative_time(spec: &str) -> Result<DateTime<Utc>> {
             "month" => Duration::days(num * 30), // Approximate
             "year" => Duration::days(num * 365), // Approximate
             unit => {
-                return Err(anyhow::anyhow!("Unknown time unit: {}", unit));
+                return Err(anyhow::anyhow!("Unknown time unit: {unit}"));
             }
         };
 
@@ -88,8 +88,7 @@ fn parse_relative_time(spec: &str) -> Result<DateTime<Utc>> {
     }
 
     Err(anyhow::anyhow!(
-        "Invalid time specification: '{}'. Expected formats: 'now', '2024-10-19', '7 days ago', '@1234567890'",
-        spec
+        "Invalid time specification: '{spec}'. Expected formats: 'now', '2024-10-19', '7 days ago', '@1234567890'"
     ))
 }
 

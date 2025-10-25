@@ -10,10 +10,10 @@ fn main() -> anyhow::Result<()> {
     let logging_config = match &cli.command {
         Some(Commands::Tui) | None => {
             // For TUI: log to file only, no stdout
-            let log_dir = dirs::data_local_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("retrochat")
-                .join("logs");
+            // Use same directory as DB (~/.retrochat/logs)
+            let config_dir = retrochat::database::config::get_config_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            let log_dir = config_dir.join("logs");
             std::fs::create_dir_all(&log_dir)?;
 
             let log_file = log_dir.join(format!(
