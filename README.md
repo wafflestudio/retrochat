@@ -1,13 +1,13 @@
 # RetroChat
 
 <p align="center">
-  <img src="docs/assets/splash.png" alt="RetroChat - Review Your AI Chats" width="800"/>
-</p>
-
-<p align="center">
   <strong>LLM Agent Chat History Retrospect Application</strong><br>
   A powerful tool for analyzing and exploring your LLM conversation history from multiple providers.
 </p>
+
+> **⚠️ Project Status Warning**
+>
+> This project is currently under active development and **not yet complete**. It may contain bugs, incomplete features, and breaking changes. **Not recommended for production use** at this time. Use at your own risk.
 
 ## Features
 
@@ -20,9 +20,25 @@
 
 ## Installation
 
+### Quick Install (npm)
+
+The fastest way to install RetroChat:
+
+```bash
+npm install -g @sanggggg/retrochat
+```
+
+After installation, you can run:
+```bash
+retrochat --help
+```
+
+**Note**: The npm package includes pre-built binaries. Make sure you have Node.js 16 or later installed.
+
 ### Prerequisites
 
-- Rust 1.75 or later
+- For npm installation: Node.js 16 or later
+- For building from source: Rust 1.75 or later
 - mise (for version management, optional but recommended)
 
 ### From Source
