@@ -44,6 +44,12 @@ coverage/
 # node_modules (in case of JS/TS tools)
 node_modules/
 
+# npm package artifacts
+npm/vendor/*/retrochat/retrochat
+npm/vendor/*/retrochat/retrochat.exe
+npm/*.tgz
+npm/package-lock.json
+
 # SQLite databases (development)
 *.db
 *.db-shm

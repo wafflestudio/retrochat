@@ -1,0 +1,35 @@
+{
+  "name": "@sanggggg/retrochat",
+  "version": "0.1.0",
+  "description": "LLM Agent Chat History Retrospect Application",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wafflestudio/retrochat.git"
+  },
+  "author": "sanggggg",
+  "license": "MIT",
+  "bin": {
+    "retrochat": "bin/retrochat.js"
+  },
+  "keywords": [
+    "llm",
+    "chat",
+    "history",
+    "retrospect",
+    "analysis",
+    "claude",
+    "cursor",
+    "gemini",
+    "ai",
+    "tui",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "bin",
+    "vendor"
+  ]
+}

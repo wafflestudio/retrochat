@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            target: x86_64-apple-darwin
+            platform: darwin-x64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            platform: darwin-arm64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: win32-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Install cross-compilation tools for Linux ARM64
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      # Build the release binary
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # Upload the binary as an artifact
+      - name: Upload binary (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrochat-${{ matrix.platform }}
+          path: target/${{ matrix.target }}/release/retrochat
+          if-no-files-found: error
+
+      - name: Upload binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrochat-${{ matrix.platform }}
+          path: target/${{ matrix.target }}/release/retrochat.exe
+          if-no-files-found: error
+
+  publish-npm:
+    name: Publish to npm
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download all binaries
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Setup the vendor directory structure
+      - name: Prepare npm package
+        run: |
+          # Create vendor directories
+          mkdir -p npm/vendor/{darwin-x64,darwin-arm64,linux-x64,linux-arm64,win32-x64}/retrochat
+
+          # Copy binaries to vendor directories
+          cp artifacts/retrochat-darwin-x64/retrochat npm/vendor/darwin-x64/retrochat/
+          cp artifacts/retrochat-darwin-arm64/retrochat npm/vendor/darwin-arm64/retrochat/
+          cp artifacts/retrochat-linux-x64/retrochat npm/vendor/linux-x64/retrochat/
+          cp artifacts/retrochat-linux-arm64/retrochat npm/vendor/linux-arm64/retrochat/
+          cp artifacts/retrochat-win32-x64/retrochat.exe npm/vendor/win32-x64/retrochat/
+
+          # Make binaries executable
+          chmod +x npm/vendor/darwin-x64/retrochat/retrochat
+          chmod +x npm/vendor/darwin-arm64/retrochat/retrochat
+          chmod +x npm/vendor/linux-x64/retrochat/retrochat
+          chmod +x npm/vendor/linux-arm64/retrochat/retrochat
+
+          # Verify all binaries are present
+          ls -lh npm/vendor/*/retrochat/
+
+      # Extract version from tag
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      # Update package.json version
+      - name: Update package version
+        run: |
+          cd npm
+          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+
+      # Setup Node.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Publish to npm
+      - name: Publish to npm
+        run: |
+          cd npm
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Create GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

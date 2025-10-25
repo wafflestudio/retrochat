@@ -1,0 +1,8 @@
+# Only include bin and vendor directories in npm package
+# Everything else is excluded by default via package.json "files" field
+
+# Development files (if any accidentally end up in npm/)
+*.log
+*.lock
+node_modules/
+.DS_Store

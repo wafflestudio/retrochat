@@ -17,7 +17,7 @@ ifeq (cli,$(firstword $(MAKECMDGOALS)))
   $(eval $(CLI_ARGS):;@:)
 endif
 
-.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean clean-db generate-example e2e-import e2e cli watch tui ci doctor init
+.PHONY: help test clippy fmt fmt-fix clippy-fix fix check build build-release clean clean-db generate-example e2e-import e2e cli watch tui ci doctor init npm-prepare npm-link npm-pack
 
 help:
 	@echo "Available targets:"
@@ -42,6 +42,9 @@ help:
 	@echo "  make watch           - Watch all providers with verbose output (make watch)"
 	@echo "  make tui             - Launch retrochat TUI interface"
 	@echo "  make ci              - Run fmt, clippy, then tests"
+	@echo "  make npm-prepare     - Build and prepare npm package for local testing"
+	@echo "  make npm-link        - Link npm package globally for local testing"
+	@echo "  make npm-pack        - Create npm package tarball for testing"
 
 test:
 	$(CARGO_BIN) test --verbose
@@ -132,3 +135,23 @@ doctor:
 
 init:
 	$(CARGO_BIN) run -- init
+
+# npm package targets
+npm-prepare:
+	@bash scripts/prepare-npm.sh
+
+npm-link: npm-prepare
+	@echo "Linking npm package globally..."
+	@cd npm && npm link
+	@echo ""
+	@echo "✓ Package linked! Try running: retrochat --help"
+
+npm-pack: npm-prepare
+	@echo "Creating npm package tarball..."
+	@cd npm && npm pack
+	@echo ""
+	@echo "✓ Package created! Install with:"
+	@echo "  npm install -g @sanggggg/retrochat"
+	@echo ""
+	@echo "Or test the local tarball:"
+	@echo "  npm install -g npm/sanggggg-retrochat-*.tgz"
