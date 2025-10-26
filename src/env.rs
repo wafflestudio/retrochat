@@ -56,3 +56,11 @@ pub mod retrospection {
     /// Maximum concurrent analysis operations
     pub const CONCURRENT: &str = "RETROCHAT_CONCURRENT";
 }
+
+/// Embedding service configuration
+pub mod embedding {
+    /// Enable MLX-based embedding generation (macOS only)
+    /// When enabled on macOS, uses MLX for embedding extraction
+    /// Shows warning and disables on unsupported platforms (Windows, Linux)
+    pub const USE_MLX: &str = "RETROCHAT_USE_MLX";
+}

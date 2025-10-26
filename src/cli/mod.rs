@@ -130,6 +130,9 @@ pub enum Commands {
         /// Messages until this time (e.g., "now", "2024-10-31", "today")
         #[arg(long)]
         until: Option<String>,
+        /// Use embedding-based semantic search instead of full-text search
+        #[arg(long)]
+        use_embedding: bool,
     },
     /// [Alias for 'retrospect execute'] Review and analyze a chat session
     Review {
@@ -187,6 +190,9 @@ pub enum QueryCommands {
         /// Messages until this time (e.g., "now", "2024-10-31", "today")
         #[arg(long)]
         until: Option<String>,
+        /// Use embedding-based semantic search instead of full-text search
+        #[arg(long)]
+        use_embedding: bool,
     },
     /// Query messages by time range
     Timeline {
@@ -286,7 +292,11 @@ impl Cli {
                         limit,
                         since,
                         until,
-                    } => query::handle_search_command(query, limit, since, until).await,
+                        use_embedding,
+                    } => {
+                        query::handle_search_command(query, limit, since, until, use_embedding)
+                            .await
+                    }
                     QueryCommands::Timeline {
                         since,
                         until,
@@ -363,7 +373,8 @@ impl Cli {
                     limit,
                     since,
                     until,
-                } => query::handle_search_command(query, limit, since, until).await,
+                    use_embedding,
+                } => query::handle_search_command(query, limit, since, until, use_embedding).await,
                 Commands::Review { session_id } => {
                     // For now, delegate to retrospect execute
                     // TODO: Could make this more interactive

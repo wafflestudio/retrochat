@@ -39,10 +39,16 @@ num_cpus = "1.16"
 indicatif = "0.17"
 inquire = "0.7"
 console = "0.15"
+sqlite-vec = "0.1.6"
+
+# MLX for embedding generation (macOS only)
+[target.'cfg(target_os = "macos")'.dependencies]
+mlx-rs = { version = "0.25", optional = true }
 
 [features]
 default = ["reqwest"]
 reqwest = ["dep:reqwest"]
+mlx = ["mlx-rs"]
 
 [dev-dependencies]
 tempfile = "3.8"

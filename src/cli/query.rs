@@ -123,6 +123,7 @@ pub async fn handle_search_command(
     limit: Option<i32>,
     since: Option<String>,
     until: Option<String>,
+    use_embedding: bool,
 ) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = DatabaseManager::new(&db_path).await?;
@@ -154,6 +155,12 @@ pub async fn handle_search_command(
         None
     };
 
+    let search_type = if use_embedding {
+        Some("embedding".to_string())
+    } else {
+        None
+    };
+
     let request = SearchRequest {
         query,
         page: Some(1),
@@ -161,7 +168,7 @@ pub async fn handle_search_command(
         date_range,
         projects: None,
         providers: None,
-        search_type: None,
+        search_type,
     };
 
     let response = query_service.search_messages(request).await?;

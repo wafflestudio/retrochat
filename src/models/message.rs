@@ -84,6 +84,9 @@ pub struct Message {
     pub tool_uses: Option<Vec<ToolUse>>,
     /// Unified tool responses (normalized across vendors)
     pub tool_results: Option<Vec<ToolResult>>,
+    /// Embedding vector for semantic search (768 dimensions, f32 values)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding: Option<Vec<f32>>,
 }
 
 impl Message {
@@ -106,6 +109,7 @@ impl Message {
             sequence_number,
             tool_uses: None,
             tool_results: None,
+            embedding: None,
         }
     }
 
@@ -131,6 +135,11 @@ impl Message {
 
     pub fn with_tool_results(mut self, tool_results: Vec<ToolResult>) -> Self {
         self.tool_results = Some(tool_results);
+        self
+    }
+
+    pub fn with_embedding(mut self, embedding: Vec<f32>) -> Self {
+        self.embedding = Some(embedding);
         self
     }
 
