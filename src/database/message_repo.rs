@@ -25,7 +25,7 @@ impl MessageRepository {
 
     /// Convert BLOB (bytes) back to embedding vector
     fn blob_to_embedding(blob: &[u8]) -> Option<Vec<f32>> {
-        if blob.len() % 4 != 0 {
+        if !blob.len().is_multiple_of(4) {
             return None;
         }
 
@@ -167,7 +167,7 @@ impl MessageRepository {
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -222,7 +222,7 @@ impl MessageRepository {
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -316,7 +316,7 @@ impl MessageRepository {
             r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             "#,
         );
