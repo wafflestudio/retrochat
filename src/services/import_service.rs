@@ -14,12 +14,12 @@ use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
     ToolOperationRepository,
 };
+use crate::models::bash_metadata::BashMetadata;
 use crate::models::ToolOperation;
 use crate::parsers::ParserRegistry;
 use crate::tools::parsers::{
     bash::BashParser, edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
 };
-use crate::models::bash_metadata::BashMetadata;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanRequest {
@@ -620,15 +620,15 @@ impl ImportService {
                         }
                     }
 
-        // Only add the original operation if it hasn't been handled by file operations
-        if !operation.is_file_operation()
-            || operation
-                .file_metadata
-                .as_ref()
-                .is_none_or(|meta| meta.file_path != "__bash_handled__")
-        {
-            tool_operations.push(operation.clone());
-        }
+                    // Only add the original operation if it hasn't been handled by file operations
+                    if !operation.is_file_operation()
+                        || operation
+                            .file_metadata
+                            .as_ref()
+                            .is_none_or(|meta| meta.file_path != "__bash_handled__")
+                    {
+                        tool_operations.push(operation.clone());
+                    }
 
                     // Link the tool_use message (first tool_use only)
                     if idx == 0 {

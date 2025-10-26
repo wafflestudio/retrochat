@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::message::{ToolResult, ToolUse};
 use super::bash_metadata::BashMetadata;
+use super::message::{ToolResult, ToolUse};
 
 /// File-related metadata for tool operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
