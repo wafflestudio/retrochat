@@ -19,27 +19,12 @@ impl MessageRepository {
     }
 
     pub async fn create(&self, message: &Message) -> AnyhowResult<()> {
-        let tool_calls_json = message
-            .tool_calls
-            .as_ref()
-            .and_then(|tc| serde_json::to_string(tc).ok());
-
-        let tool_uses_json = message
-            .tool_uses
-            .as_ref()
-            .and_then(|tu| serde_json::to_string(tu).ok());
-
-        let tool_results_json = message
-            .tool_results
-            .as_ref()
-            .and_then(|tr| serde_json::to_string(tr).ok());
-
         sqlx::query(
             r#"
             INSERT INTO messages (
                 id, session_id, role, content, timestamp, token_count,
-                tool_calls, metadata, sequence_number, tool_uses, tool_results
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                metadata, sequence_number, message_type, tool_operation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(message.id.to_string())
@@ -48,11 +33,10 @@ impl MessageRepository {
         .bind(&message.content)
         .bind(message.timestamp.to_rfc3339())
         .bind(message.token_count)
-        .bind(tool_calls_json)
         .bind("{}") // metadata
         .bind(message.sequence_number)
-        .bind(tool_uses_json)
-        .bind(tool_results_json)
+        .bind(message.message_type.to_string())
+        .bind(message.tool_operation_id.map(|id| id.to_string()))
         .execute(&self.pool)
         .await
         .context("Failed to create message")?;
@@ -64,7 +48,7 @@ impl MessageRepository {
         let row = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   tool_calls, metadata, sequence_number, tool_uses, tool_results
+                   metadata, sequence_number, message_type, tool_operation_id
             FROM messages
             WHERE id = ?
             "#,
@@ -87,7 +71,7 @@ impl MessageRepository {
         let rows = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   tool_calls, metadata, sequence_number, tool_uses, tool_results
+                   metadata, sequence_number, message_type, tool_operation_id
             FROM messages
             WHERE session_id = ?
             ORDER BY sequence_number ASC
@@ -122,8 +106,8 @@ impl MessageRepository {
         let rows = sqlx::query(
             r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
-                   m.tool_uses, m.tool_results
+                   m.token_count, m.metadata, m.sequence_number,
+                   m.message_type, m.tool_operation_id
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -157,8 +141,8 @@ impl MessageRepository {
 
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
-                   m.tool_uses, m.tool_results
+                   m.token_count, m.metadata, m.sequence_number,
+                   m.message_type, m.tool_operation_id
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -212,8 +196,8 @@ impl MessageRepository {
 
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
-                   m.tool_uses, m.tool_results
+                   m.token_count, m.metadata, m.sequence_number,
+                   m.message_type, m.tool_operation_id
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -306,8 +290,8 @@ impl MessageRepository {
         let mut sql = String::from(
             r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
-                   m.tool_uses, m.tool_results
+                   m.token_count, m.metadata, m.sequence_number,
+                   m.message_type, m.tool_operation_id
             FROM messages m
             "#,
         );
@@ -392,27 +376,12 @@ impl MessageRepository {
             .context("Failed to start transaction")?;
 
         for message in messages {
-            let tool_calls_json = message
-                .tool_calls
-                .as_ref()
-                .and_then(|tc| serde_json::to_string(tc).ok());
-
-            let tool_uses_json = message
-                .tool_uses
-                .as_ref()
-                .and_then(|tu| serde_json::to_string(tu).ok());
-
-            let tool_results_json = message
-                .tool_results
-                .as_ref()
-                .and_then(|tr| serde_json::to_string(tr).ok());
-
             sqlx::query(
                 r#"
                 INSERT INTO messages (
                     id, session_id, role, content, timestamp, token_count,
-                    tool_calls, metadata, sequence_number, tool_uses, tool_results
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    metadata, sequence_number, message_type, tool_operation_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(message.id.to_string())
@@ -421,11 +390,10 @@ impl MessageRepository {
             .bind(&message.content)
             .bind(message.timestamp.to_rfc3339())
             .bind(message.token_count)
-            .bind(tool_calls_json)
             .bind("{}") // metadata
             .bind(message.sequence_number)
-            .bind(tool_uses_json)
-            .bind(tool_results_json)
+            .bind(message.message_type.to_string())
+            .bind(message.tool_operation_id.map(|id| id.to_string()))
             .execute(&mut *tx)
             .await
             .context("Failed to insert message in bulk")?;
@@ -438,16 +406,17 @@ impl MessageRepository {
     }
 
     fn row_to_message(&self, row: &SqliteRow) -> AnyhowResult<Message> {
+        use crate::models::message::MessageType;
+
         let id_str: String = row.try_get("id")?;
         let session_id_str: String = row.try_get("session_id")?;
         let role_str: String = row.try_get("role")?;
         let content: String = row.try_get("content")?;
         let timestamp_str: String = row.try_get("timestamp")?;
         let token_count: Option<i64> = row.try_get("token_count")?;
-        let tool_calls_json: Option<String> = row.try_get("tool_calls")?;
         let sequence_number: i64 = row.try_get("sequence_number")?;
-        let tool_uses_json: Option<String> = row.try_get("tool_uses")?;
-        let tool_results_json: Option<String> = row.try_get("tool_results")?;
+        let message_type_str: String = row.try_get("message_type")?;
+        let tool_operation_id_str: Option<String> = row.try_get("tool_operation_id")?;
 
         let id = Uuid::parse_str(&id_str).context("Invalid message ID format")?;
         let session_id = Uuid::parse_str(&session_id_str).context("Invalid session ID format")?;
@@ -456,21 +425,10 @@ impl MessageRepository {
         let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
             .context("Invalid timestamp format")?
             .with_timezone(&Utc);
-
-        let tool_calls = if let Some(json) = &tool_calls_json {
-            serde_json::from_str(json).ok()
-        } else {
-            None
-        };
-
-        let tool_uses = if let Some(json) = &tool_uses_json {
-            serde_json::from_str(json).ok()
-        } else {
-            None
-        };
-
-        let tool_results = if let Some(json) = &tool_results_json {
-            serde_json::from_str(json).ok()
+        let message_type = MessageType::from_str(&message_type_str)
+            .map_err(|e| anyhow::anyhow!("Invalid message type: {e}"))?;
+        let tool_operation_id = if let Some(id_str) = tool_operation_id_str {
+            Some(Uuid::parse_str(&id_str).context("Invalid tool operation ID format")?)
         } else {
             None
         };
@@ -484,11 +442,12 @@ impl MessageRepository {
             content,
             timestamp,
             token_count: token_count.map(|tc| tc as u32),
-            tool_calls,
             metadata,
             sequence_number: sequence_number as u32,
-            tool_uses,
-            tool_results,
+            message_type,
+            tool_operation_id,
+            tool_uses: None,
+            tool_results: None,
         })
     }
 }
