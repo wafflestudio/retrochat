@@ -607,15 +607,15 @@ impl ImportService {
                         }
                     }
 
-                    // Only add the original operation if it hasn't been handled by file operations
-                    if !operation.is_file_operation()
-                        || operation
-                            .file_metadata
-                            .as_ref()
-                            .map_or(true, |meta| meta.file_path != "__bash_handled__")
-                    {
-                        tool_operations.push(operation.clone());
-                    }
+        // Only add the original operation if it hasn't been handled by file operations
+        if !operation.is_file_operation()
+            || operation
+                .file_metadata
+                .as_ref()
+                .is_none_or(|meta| meta.file_path != "__bash_handled__")
+        {
+            tool_operations.push(operation.clone());
+        }
 
                     // Link the tool_use message (first tool_use only)
                     if idx == 0 {
