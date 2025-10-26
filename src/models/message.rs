@@ -227,7 +227,9 @@ impl Message {
     /// # async fn example(message: retrochat::models::Message, repo: &ToolOperationRepository) {
     /// if let Some(operation) = message.get_tool_operation(repo).await.unwrap() {
     ///     if operation.is_file_operation() {
-    ///         println!("File: {:?}, Lines changed: {}", operation.file_path, operation.total_line_changes());
+    ///         if let Some(file_meta) = &operation.file_metadata {
+    ///             println!("File: {:?}, Lines changed: {}", file_meta.file_path, operation.total_line_changes());
+    ///         }
     ///     }
     /// }
     /// # }

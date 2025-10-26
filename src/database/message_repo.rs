@@ -196,8 +196,8 @@ impl MessageRepository {
 
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
-                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
-                   m.tool_uses, m.tool_results
+                   m.token_count, m.metadata, m.sequence_number,
+                   m.message_type, m.tool_operation_id
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
