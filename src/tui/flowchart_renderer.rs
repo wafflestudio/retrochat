@@ -59,15 +59,8 @@ impl FlowchartRenderer {
                     if targets.len() == 1 {
                         // Check if this is a loop
                         let target = targets[0];
-                        if let Some(edge_type) = edge_types.get(&(node_id.as_str(), target)) {
-                            match edge_type {
-                                EdgeType::Loop => {
-                                    self.render_loop(&mut lines);
-                                }
-                                _ => {
-                                    self.render_sequential_arrow(&mut lines);
-                                }
-                            }
+                        if let Some(EdgeType::Loop) = edge_types.get(&(node_id.as_str(), target)) {
+                            self.render_loop(&mut lines);
                         } else {
                             self.render_sequential_arrow(&mut lines);
                         }
@@ -92,7 +85,7 @@ impl FlowchartRenderer {
 
     fn render_node(&self, lines: &mut Vec<Line<'static>>, node: &FlowchartNode, number: usize) {
         let label = self.truncate_label(&node.label, self.max_width.saturating_sub(8));
-        
+
         // Calculate proper box width based on content
         let content = format!("{}. {}", number, label);
         let box_width = content.chars().count() + 4; // 2 spaces on each side
@@ -151,11 +144,7 @@ impl FlowchartRenderer {
             )]));
         } else {
             // More than 2 branches - simplified representation
-            let branch_line = format!(
-                " ├{}┤ {} branches",
-                "─".repeat(5),
-                branch_count
-            );
+            let branch_line = format!(" ├{}┤ {} branches", "─".repeat(5), branch_count);
             lines.push(Line::from(vec![Span::styled(
                 branch_line,
                 Style::default().fg(Color::Magenta),
@@ -257,7 +246,7 @@ impl FlowchartRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{EdgeType, Flowchart, FlowchartEdge, FlowchartNode, MessageRef, NodeType};
+    use crate::models::{EdgeType, Flowchart, FlowchartEdge, FlowchartNode, NodeType};
 
     #[test]
     fn test_render_simple_flowchart() {

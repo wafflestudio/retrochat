@@ -155,10 +155,7 @@ impl Flowchart {
 
     /// Get all edges pointing to a node
     pub fn get_incoming_edges(&self, node_id: &str) -> Vec<&FlowchartEdge> {
-        self.edges
-            .iter()
-            .filter(|e| e.to_node == node_id)
-            .collect()
+        self.edges.iter().filter(|e| e.to_node == node_id).collect()
     }
 
     /// Check if this is a valid DAG (no cycles)
@@ -167,10 +164,9 @@ impl Flowchart {
         let mut rec_stack = std::collections::HashSet::new();
 
         for node in &self.nodes {
-            if !visited.contains(&node.id) {
-                if self.has_cycle(&node.id, &mut visited, &mut rec_stack) {
-                    return false;
-                }
+            if !visited.contains(&node.id) && self.has_cycle(&node.id, &mut visited, &mut rec_stack)
+            {
+                return false;
             }
         }
 

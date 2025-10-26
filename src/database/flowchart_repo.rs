@@ -138,6 +138,16 @@ mod tests {
         let db = Database::new_in_memory().await.unwrap();
         db.initialize().await.unwrap();
 
+        // Create a test session first
+        let session_repo = db.chat_session_repo();
+        let session = crate::models::ChatSession::new(
+            crate::models::Provider::ClaudeCode,
+            "test-provider".to_string(),
+            "test-hash".to_string(),
+            chrono::Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
         let repo = FlowchartRepository::new(Arc::new(db.manager));
 
         let nodes = vec![FlowchartNode {
@@ -159,7 +169,7 @@ mod tests {
             label: None,
         }];
 
-        let flowchart = Flowchart::new("session-123".to_string(), nodes, edges);
+        let flowchart = Flowchart::new(session.id.to_string(), nodes, edges);
         let flowchart_id = flowchart.id.clone();
 
         repo.create(&flowchart).await.unwrap();
@@ -168,7 +178,7 @@ mod tests {
         assert!(found.is_some());
 
         let found_flowchart = found.unwrap();
-        assert_eq!(found_flowchart.session_id, "session-123");
+        assert_eq!(found_flowchart.session_id, session.id.to_string());
         assert_eq!(found_flowchart.nodes.len(), 1);
         assert_eq!(found_flowchart.edges.len(), 1);
     }
@@ -178,15 +188,28 @@ mod tests {
         let db = Database::new_in_memory().await.unwrap();
         db.initialize().await.unwrap();
 
+        // Create a test session first
+        let session_repo = db.chat_session_repo();
+        let session = crate::models::ChatSession::new(
+            crate::models::Provider::ClaudeCode,
+            "test-provider".to_string(),
+            "test-hash".to_string(),
+            chrono::Utc::now(),
+        );
+        session_repo.create(&session).await.unwrap();
+
         let repo = FlowchartRepository::new(Arc::new(db.manager));
 
-        let flowchart1 = Flowchart::new("session-123".to_string(), vec![], vec![]);
-        let flowchart2 = Flowchart::new("session-123".to_string(), vec![], vec![]);
+        let flowchart1 = Flowchart::new(session.id.to_string(), vec![], vec![]);
+        let flowchart2 = Flowchart::new(session.id.to_string(), vec![], vec![]);
 
         repo.create(&flowchart1).await.unwrap();
         repo.create(&flowchart2).await.unwrap();
 
-        let flowcharts = repo.get_by_session_id("session-123").await.unwrap();
+        let flowcharts = repo
+            .get_by_session_id(&session.id.to_string())
+            .await
+            .unwrap();
         assert_eq!(flowcharts.len(), 2);
     }
 }

@@ -63,7 +63,6 @@ impl FlowchartService {
             .extract_text()
             .ok_or("Failed to extract text from AI response")?;
 
-
         // Parse JSON response
         let flowchart_data: FlowchartResponse = serde_json::from_str(&response_text)
             .or_else(|_| self.extract_json_from_markdown(&response_text))?;
@@ -166,9 +165,7 @@ RULES:
         &self,
         session_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.flowchart_repo
-            .delete_by_session_id(session_id)
-            .await?;
+        self.flowchart_repo.delete_by_session_id(session_id).await?;
         Ok(())
     }
 }
@@ -200,9 +197,10 @@ mod tests {
 
         let session_repo = db.chat_session_repo();
         let session = crate::models::ChatSession::new(
-            project.id.clone(),
+            crate::models::Provider::ClaudeCode,
             "test-provider".to_string(),
-            crate::models::SessionState::Active,
+            "test-hash".to_string(),
+            chrono::Utc::now(),
         );
         session_repo.create(&session).await.unwrap();
 
@@ -232,7 +230,10 @@ mod tests {
         let service = FlowchartService::new(Arc::new(db.manager), client);
 
         // Generate flowchart
-        let flowchart = service.generate_flowchart(&session.id).await.unwrap();
+        let flowchart = service
+            .generate_flowchart(&session.id.to_string())
+            .await
+            .unwrap();
 
         assert!(!flowchart.nodes.is_empty());
         assert!(flowchart.is_valid_dag());

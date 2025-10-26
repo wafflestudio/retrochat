@@ -11,7 +11,10 @@ use std::sync::Arc;
 
 use crate::database::{DatabaseManager, FlowchartRepository, RetrospectionRepository};
 use crate::models::{Message, MessageRole};
-use crate::services::{FlowchartService, GoogleAiClient, GoogleAiConfig, MessageGroup, QueryService, SessionDetailRequest};
+use crate::services::{
+    FlowchartService, GoogleAiClient, GoogleAiConfig, MessageGroup, QueryService,
+    SessionDetailRequest,
+};
 
 use super::flowchart_renderer::FlowchartRenderer;
 use super::state::SessionDetailState;
@@ -138,7 +141,7 @@ impl SessionDetailWidget {
             KeyCode::Char('f') => {
                 // F: Toggle flowchart view
                 self.state.toggle_flowchart();
-                
+
                 // Load flowchart data if showing flowchart and we have a session
                 if self.state.show_flowchart {
                     if let Some(session_id) = self.state.session_id.clone() {
@@ -174,7 +177,8 @@ impl SessionDetailWidget {
         self.render_session_header(f, chunks[0]);
 
         // Render main content area
-        let show_right_panel = (self.state.show_retrospection && !self.state.retrospections.is_empty())
+        let show_right_panel = (self.state.show_retrospection
+            && !self.state.retrospections.is_empty())
             || self.state.show_flowchart;
 
         if show_right_panel {

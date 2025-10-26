@@ -352,7 +352,7 @@ impl Cli {
                 },
                 Commands::Flowchart { command } => {
                     flowchart::handle_flowchart_command(command).await
-                },
+                }
                 // New commands
                 Commands::Setup => setup::run_setup_wizard().await,
                 Commands::Add {

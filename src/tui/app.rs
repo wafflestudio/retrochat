@@ -156,24 +156,22 @@ impl App {
         let analytics_service = AnalyticsService::new((*db_manager).clone());
 
         // Try to create retrospection and flowchart services if Google AI API key is available
-        let (retrospection_service, flowchart_service) = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
-            let config = GoogleAiConfig::default();
-            match GoogleAiClient::new(config) {
-                Ok(client) => (
-                    Some(Arc::new(RetrospectionService::new(
-                        db_manager.clone(),
-                        client.clone(),
-                    ))),
-                    Some(Arc::new(FlowchartService::new(
-                        db_manager.clone(),
-                        client,
-                    ))),
-                ),
-                Err(_) => (None, None),
-            }
-        } else {
-            (None, None)
-        };
+        let (retrospection_service, flowchart_service) =
+            if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
+                let config = GoogleAiConfig::default();
+                match GoogleAiClient::new(config) {
+                    Ok(client) => (
+                        Some(Arc::new(RetrospectionService::new(
+                            db_manager.clone(),
+                            client.clone(),
+                        ))),
+                        Some(Arc::new(FlowchartService::new(db_manager.clone(), client))),
+                    ),
+                    Err(_) => (None, None),
+                }
+            } else {
+                (None, None)
+            };
 
         Ok(Self {
             state: AppState::new(),
