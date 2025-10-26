@@ -422,13 +422,28 @@ impl QueryService {
         let message_repo = crate::database::MessageRepository::new(&self.db_manager);
         let session_repo = ChatSessionRepository::new(&self.db_manager);
 
+        // Parse date range if provided
+        let (start_datetime, end_datetime) = if let Some(ref date_range) = request.date_range {
+            let start = DateTime::parse_from_rfc3339(&date_range.start_date)
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok();
+            let end = DateTime::parse_from_rfc3339(&date_range.end_date)
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok();
+            (start, end)
+        } else {
+            (None, None)
+        };
+
         // Search for messages using FTS with filters
         let messages = message_repo
-            .search_content_with_filters(
+            .search_content_with_time_filters(
                 &request.query,
-                None,      // session_id filter
-                None,      // role filter
-                Some(100), // limit
+                None,           // session_id filter
+                None,           // role filter
+                start_datetime, // from timestamp
+                end_datetime,   // to timestamp
+                Some(100),      // limit
             )
             .await?;
 

@@ -51,9 +51,9 @@ async fn test_run_setup_wizard_structure() {
     // (e.g., using expect-test or similar for CLI testing)
 
     // For now, we just verify the types are correct
-    let _fn_ptr: fn() -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>,
-    > = || Box::pin(async { Ok(()) });
+    type SetupFuture =
+        std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>;
+    let _fn_ptr: fn() -> SetupFuture = || Box::pin(async { Ok(()) });
 }
 
 #[test]

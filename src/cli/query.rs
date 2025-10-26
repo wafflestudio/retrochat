@@ -118,16 +118,47 @@ pub async fn handle_session_detail_command(session_id: String) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_search_command(query: String, limit: Option<i32>) -> Result<()> {
+pub async fn handle_search_command(
+    query: String,
+    limit: Option<i32>,
+    since: Option<String>,
+    until: Option<String>,
+) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = DatabaseManager::new(&db_path).await?;
     let query_service = QueryService::with_database(Arc::new(db_manager));
+
+    // Parse time specifications if provided
+    let date_range = if since.is_some() || until.is_some() {
+        let start_date = if let Some(since_str) = since {
+            time_parser::parse_time_spec(&since_str)?.to_rfc3339()
+        } else {
+            // Use a very old date as default start
+            chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z")?
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339()
+        };
+
+        let end_date = if let Some(until_str) = until {
+            time_parser::parse_time_spec(&until_str)?.to_rfc3339()
+        } else {
+            // Use now as default end
+            chrono::Utc::now().to_rfc3339()
+        };
+
+        Some(crate::services::DateRange {
+            start_date,
+            end_date,
+        })
+    } else {
+        None
+    };
 
     let request = SearchRequest {
         query,
         page: Some(1),
         page_size: limit,
-        date_range: None,
+        date_range,
         projects: None,
         providers: None,
         search_type: None,
