@@ -20,6 +20,7 @@ use crate::parsers::ParserRegistry;
 use crate::tools::parsers::{
     bash::BashParser, edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
 };
+use crate::utils::bash_utils;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanRequest {
@@ -557,10 +558,27 @@ impl ImportService {
                             if let Ok(parsed) = parser.parse(tool_use) {
                                 if let ToolData::Bash(data) = parsed.data {
                                     // Create bash metadata for the main operation
-                                    let bash_metadata = BashMetadata::new(
+                                    let mut bash_metadata = BashMetadata::new(
                                         "BashCommand".to_string(),
                                         data.command.clone(),
                                     );
+
+                                    // Extract stdout, stderr, and exit code from tool result
+                                    if let Some(result) = tool_result {
+                                        let (stdout, stderr) =
+                                            bash_utils::extract_bash_output(result);
+                                        let exit_code = bash_utils::extract_bash_exit_code(result);
+
+                                        if let Some(stdout) = stdout {
+                                            bash_metadata = bash_metadata.with_stdout(stdout);
+                                        }
+                                        if let Some(stderr) = stderr {
+                                            bash_metadata = bash_metadata.with_stderr(stderr);
+                                        }
+                                        if let Some(exit_code) = exit_code {
+                                            bash_metadata = bash_metadata.with_exit_code(exit_code);
+                                        }
+                                    }
 
                                     // Set the bash metadata on the main operation
                                     operation = operation.with_bash_metadata(bash_metadata);
@@ -577,10 +595,31 @@ impl ImportService {
                                                     );
 
                                                 // Create bash metadata for this specific file operation
-                                                let file_bash_metadata = BashMetadata::new(
+                                                let mut file_bash_metadata = BashMetadata::new(
                                                     format!("{:?}", file_op.operation_type),
                                                     data.command.clone(),
                                                 );
+
+                                                // Extract stdout, stderr, and exit code from tool result
+                                                if let Some(result) = tool_result {
+                                                    let (stdout, stderr) =
+                                                        bash_utils::extract_bash_output(result);
+                                                    let exit_code =
+                                                        bash_utils::extract_bash_exit_code(result);
+
+                                                    if let Some(stdout) = stdout {
+                                                        file_bash_metadata =
+                                                            file_bash_metadata.with_stdout(stdout);
+                                                    }
+                                                    if let Some(stderr) = stderr {
+                                                        file_bash_metadata =
+                                                            file_bash_metadata.with_stderr(stderr);
+                                                    }
+                                                    if let Some(exit_code) = exit_code {
+                                                        file_bash_metadata = file_bash_metadata
+                                                            .with_exit_code(exit_code);
+                                                    }
+                                                }
 
                                                 // Set file metadata and bash metadata
                                                 file_operation = file_operation
