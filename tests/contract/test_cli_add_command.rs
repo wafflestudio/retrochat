@@ -80,8 +80,7 @@ fn test_stats_command() {
 
     match stats_cmd {
         Commands::Stats => {
-            // Stats command has no fields
-            assert!(true);
+            // Stats command has no fields - match is sufficient
         }
         _ => panic!("Expected Stats command"),
     }
@@ -139,8 +138,7 @@ fn test_setup_command() {
 
     match setup_cmd {
         Commands::Setup => {
-            // Setup command has no fields
-            assert!(true);
+            // Setup command has no fields - match is sufficient
         }
         _ => panic!("Expected Setup command"),
     }
@@ -162,7 +160,7 @@ fn test_cli_with_command() {
 
     assert!(cli.command.is_some(), "Command should be present");
     match cli.command {
-        Some(Commands::Stats) => assert!(true),
+        Some(Commands::Stats) => {}
         _ => panic!("Expected Stats command"),
     }
 }

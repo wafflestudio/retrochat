@@ -10,10 +10,11 @@ pub enum MessageRole {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum MessageType {
     ToolRequest,
     ToolResult,
+    #[default]
     SimpleMessage,
 }
 
@@ -60,12 +61,6 @@ impl std::str::FromStr for MessageType {
             "simple_message" => Ok(MessageType::SimpleMessage),
             _ => Err(format!("Unknown message type: {s}")),
         }
-    }
-}
-
-impl Default for MessageType {
-    fn default() -> Self {
-        MessageType::SimpleMessage
     }
 }
 
