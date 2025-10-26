@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use super::bash_metadata::BashMetadata;
 use super::message::{ToolResult, ToolUse};
 
 /// File-related metadata for tool operations
@@ -65,6 +66,10 @@ pub struct ToolOperation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_metadata: Option<FileMetadata>,
 
+    // Bash-specific metadata (None for non-bash tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bash_metadata: Option<BashMetadata>,
+
     // Generic fields for all tools
     pub success: Option<bool>,
     pub result_summary: Option<String>,
@@ -82,6 +87,7 @@ impl ToolOperation {
             tool_name,
             timestamp,
             file_metadata: None,
+            bash_metadata: None,
             success: None,
             result_summary: None,
             raw_input: None,
@@ -182,6 +188,12 @@ impl ToolOperation {
             meta.is_bulk_edit = Some(is_bulk);
             meta.is_refactoring = Some(is_refactoring);
         }
+        self
+    }
+
+    /// Builder method: set bash metadata
+    pub fn with_bash_metadata(mut self, bash_metadata: BashMetadata) -> Self {
+        self.bash_metadata = Some(bash_metadata);
         self
     }
 
