@@ -28,34 +28,26 @@ impl ToolOperationRepository {
             .as_ref()
             .and_then(|v| serde_json::to_string(v).ok());
 
+        let file_metadata_json = operation
+            .file_metadata
+            .as_ref()
+            .and_then(|meta| serde_json::to_string(meta).ok());
+
         sqlx::query(
             r#"
             INSERT INTO tool_operations (
-                id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                file_path, file_extension, is_code_file, is_config_file,
-                lines_before, lines_after, lines_added, lines_removed, content_size,
-                is_bulk_edit, is_refactoring,
-                success, result_summary, raw_input, raw_result, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, tool_use_id, tool_name, timestamp,
+                file_metadata,
+                success, result_summary, raw_input, raw_result,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(operation.id.to_string())
-        .bind(operation.message_id.to_string())
         .bind(&operation.tool_use_id)
-        .bind(operation.session_id.to_string())
         .bind(&operation.tool_name)
         .bind(operation.timestamp.to_rfc3339())
-        .bind(&operation.file_path)
-        .bind(&operation.file_extension)
-        .bind(operation.is_code_file)
-        .bind(operation.is_config_file)
-        .bind(operation.lines_before)
-        .bind(operation.lines_after)
-        .bind(operation.lines_added)
-        .bind(operation.lines_removed)
-        .bind(operation.content_size)
-        .bind(operation.is_bulk_edit)
-        .bind(operation.is_refactoring)
+        .bind(file_metadata_json)
         .bind(operation.success)
         .bind(&operation.result_summary)
         .bind(raw_input_json)
@@ -86,34 +78,26 @@ impl ToolOperationRepository {
                 .as_ref()
                 .and_then(|v| serde_json::to_string(v).ok());
 
+            let file_metadata_json = operation
+                .file_metadata
+                .as_ref()
+                .and_then(|meta| serde_json::to_string(meta).ok());
+
             sqlx::query(
                 r#"
                 INSERT INTO tool_operations (
-                    id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                    file_path, file_extension, is_code_file, is_config_file,
-                    lines_before, lines_after, lines_added, lines_removed, content_size,
-                    is_bulk_edit, is_refactoring,
-                    success, result_summary, raw_input, raw_result, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, tool_use_id, tool_name, timestamp,
+                    file_metadata,
+                    success, result_summary, raw_input, raw_result,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(operation.id.to_string())
-            .bind(operation.message_id.to_string())
             .bind(&operation.tool_use_id)
-            .bind(operation.session_id.to_string())
             .bind(&operation.tool_name)
             .bind(operation.timestamp.to_rfc3339())
-            .bind(&operation.file_path)
-            .bind(&operation.file_extension)
-            .bind(operation.is_code_file)
-            .bind(operation.is_config_file)
-            .bind(operation.lines_before)
-            .bind(operation.lines_after)
-            .bind(operation.lines_added)
-            .bind(operation.lines_removed)
-            .bind(operation.content_size)
-            .bind(operation.is_bulk_edit)
-            .bind(operation.is_refactoring)
+            .bind(file_metadata_json)
             .bind(operation.success)
             .bind(&operation.result_summary)
             .bind(raw_input_json)
@@ -131,11 +115,10 @@ impl ToolOperationRepository {
     pub async fn get_by_id(&self, id: &Uuid) -> AnyhowResult<Option<ToolOperation>> {
         let row = sqlx::query(
             r#"
-            SELECT id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                   file_path, file_extension, is_code_file, is_config_file,
-                   lines_before, lines_after, lines_added, lines_removed, content_size,
-                   is_bulk_edit, is_refactoring,
-                   success, result_summary, raw_input, raw_result, created_at
+            SELECT id, tool_use_id, tool_name, timestamp,
+                   file_metadata,
+                   success, result_summary, raw_input, raw_result,
+                   created_at
             FROM tool_operations
             WHERE id = ?
             "#,
@@ -157,14 +140,14 @@ impl ToolOperationRepository {
     pub async fn get_by_session(&self, session_id: &Uuid) -> AnyhowResult<Vec<ToolOperation>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                   file_path, file_extension, is_code_file, is_config_file,
-                   lines_before, lines_after, lines_added, lines_removed, content_size,
-                   is_bulk_edit, is_refactoring,
-                   success, result_summary, raw_input, raw_result, created_at
-            FROM tool_operations
-            WHERE session_id = ?
-            ORDER BY timestamp ASC
+            SELECT t.id, t.tool_use_id, t.tool_name, t.timestamp,
+                   t.file_metadata,
+                   t.success, t.result_summary, t.raw_input, t.raw_result,
+                   t.created_at
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ?
+            ORDER BY t.timestamp ASC
             "#,
         )
         .bind(session_id.to_string())
@@ -184,14 +167,14 @@ impl ToolOperationRepository {
     pub async fn get_by_message(&self, message_id: &Uuid) -> AnyhowResult<Vec<ToolOperation>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                   file_path, file_extension, is_code_file, is_config_file,
-                   lines_before, lines_after, lines_added, lines_removed, content_size,
-                   is_bulk_edit, is_refactoring,
-                   success, result_summary, raw_input, raw_result, created_at
-            FROM tool_operations
-            WHERE message_id = ?
-            ORDER BY timestamp ASC
+            SELECT t.id, t.tool_use_id, t.tool_name, t.timestamp,
+                   t.file_metadata,
+                   t.success, t.result_summary, t.raw_input, t.raw_result,
+                   t.created_at
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.id = ?
+            ORDER BY t.timestamp ASC
             "#,
         )
         .bind(message_id.to_string())
@@ -208,18 +191,18 @@ impl ToolOperationRepository {
         Ok(operations)
     }
 
-    /// Get only file operations (operations with file_path)
+    /// Get only file operations (operations with file_metadata)
     pub async fn get_file_operations(&self, session_id: &Uuid) -> AnyhowResult<Vec<ToolOperation>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                   file_path, file_extension, is_code_file, is_config_file,
-                   lines_before, lines_after, lines_added, lines_removed, content_size,
-                   is_bulk_edit, is_refactoring,
-                   success, result_summary, raw_input, raw_result, created_at
-            FROM tool_operations
-            WHERE session_id = ? AND file_path IS NOT NULL
-            ORDER BY timestamp ASC
+            SELECT t.id, t.tool_use_id, t.tool_name, t.timestamp,
+                   t.file_metadata,
+                   t.success, t.result_summary, t.raw_input, t.raw_result,
+                   t.created_at
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ? AND t.file_metadata IS NOT NULL
+            ORDER BY t.timestamp ASC
             "#,
         )
         .bind(session_id.to_string())
@@ -240,13 +223,11 @@ impl ToolOperationRepository {
     pub async fn get_file_history(&self, file_path: &str) -> AnyhowResult<Vec<ToolOperation>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, message_id, tool_use_id, session_id, tool_name, timestamp,
-                   file_path, file_extension, is_code_file, is_config_file,
-                   lines_before, lines_after, lines_added, lines_removed, content_size,
-                   is_bulk_edit, is_refactoring,
+            SELECT id, tool_use_id, tool_name, timestamp,
+                   file_metadata,
                    success, result_summary, raw_input, raw_result, created_at
             FROM tool_operations
-            WHERE file_path = ?
+            WHERE json_extract(file_metadata, '$.file_path') = ?
             ORDER BY timestamp ASC
             "#,
         )
@@ -271,10 +252,11 @@ impl ToolOperationRepository {
     ) -> AnyhowResult<Vec<(String, i64)>> {
         let rows = sqlx::query(
             r#"
-            SELECT tool_name, COUNT(*) as count
-            FROM tool_operations
-            WHERE session_id = ?
-            GROUP BY tool_name
+            SELECT t.tool_name, COUNT(*) as count
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ?
+            GROUP BY t.tool_name
             ORDER BY count DESC
             "#,
         )
@@ -298,11 +280,14 @@ impl ToolOperationRepository {
         let row = sqlx::query(
             r#"
             SELECT
-                SUM(CASE WHEN is_code_file = 1 THEN 1 ELSE 0 END) as code_files,
-                SUM(CASE WHEN is_config_file = 1 THEN 1 ELSE 0 END) as config_files,
-                SUM(CASE WHEN is_code_file = 0 AND is_config_file = 0 AND file_path IS NOT NULL THEN 1 ELSE 0 END) as other_files
-            FROM tool_operations
-            WHERE session_id = ? AND file_path IS NOT NULL
+                SUM(CASE WHEN json_extract(t.file_metadata, '$.is_code_file') = 1 THEN 1 ELSE 0 END) as code_files,
+                SUM(CASE WHEN json_extract(t.file_metadata, '$.is_config_file') = 1 THEN 1 ELSE 0 END) as config_files,
+                SUM(CASE WHEN json_extract(t.file_metadata, '$.is_code_file') = 0
+                         AND json_extract(t.file_metadata, '$.is_config_file') = 0
+                         AND t.file_metadata IS NOT NULL THEN 1 ELSE 0 END) as other_files
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ? AND t.file_metadata IS NOT NULL
             "#,
         )
         .bind(session_id.to_string())
@@ -322,10 +307,11 @@ impl ToolOperationRepository {
         let row = sqlx::query(
             r#"
             SELECT
-                COALESCE(SUM(lines_added), 0) as total_added,
-                COALESCE(SUM(lines_removed), 0) as total_removed
-            FROM tool_operations
-            WHERE session_id = ?
+                COALESCE(SUM(CAST(json_extract(t.file_metadata, '$.lines_added') AS INTEGER)), 0) as total_added,
+                COALESCE(SUM(CAST(json_extract(t.file_metadata, '$.lines_removed') AS INTEGER)), 0) as total_removed
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ?
             "#,
         )
         .bind(session_id.to_string())
@@ -348,15 +334,16 @@ impl ToolOperationRepository {
         let rows = sqlx::query(
             r#"
             SELECT
-                file_path,
+                json_extract(t.file_metadata, '$.file_path') as file_path,
                 COUNT(*) as modification_count,
-                COALESCE(SUM(lines_added), 0) as total_lines_added,
-                COALESCE(SUM(lines_removed), 0) as total_lines_removed
-            FROM tool_operations
-            WHERE session_id = ?
-              AND file_path IS NOT NULL
-              AND tool_name IN ('Write', 'Edit')
-            GROUP BY file_path
+                COALESCE(SUM(CAST(json_extract(t.file_metadata, '$.lines_added') AS INTEGER)), 0) as total_lines_added,
+                COALESCE(SUM(CAST(json_extract(t.file_metadata, '$.lines_removed') AS INTEGER)), 0) as total_lines_removed
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ?
+              AND t.file_metadata IS NOT NULL
+              AND t.tool_name IN ('Write', 'Edit')
+            GROUP BY json_extract(t.file_metadata, '$.file_path')
             ORDER BY modification_count DESC
             LIMIT ?
             "#,
@@ -385,54 +372,55 @@ impl ToolOperationRepository {
     }
 
     pub async fn delete_by_session(&self, session_id: &Uuid) -> AnyhowResult<u64> {
-        let result = sqlx::query("DELETE FROM tool_operations WHERE session_id = ?")
-            .bind(session_id.to_string())
-            .execute(&self.pool)
-            .await
-            .context("Failed to delete tool operations by session")?;
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tool_operations
+            WHERE id IN (
+                SELECT t.id
+                FROM tool_operations t
+                JOIN messages m ON m.tool_operation_id = t.id
+                WHERE m.session_id = ?
+            )
+            "#,
+        )
+        .bind(session_id.to_string())
+        .execute(&self.pool)
+        .await
+        .context("Failed to delete tool operations by session")?;
 
         Ok(result.rows_affected())
     }
 
     pub async fn count_by_session(&self, session_id: &Uuid) -> AnyhowResult<i64> {
-        let count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM tool_operations WHERE session_id = ?")
-                .bind(session_id.to_string())
-                .fetch_one(&self.pool)
-                .await
-                .context("Failed to count tool operations by session")?;
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM tool_operations t
+            JOIN messages m ON m.tool_operation_id = t.id
+            WHERE m.session_id = ?
+            "#,
+        )
+        .bind(session_id.to_string())
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to count tool operations by session")?;
 
         Ok(count)
     }
 
     fn row_to_tool_operation(&self, row: &SqliteRow) -> AnyhowResult<ToolOperation> {
         let id_str: String = row.try_get("id")?;
-        let message_id_str: String = row.try_get("message_id")?;
         let tool_use_id: String = row.try_get("tool_use_id")?;
-        let session_id_str: String = row.try_get("session_id")?;
         let tool_name: String = row.try_get("tool_name")?;
         let timestamp_str: String = row.try_get("timestamp")?;
 
         let id = Uuid::parse_str(&id_str).context("Invalid tool operation ID format")?;
-        let message_id = Uuid::parse_str(&message_id_str).context("Invalid message ID format")?;
-        let session_id = Uuid::parse_str(&session_id_str).context("Invalid session ID format")?;
         let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
             .context("Invalid timestamp format")?
             .with_timezone(&Utc);
 
-        let file_path: Option<String> = row.try_get("file_path").ok();
-        let file_extension: Option<String> = row.try_get("file_extension").ok();
-        let is_code_file: Option<bool> = row.try_get("is_code_file").ok();
-        let is_config_file: Option<bool> = row.try_get("is_config_file").ok();
-
-        let lines_before: Option<i32> = row.try_get("lines_before").ok();
-        let lines_after: Option<i32> = row.try_get("lines_after").ok();
-        let lines_added: Option<i32> = row.try_get("lines_added").ok();
-        let lines_removed: Option<i32> = row.try_get("lines_removed").ok();
-        let content_size: Option<i32> = row.try_get("content_size").ok();
-
-        let is_bulk_edit: Option<bool> = row.try_get("is_bulk_edit").ok();
-        let is_refactoring: Option<bool> = row.try_get("is_refactoring").ok();
+        let file_metadata_json: Option<String> = row.try_get("file_metadata").ok();
+        let file_metadata = file_metadata_json.and_then(|json| serde_json::from_str(&json).ok());
 
         let success: Option<bool> = row.try_get("success").ok();
         let result_summary: Option<String> = row.try_get("result_summary").ok();
@@ -450,22 +438,10 @@ impl ToolOperationRepository {
 
         Ok(ToolOperation {
             id,
-            message_id,
             tool_use_id,
-            session_id,
             tool_name,
             timestamp,
-            file_path,
-            file_extension,
-            is_code_file,
-            is_config_file,
-            lines_before,
-            lines_after,
-            lines_added,
-            lines_removed,
-            content_size,
-            is_bulk_edit,
-            is_refactoring,
+            file_metadata,
             success,
             result_summary,
             raw_input,
@@ -502,23 +478,9 @@ mod tests {
         session.set_state(SessionState::Imported);
         session_repo.create(&session).await.unwrap();
 
-        // Create message
-        let message_id = Uuid::new_v4();
-        let mut message = Message::new(
-            session_id,
-            MessageRole::Assistant,
-            "test message".to_string(),
-            Utc::now(),
-            1,
-        );
-        message.id = message_id;
-        message_repo.create(&message).await.unwrap();
-
-        // Now create tool operation
+        // Create tool operation first
         let operation = ToolOperation::new(
-            message_id,
             "test_tool_use_id".to_string(),
-            session_id,
             "Write".to_string(),
             Utc::now(),
         )
@@ -529,13 +491,29 @@ mod tests {
 
         repo.create(&operation).await.unwrap();
 
+        // Create message linked to tool operation
+        let message_id = Uuid::new_v4();
+        let mut message = Message::new(
+            session_id,
+            MessageRole::Assistant,
+            "test message".to_string(),
+            Utc::now(),
+            1,
+        )
+        .with_message_type(crate::models::message::MessageType::ToolRequest)
+        .with_tool_operation(operation.id);
+        message.id = message_id;
+        message_repo.create(&message).await.unwrap();
+
         let retrieved = repo.get_by_id(&operation.id).await.unwrap();
         assert!(retrieved.is_some());
 
         let retrieved_op = retrieved.unwrap();
         assert_eq!(retrieved_op.tool_name, "Write");
-        assert_eq!(retrieved_op.file_path, Some("/test/file.rs".to_string()));
-        assert_eq!(retrieved_op.is_code_file, Some(true));
+        assert!(retrieved_op.file_metadata.is_some());
+        let meta = retrieved_op.file_metadata.as_ref().unwrap();
+        assert_eq!(meta.file_path, "/test/file.rs".to_string());
+        assert_eq!(meta.is_code_file, Some(true));
     }
 
     #[tokio::test]
@@ -560,28 +538,25 @@ mod tests {
         session.set_state(SessionState::Imported);
         session_repo.create(&session).await.unwrap();
 
-        // Create message
-        let message_id = Uuid::new_v4();
-        let mut message = Message::new(
-            session_id,
-            MessageRole::Assistant,
-            "test message".to_string(),
-            Utc::now(),
-            1,
-        );
-        message.id = message_id;
-        message_repo.create(&message).await.unwrap();
-
-        // Create multiple operations
+        // Create multiple operations and messages linked to them
         for i in 0..3 {
-            let operation = ToolOperation::new(
-                message_id,
-                format!("tool_use_{i}"),
-                session_id,
-                "Edit".to_string(),
-                Utc::now(),
-            );
+            let operation =
+                ToolOperation::new(format!("tool_use_{i}"), "Edit".to_string(), Utc::now());
             repo.create(&operation).await.unwrap();
+
+            // Create message linked to this operation
+            let message_id = Uuid::new_v4();
+            let mut message = Message::new(
+                session_id,
+                MessageRole::Assistant,
+                format!("test message {i}"),
+                Utc::now(),
+                (i + 1) as u32,
+            )
+            .with_message_type(crate::models::message::MessageType::ToolRequest)
+            .with_tool_operation(operation.id);
+            message.id = message_id;
+            message_repo.create(&message).await.unwrap();
         }
 
         let operations = repo.get_by_session(&session_id).await.unwrap();

@@ -10,6 +10,13 @@ pub enum MessageRole {
     System,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MessageType {
+    ToolRequest,
+    ToolResult,
+    SimpleMessage,
+}
+
 impl std::fmt::Display for MessageRole {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -30,6 +37,35 @@ impl std::str::FromStr for MessageRole {
             "System" => Ok(MessageRole::System),
             _ => Err(format!("Unknown message role: {s}")),
         }
+    }
+}
+
+impl std::fmt::Display for MessageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MessageType::ToolRequest => write!(f, "tool_request"),
+            MessageType::ToolResult => write!(f, "tool_result"),
+            MessageType::SimpleMessage => write!(f, "simple_message"),
+        }
+    }
+}
+
+impl std::str::FromStr for MessageType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "tool_request" => Ok(MessageType::ToolRequest),
+            "tool_result" => Ok(MessageType::ToolResult),
+            "simple_message" => Ok(MessageType::SimpleMessage),
+            _ => Err(format!("Unknown message type: {s}")),
+        }
+    }
+}
+
+impl Default for MessageType {
+    fn default() -> Self {
+        MessageType::SimpleMessage
     }
 }
 
@@ -77,12 +113,16 @@ pub struct Message {
     pub content: String,
     pub timestamp: DateTime<Utc>,
     pub token_count: Option<u32>,
-    pub tool_calls: Option<Vec<ToolCall>>,
     pub metadata: Option<Value>,
     pub sequence_number: u32,
-    /// Unified tool requests (normalized across vendors)
+    pub message_type: MessageType,
+    pub tool_operation_id: Option<Uuid>,
+
+    // TRANSIENT FIELDS: Used only during import, never persisted to database
+    // These fields are populated by parsers and consumed by ImportService to create ToolOperations
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_uses: Option<Vec<ToolUse>>,
-    /// Unified tool responses (normalized across vendors)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_results: Option<Vec<ToolResult>>,
 }
 
@@ -101,9 +141,10 @@ impl Message {
             content,
             timestamp,
             token_count: None,
-            tool_calls: None,
             metadata: None,
             sequence_number,
+            message_type: MessageType::default(),
+            tool_operation_id: None,
             tool_uses: None,
             tool_results: None,
         }
@@ -114,21 +155,28 @@ impl Message {
         self
     }
 
-    pub fn with_tool_calls(mut self, tool_calls: Vec<ToolCall>) -> Self {
-        self.tool_calls = Some(tool_calls);
-        self
-    }
-
     pub fn with_metadata(mut self, metadata: Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
 
+    pub fn with_message_type(mut self, message_type: MessageType) -> Self {
+        self.message_type = message_type;
+        self
+    }
+
+    pub fn with_tool_operation(mut self, tool_operation_id: Uuid) -> Self {
+        self.tool_operation_id = Some(tool_operation_id);
+        self
+    }
+
+    /// Set tool_uses (transient field - only used during import)
     pub fn with_tool_uses(mut self, tool_uses: Vec<ToolUse>) -> Self {
         self.tool_uses = Some(tool_uses);
         self
     }
 
+    /// Set tool_results (transient field - only used during import)
     pub fn with_tool_results(mut self, tool_results: Vec<ToolResult>) -> Self {
         self.tool_results = Some(tool_results);
         self
@@ -136,12 +184,6 @@ impl Message {
 
     pub fn is_valid(&self) -> bool {
         !self.content.is_empty()
-    }
-
-    pub fn has_tool_calls(&self) -> bool {
-        self.tool_calls
-            .as_ref()
-            .is_some_and(|calls| !calls.is_empty())
     }
 
     pub fn content_length(&self) -> usize {
@@ -164,40 +206,46 @@ impl Message {
         matches!(self.role, MessageRole::System)
     }
 
-    /// Check if this message has any tool uses
-    pub fn has_tool_uses(&self) -> bool {
-        self.tool_uses.as_ref().is_some_and(|uses| !uses.is_empty())
+    /// Check if this message is a tool request
+    pub fn is_tool_request(&self) -> bool {
+        matches!(self.message_type, MessageType::ToolRequest)
     }
 
-    /// Check if this message has any tool results
-    pub fn has_tool_results(&self) -> bool {
-        self.tool_results
-            .as_ref()
-            .is_some_and(|results| !results.is_empty())
+    /// Check if this message is a tool result
+    pub fn is_tool_result(&self) -> bool {
+        matches!(self.message_type, MessageType::ToolResult)
     }
 
-    /// Get all tool operations associated with this message
+    /// Check if this message has an associated tool operation
+    pub fn has_tool_operation(&self) -> bool {
+        self.tool_operation_id.is_some()
+    }
+
+    /// Get the tool operation associated with this message
     ///
-    /// This retrieves structured ToolOperation records from the database
-    /// which contain parsed file change metrics and other tool-specific data.
+    /// This retrieves the ToolOperation record from the database
+    /// which contains parsed file change metrics and other tool-specific data.
     ///
     /// # Example
     /// ```no_run
     /// # use retrochat::database::ToolOperationRepository;
     /// # async fn example(message: retrochat::models::Message, repo: &ToolOperationRepository) {
-    /// let operations = message.get_tool_operations(repo).await.unwrap();
-    /// for op in operations {
-    ///     if op.is_file_operation() {
-    ///         println!("File: {:?}, Lines changed: {}", op.file_path, op.total_line_changes());
+    /// if let Some(operation) = message.get_tool_operation(repo).await.unwrap() {
+    ///     if operation.is_file_operation() {
+    ///         println!("File: {:?}, Lines changed: {}", operation.file_path, operation.total_line_changes());
     ///     }
     /// }
     /// # }
     /// ```
-    pub async fn get_tool_operations(
+    pub async fn get_tool_operation(
         &self,
         repo: &crate::database::ToolOperationRepository,
-    ) -> anyhow::Result<Vec<crate::models::ToolOperation>> {
-        repo.get_by_message(&self.id).await
+    ) -> anyhow::Result<Option<crate::models::ToolOperation>> {
+        if let Some(tool_op_id) = self.tool_operation_id {
+            repo.get_by_id(&tool_op_id).await
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -245,9 +293,10 @@ mod tests {
         assert_eq!(message.content, content);
         assert_eq!(message.timestamp, timestamp);
         assert_eq!(message.sequence_number, sequence_number);
+        assert_eq!(message.message_type, MessageType::SimpleMessage);
         assert!(message.is_valid());
         assert!(message.is_user_message());
-        assert!(!message.has_tool_calls());
+        assert!(!message.has_tool_operation());
     }
 
     #[test]
@@ -264,13 +313,8 @@ mod tests {
     }
 
     #[test]
-    fn test_message_with_tool_calls() {
-        let tool_call = ToolCall {
-            id: "call_1".to_string(),
-            function: "get_weather".to_string(),
-            arguments: serde_json::json!({"location": "San Francisco"}),
-            result: Some(serde_json::json!({"temperature": "72F"})),
-        };
+    fn test_message_with_tool_operation() {
+        let tool_operation_id = Uuid::new_v4();
 
         let message = Message::new(
             Uuid::new_v4(),
@@ -279,11 +323,13 @@ mod tests {
             Utc::now(),
             1,
         )
-        .with_tool_calls(vec![tool_call]);
+        .with_message_type(MessageType::ToolRequest)
+        .with_tool_operation(tool_operation_id);
 
-        assert!(message.has_tool_calls());
+        assert!(message.has_tool_operation());
+        assert!(message.is_tool_request());
         assert!(message.is_assistant_message());
-        assert_eq!(message.tool_calls.as_ref().unwrap().len(), 1);
+        assert_eq!(message.tool_operation_id, Some(tool_operation_id));
     }
 
     #[test]
@@ -318,6 +364,13 @@ mod tests {
     }
 
     #[test]
+    fn test_message_type_display() {
+        assert_eq!(MessageType::ToolRequest.to_string(), "tool_request");
+        assert_eq!(MessageType::ToolResult.to_string(), "tool_result");
+        assert_eq!(MessageType::SimpleMessage.to_string(), "simple_message");
+    }
+
+    #[test]
     fn test_word_count() {
         let message = Message::new(
             Uuid::new_v4(),
@@ -332,7 +385,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_tool_operations() {
+    async fn test_get_tool_operation() {
         use crate::database::{
             ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
         };
@@ -355,14 +408,14 @@ mod tests {
         session.set_state(SessionState::Imported);
         session_repo.create(&session).await.unwrap();
 
-        // Create message with tool uses
+        // Create tool operation
+        let tool_op = ToolOperation::new("tool_1".to_string(), "Write".to_string(), Utc::now())
+            .with_file_path("/test.rs".to_string());
+        let tool_op_id = tool_op.id;
+        tool_op_repo.create(&tool_op).await.unwrap();
+
+        // Create message with tool operation
         let message_id = Uuid::new_v4();
-        let tool_use = ToolUse {
-            id: "tool_1".to_string(),
-            name: "Write".to_string(),
-            input: serde_json::json!({"file_path": "/test.rs", "content": "test"}),
-            raw: serde_json::json!({}),
-        };
         let mut message = Message::new(
             session_id,
             MessageRole::Assistant,
@@ -370,53 +423,58 @@ mod tests {
             Utc::now(),
             1,
         )
-        .with_tool_uses(vec![tool_use]);
+        .with_message_type(MessageType::ToolRequest)
+        .with_tool_operation(tool_op_id);
         message.id = message_id;
         message_repo.create(&message).await.unwrap();
 
-        // Create tool operations
-        let tool_op = ToolOperation::new(
-            message_id,
-            "tool_1".to_string(),
-            session_id,
-            "Write".to_string(),
-            Utc::now(),
-        )
-        .with_file_path("/test.rs".to_string());
-        tool_op_repo.create(&tool_op).await.unwrap();
-
         // Test helper method
-        let operations = message.get_tool_operations(&tool_op_repo).await.unwrap();
-        assert_eq!(operations.len(), 1);
-        assert_eq!(operations[0].tool_name, "Write");
-        assert_eq!(operations[0].file_path, Some("/test.rs".to_string()));
+        let operation = message.get_tool_operation(&tool_op_repo).await.unwrap();
+        assert!(operation.is_some());
+        let op = operation.unwrap();
+        assert_eq!(op.tool_name, "Write");
+        assert!(op.file_metadata.is_some());
+        assert_eq!(
+            op.file_metadata.as_ref().unwrap().file_path,
+            "/test.rs".to_string()
+        );
     }
 
     #[test]
-    fn test_has_tool_uses() {
-        let message_with_tools = Message::new(
+    fn test_message_type_checks() {
+        let tool_request_msg = Message::new(
             Uuid::new_v4(),
             MessageRole::Assistant,
             "test".to_string(),
             Utc::now(),
             1,
         )
-        .with_tool_uses(vec![ToolUse {
-            id: "test".to_string(),
-            name: "Write".to_string(),
-            input: serde_json::json!({}),
-            raw: serde_json::json!({}),
-        }]);
+        .with_message_type(MessageType::ToolRequest);
 
-        let message_without_tools = Message::new(
+        let tool_result_msg = Message::new(
+            Uuid::new_v4(),
+            MessageRole::Assistant,
+            "test".to_string(),
+            Utc::now(),
+            2,
+        )
+        .with_message_type(MessageType::ToolResult);
+
+        let simple_msg = Message::new(
             Uuid::new_v4(),
             MessageRole::User,
             "test".to_string(),
             Utc::now(),
-            1,
+            3,
         );
 
-        assert!(message_with_tools.has_tool_uses());
-        assert!(!message_without_tools.has_tool_uses());
+        assert!(tool_request_msg.is_tool_request());
+        assert!(!tool_request_msg.is_tool_result());
+
+        assert!(!tool_result_msg.is_tool_request());
+        assert!(tool_result_msg.is_tool_result());
+
+        assert!(!simple_msg.is_tool_request());
+        assert!(!simple_msg.is_tool_result());
     }
 }
