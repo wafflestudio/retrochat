@@ -183,6 +183,71 @@ impl MessageRepository {
         Ok(messages)
     }
 
+    pub async fn search_content_with_time_filters(
+        &self,
+        query: &str,
+        session_id: Option<&Uuid>,
+        role: Option<&str>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        limit: Option<i64>,
+    ) -> AnyhowResult<Vec<Message>> {
+        let limit = limit.unwrap_or(100);
+
+        let mut sql = r#"
+            SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
+                   m.token_count, m.tool_calls, m.metadata, m.sequence_number,
+                   m.tool_uses, m.tool_results
+            FROM messages m
+            JOIN messages_fts fts ON m.rowid = fts.rowid
+            WHERE messages_fts MATCH ?
+        "#
+        .to_string();
+
+        let mut params = vec![query.to_string()];
+
+        if let Some(session_id) = session_id {
+            sql.push_str(" AND m.session_id = ?");
+            params.push(session_id.to_string());
+        }
+
+        if let Some(role) = role {
+            sql.push_str(" AND m.role = ?");
+            params.push(role.to_string());
+        }
+
+        if let Some(from_time) = from {
+            sql.push_str(" AND m.timestamp >= ?");
+            params.push(from_time.to_rfc3339());
+        }
+
+        if let Some(to_time) = to {
+            sql.push_str(" AND m.timestamp <= ?");
+            params.push(to_time.to_rfc3339());
+        }
+
+        sql.push_str(" ORDER BY fts.rank LIMIT ?");
+        params.push(limit.to_string());
+
+        let mut query_builder = sqlx::query(&sql);
+        for param in &params {
+            query_builder = query_builder.bind(param);
+        }
+
+        let rows = query_builder
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to search messages with time filters")?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let message = self.row_to_message(&row)?;
+            messages.push(message);
+        }
+
+        Ok(messages)
+    }
+
     pub async fn count_by_session(&self, session_id: &Uuid) -> AnyhowResult<i64> {
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE session_id = ?")
             .bind(session_id.to_string())

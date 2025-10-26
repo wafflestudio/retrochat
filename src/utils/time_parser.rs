@@ -152,4 +152,47 @@ mod tests {
         let result = parse_time_spec("invalid input");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_parse_hours_ago() {
+        let result = parse_time_spec("2 hours ago");
+        assert!(result.is_ok());
+        let dt = result.unwrap();
+        let expected = Utc::now() - Duration::hours(2);
+        // Allow 2 second tolerance
+        assert!((dt.timestamp() - expected.timestamp()).abs() < 2);
+    }
+
+    #[test]
+    fn test_parse_weeks_ago() {
+        let result = parse_time_spec("2 weeks ago");
+        assert!(result.is_ok());
+        let dt = result.unwrap();
+        let expected = Utc::now() - Duration::weeks(2);
+        // Allow 2 second tolerance
+        assert!((dt.timestamp() - expected.timestamp()).abs() < 2);
+    }
+
+    #[test]
+    fn test_parse_today() {
+        let result = parse_time_spec("today");
+        assert!(result.is_ok());
+        let dt = result.unwrap();
+        let now = Utc::now();
+        assert_eq!(dt.date_naive(), now.date_naive());
+        assert_eq!(dt.hour(), 0);
+        assert_eq!(dt.minute(), 0);
+    }
+
+    #[test]
+    fn test_parse_plural_units() {
+        // Test plural forms
+        let days_result = parse_time_spec("5 days ago");
+        let hours_result = parse_time_spec("3 hours ago");
+        let minutes_result = parse_time_spec("30 minutes ago");
+
+        assert!(days_result.is_ok());
+        assert!(hours_result.is_ok());
+        assert!(minutes_result.is_ok());
+    }
 }

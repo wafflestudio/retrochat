@@ -124,6 +124,12 @@ pub enum Commands {
         /// Maximum number of results (default: 20)
         #[arg(short, long)]
         limit: Option<i32>,
+        /// Messages since this time (e.g., "7 days ago", "2024-10-01", "yesterday")
+        #[arg(long)]
+        since: Option<String>,
+        /// Messages until this time (e.g., "now", "2024-10-31", "today")
+        #[arg(long)]
+        until: Option<String>,
     },
     /// [Alias for 'retrospect execute'] Review and analyze a chat session
     Review {
@@ -175,6 +181,12 @@ pub enum QueryCommands {
         /// Maximum number of results (default: 20)
         #[arg(short, long)]
         limit: Option<i32>,
+        /// Messages since this time (e.g., "7 days ago", "2024-10-01", "yesterday")
+        #[arg(long)]
+        since: Option<String>,
+        /// Messages until this time (e.g., "now", "2024-10-31", "today")
+        #[arg(long)]
+        until: Option<String>,
     },
     /// Query messages by time range
     Timeline {
@@ -269,9 +281,12 @@ impl Cli {
                     QueryCommands::Session { session_id } => {
                         query::handle_session_detail_command(session_id).await
                     }
-                    QueryCommands::Search { query, limit } => {
-                        query::handle_search_command(query, limit).await
-                    }
+                    QueryCommands::Search {
+                        query,
+                        limit,
+                        since,
+                        until,
+                    } => query::handle_search_command(query, limit, since, until).await,
                     QueryCommands::Timeline {
                         since,
                         until,
@@ -343,9 +358,12 @@ impl Cli {
                     }
                 }
                 Commands::Stats => analytics::handle_insights_command().await,
-                Commands::Search { query, limit } => {
-                    query::handle_search_command(query, limit).await
-                }
+                Commands::Search {
+                    query,
+                    limit,
+                    since,
+                    until,
+                } => query::handle_search_command(query, limit, since, until).await,
                 Commands::Review { session_id } => {
                     // For now, delegate to retrospect execute
                     // TODO: Could make this more interactive
