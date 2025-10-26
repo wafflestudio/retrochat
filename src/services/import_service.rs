@@ -17,7 +17,7 @@ use crate::database::{
 use crate::models::ToolOperation;
 use crate::parsers::ParserRegistry;
 use crate::tools::parsers::{
-    edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
+    bash::BashParser, edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -551,13 +551,71 @@ impl ImportService {
                                 }
                             }
                         }
+                        "Bash" => {
+                            let parser = BashParser;
+                            if let Ok(parsed) = parser.parse(tool_use) {
+                                if let ToolData::Bash(data) = parsed.data {
+                                    // For each file operation, create a separate ToolOperation
+                                    if data.has_file_operations() {
+                                        for file_op in &data.file_operations {
+                                            for file_path in &file_op.file_paths {
+                                                let mut file_operation =
+                                                    ToolOperation::from_tool_use(
+                                                        tool_use,
+                                                        tool_result,
+                                                        message.timestamp,
+                                                    );
+
+                                                // Set file metadata with bash operation info
+                                                file_operation = file_operation
+                                                    .with_file_path(file_path.clone())
+                                                    .with_bash_operation(format!(
+                                                        "{:?}",
+                                                        file_op.operation_type
+                                                    ));
+
+                                                // Determine file type based on extension
+                                                let is_code = file_path.ends_with(".rs")
+                                                    || file_path.ends_with(".js")
+                                                    || file_path.ends_with(".ts")
+                                                    || file_path.ends_with(".py")
+                                                    || file_path.ends_with(".go")
+                                                    || file_path.ends_with(".java");
+
+                                                let is_config = file_path.ends_with("Cargo.toml")
+                                                    || file_path.ends_with("package.json")
+                                                    || file_path.ends_with(".yaml")
+                                                    || file_path.ends_with(".yml")
+                                                    || file_path.ends_with(".toml");
+
+                                                file_operation = file_operation
+                                                    .with_file_type(is_code, is_config);
+
+                                                tool_operations.push(file_operation);
+                                            }
+                                        }
+                                        // Mark that we've handled this operation
+                                        operation = operation
+                                            .with_file_path("__bash_handled__".to_string());
+                                    }
+                                }
+                            }
+                        }
                         _ => {
-                            // For other tools (Bash, Task, etc.), just save the basic info
+                            // For other tools (Task, etc.), just save the basic info
                             // File-related fields will be None
                         }
                     }
 
-                    tool_operations.push(operation.clone());
+                    // Only add the original operation if it hasn't been handled by file operations
+                    if !operation.is_file_operation()
+                        || operation
+                            .file_metadata
+                            .as_ref()
+                            .map_or(true, |meta| meta.file_path != "__bash_handled__")
+                    {
+                        tool_operations.push(operation.clone());
+                    }
 
                     // Link the tool_use message (first tool_use only)
                     if idx == 0 {
