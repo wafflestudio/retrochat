@@ -80,7 +80,7 @@ fn test_stats_command() {
 
     match stats_cmd {
         Commands::Stats => {
-            // Stats command has no fields, test passes if we match this variant
+            // Stats command has no fields - match is sufficient
         }
         _ => panic!("Expected Stats command"),
     }
@@ -218,7 +218,7 @@ fn test_setup_command() {
 
     match setup_cmd {
         Commands::Setup => {
-            // Setup command has no fields, test passes if we match this variant
+            // Setup command has no fields - match is sufficient
         }
         _ => panic!("Expected Setup command"),
     }
@@ -240,9 +240,7 @@ fn test_cli_with_command() {
 
     assert!(cli.command.is_some(), "Command should be present");
     match cli.command {
-        Some(Commands::Stats) => {
-            // Test passes if we match this variant
-        }
+        Some(Commands::Stats) => {}
         _ => panic!("Expected Stats command"),
     }
 }

@@ -40,6 +40,8 @@ indicatif = "0.17"
 inquire = "0.7"
 console = "0.15"
 sqlite-vec = "0.1.6"
+regex = "1.10"
+lazy_static = "1.4"
 
 # MLX for embedding generation (macOS only)
 [target.'cfg(target_os = "macos")'.dependencies]

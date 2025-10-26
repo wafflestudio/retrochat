@@ -8,11 +8,19 @@ use std::time::UNIX_EPOCH;
 use tokio::sync::{mpsc, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
+use uuid::Uuid;
 
 use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
+    ToolOperationRepository,
 };
+use crate::models::bash_metadata::BashMetadata;
+use crate::models::ToolOperation;
 use crate::parsers::ParserRegistry;
+use crate::tools::parsers::{
+    bash::BashParser, edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
+};
+use crate::utils::bash_utils;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanRequest {
@@ -206,8 +214,9 @@ impl ImportService {
         let session_repo = ChatSessionRepository::new(&self.db_manager);
         let message_repo = MessageRepository::new(&self.db_manager);
         let project_repo = ProjectRepository::new(&self.db_manager);
+        let tool_operation_repo = ToolOperationRepository::new(&self.db_manager);
 
-        for (session, messages) in sessions {
+        for (session, mut messages) in sessions {
             // Check if session already exists
             let existing_session = session_repo.get_by_id(&session.id).await.ok().flatten();
 
@@ -244,28 +253,42 @@ impl ImportService {
                 }
             }
 
-            // Use a transaction for session and message inserts to improve performance
-            let tx = match self.db_manager.pool().begin().await {
-                Ok(tx) => tx,
-                Err(e) => {
-                    warnings.push(format!(
-                        "Failed to start transaction for session {}: {}",
-                        session.id, e
-                    ));
-                    continue;
-                }
-            };
-
-            // Rollback the transaction we started but won't use
-            let _ = tx.rollback().await;
-
             // Insert session
             if let Err(e) = session_repo.create(&session).await {
                 warnings.push(format!("Failed to insert session {}: {}", session.id, e));
                 continue;
             }
 
-            // Use bulk insert for messages for better performance
+            // Extract and save tool operations FIRST (before messages)
+            // Returns map of message_id -> (tool_operation_id, message_type)
+            let tool_op_links = match self
+                .extract_and_save_tool_operations(&tool_operation_repo, &messages)
+                .await
+            {
+                Ok(links) => links,
+                Err(e) => {
+                    warnings.push(format!(
+                        "Failed to create tool operations for session {}: {}",
+                        session.id, e
+                    ));
+                    // Try to rollback session insertion
+                    let _ = session_repo.delete(&session.id).await;
+                    continue;
+                }
+            };
+
+            // Update messages with tool_operation_id and message_type
+            for message in &mut messages {
+                if let Some((tool_op_id, msg_type)) = tool_op_links.get(&message.id) {
+                    message.tool_operation_id = Some(*tool_op_id);
+                    message.message_type = msg_type.clone();
+                }
+                // Clear transient fields before saving
+                message.tool_uses = None;
+                message.tool_results = None;
+            }
+
+            // Use bulk insert for messages
             let session_messages_imported = messages.len() as i32;
             if let Err(e) = message_repo.bulk_create(&messages).await {
                 warnings.push(format!(
@@ -442,6 +465,234 @@ impl ImportService {
         })
     }
 
+    /// Extract tool operations from messages and save them to database
+    /// Returns a map of message_id -> (tool_operation_id, message_type)
+    async fn extract_and_save_tool_operations(
+        &self,
+        tool_operation_repo: &ToolOperationRepository,
+        messages: &[crate::models::Message],
+    ) -> Result<std::collections::HashMap<Uuid, (Uuid, crate::models::message::MessageType)>> {
+        use crate::models::message::MessageType;
+        let mut message_links = std::collections::HashMap::new();
+        let mut tool_operations = Vec::new();
+
+        // PHASE 1: Collect all tool_results from all messages
+        // This allows matching tool_results that are in separate messages from tool_uses
+        let mut global_tool_results: std::collections::HashMap<
+            String,
+            Vec<(&crate::models::message::ToolResult, Uuid)>,
+        > = std::collections::HashMap::new();
+
+        for message in messages {
+            if let Some(tool_results) = &message.tool_results {
+                for tool_result in tool_results {
+                    global_tool_results
+                        .entry(tool_result.tool_use_id.clone())
+                        .or_default()
+                        .push((tool_result, message.id));
+                }
+            }
+        }
+
+        // PHASE 2: Process tool_uses and create ToolOperations
+        for message in messages {
+            // Process tool_uses if present
+            if let Some(tool_uses) = &message.tool_uses {
+                for (idx, tool_use) in tool_uses.iter().enumerate() {
+                    // Find matching tool_result from global map (could be in any message)
+                    let tool_result_data = global_tool_results
+                        .get(&tool_use.id)
+                        .and_then(|vec| vec.first());
+
+                    let tool_result = tool_result_data.map(|(tr, _)| *tr);
+                    let tool_result_message_id = tool_result_data.map(|(_, mid)| *mid);
+
+                    // Create base ToolOperation
+                    let mut operation =
+                        ToolOperation::from_tool_use(tool_use, tool_result, message.timestamp);
+
+                    // Parse tool-specific data and extract metrics
+                    match tool_use.name.as_str() {
+                        "Edit" => {
+                            let parser = EditParser;
+                            if let Ok(parsed) = parser.parse(tool_use) {
+                                if let ToolData::Edit(data) = parsed.data {
+                                    operation = operation
+                                        .with_file_path(data.file_path.clone())
+                                        .with_file_type(data.is_code_file(), data.is_config_file())
+                                        .with_line_metrics(data.lines_before(), data.lines_after())
+                                        .with_edit_flags(
+                                            data.is_bulk_replacement(),
+                                            data.is_refactoring(),
+                                        );
+                                }
+                            }
+                        }
+                        "Write" => {
+                            let parser = WriteParser;
+                            if let Ok(parsed) = parser.parse(tool_use) {
+                                if let ToolData::Write(data) = parsed.data {
+                                    operation = operation
+                                        .with_file_path(data.file_path.clone())
+                                        .with_file_type(data.is_code_file(), data.is_config_file())
+                                        .with_line_metrics(None, data.lines_after());
+
+                                    if let Some(size) = data.content_size {
+                                        operation = operation.with_content_size(size as i32);
+                                    }
+                                }
+                            }
+                        }
+                        "Read" => {
+                            let parser = ReadParser;
+                            if let Ok(parsed) = parser.parse(tool_use) {
+                                if let ToolData::Read(data) = parsed.data {
+                                    operation = operation
+                                        .with_file_path(data.file_path.clone())
+                                        .with_file_type(data.is_code_file(), data.is_config_file());
+                                }
+                            }
+                        }
+                        "Bash" => {
+                            let parser = BashParser;
+                            if let Ok(parsed) = parser.parse(tool_use) {
+                                if let ToolData::Bash(data) = parsed.data {
+                                    // Create bash metadata for the main operation
+                                    let mut bash_metadata = BashMetadata::new(
+                                        "BashCommand".to_string(),
+                                        data.command.clone(),
+                                    );
+
+                                    // Extract stdout, stderr, and exit code from tool result
+                                    if let Some(result) = tool_result {
+                                        let (stdout, stderr) =
+                                            bash_utils::extract_bash_output(result);
+                                        let exit_code = bash_utils::extract_bash_exit_code(result);
+
+                                        if let Some(stdout) = stdout {
+                                            bash_metadata = bash_metadata.with_stdout(stdout);
+                                        }
+                                        if let Some(stderr) = stderr {
+                                            bash_metadata = bash_metadata.with_stderr(stderr);
+                                        }
+                                        if let Some(exit_code) = exit_code {
+                                            bash_metadata = bash_metadata.with_exit_code(exit_code);
+                                        }
+                                    }
+
+                                    // Set the bash metadata on the main operation
+                                    operation = operation.with_bash_metadata(bash_metadata);
+
+                                    // For each file operation, create a separate ToolOperation
+                                    if data.has_file_operations() {
+                                        for file_op in &data.file_operations {
+                                            for file_path in &file_op.file_paths {
+                                                let mut file_operation =
+                                                    ToolOperation::from_tool_use(
+                                                        tool_use,
+                                                        tool_result,
+                                                        message.timestamp,
+                                                    );
+
+                                                // Create bash metadata for this specific file operation
+                                                let mut file_bash_metadata = BashMetadata::new(
+                                                    format!("{:?}", file_op.operation_type),
+                                                    data.command.clone(),
+                                                );
+
+                                                // Extract stdout, stderr, and exit code from tool result
+                                                if let Some(result) = tool_result {
+                                                    let (stdout, stderr) =
+                                                        bash_utils::extract_bash_output(result);
+                                                    let exit_code =
+                                                        bash_utils::extract_bash_exit_code(result);
+
+                                                    if let Some(stdout) = stdout {
+                                                        file_bash_metadata =
+                                                            file_bash_metadata.with_stdout(stdout);
+                                                    }
+                                                    if let Some(stderr) = stderr {
+                                                        file_bash_metadata =
+                                                            file_bash_metadata.with_stderr(stderr);
+                                                    }
+                                                    if let Some(exit_code) = exit_code {
+                                                        file_bash_metadata = file_bash_metadata
+                                                            .with_exit_code(exit_code);
+                                                    }
+                                                }
+
+                                                // Set file metadata and bash metadata
+                                                file_operation = file_operation
+                                                    .with_file_path(file_path.clone())
+                                                    .with_bash_metadata(file_bash_metadata);
+
+                                                // Determine file type based on extension
+                                                let is_code = file_path.ends_with(".rs")
+                                                    || file_path.ends_with(".js")
+                                                    || file_path.ends_with(".ts")
+                                                    || file_path.ends_with(".py")
+                                                    || file_path.ends_with(".go")
+                                                    || file_path.ends_with(".java");
+
+                                                let is_config = file_path.ends_with("Cargo.toml")
+                                                    || file_path.ends_with("package.json")
+                                                    || file_path.ends_with(".yaml")
+                                                    || file_path.ends_with(".yml")
+                                                    || file_path.ends_with(".toml");
+
+                                                file_operation = file_operation
+                                                    .with_file_type(is_code, is_config);
+
+                                                tool_operations.push(file_operation);
+                                            }
+                                        }
+                                        // Mark that we've handled this operation
+                                        operation = operation
+                                            .with_file_path("__bash_handled__".to_string());
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            // For other tools (Task, etc.), just save the basic info
+                            // File-related fields will be None
+                        }
+                    }
+
+                    // Only add the original operation if it hasn't been handled by file operations
+                    if !operation.is_file_operation()
+                        || operation
+                            .file_metadata
+                            .as_ref()
+                            .is_none_or(|meta| meta.file_path != "__bash_handled__")
+                    {
+                        tool_operations.push(operation.clone());
+                    }
+
+                    // Link the tool_use message (first tool_use only)
+                    if idx == 0 {
+                        message_links.insert(message.id, (operation.id, MessageType::ToolRequest));
+                    }
+
+                    // Link the tool_result message as well (if it's a different message)
+                    if let Some(result_msg_id) = tool_result_message_id {
+                        if result_msg_id != message.id {
+                            message_links
+                                .insert(result_msg_id, (operation.id, MessageType::ToolResult));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bulk create all tool operations
+        if !tool_operations.is_empty() {
+            tool_operation_repo.bulk_create(&tool_operations).await?;
+        }
+
+        Ok(message_links)
+    }
+
     /// Import files with progress reporting
     pub async fn import_batch_with_progress<F>(
         &self,
@@ -563,3 +814,163 @@ impl ImportService {
 }
 
 // Note: ImportService requires a DatabaseManager, so no Default implementation
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::DatabaseManager;
+    use crate::models::message::{Message, MessageRole, ToolResult, ToolUse};
+    use chrono::Utc;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_extract_tool_operations_with_separated_messages() {
+        // Setup: Create in-memory database
+        let db = DatabaseManager::open_in_memory().await.unwrap();
+        let tool_operation_repo = ToolOperationRepository::new(&db);
+        let service = ImportService::new(Arc::new(db));
+
+        let session_id = Uuid::new_v4();
+        let timestamp = Utc::now();
+
+        // Create tool_use in message 1
+        let tool_use = ToolUse {
+            id: "test_tool_123".to_string(),
+            name: "Read".to_string(),
+            input: json!({"file_path": "/test/file.rs"}),
+            raw: json!({}),
+        };
+
+        let msg1 = Message::new(
+            session_id,
+            MessageRole::Assistant,
+            "Reading file".to_string(),
+            timestamp,
+            1,
+        )
+        .with_tool_uses(vec![tool_use]);
+
+        // Create tool_result in message 2 (separate message)
+        let tool_result = ToolResult {
+            tool_use_id: "test_tool_123".to_string(),
+            content: "File contents here".to_string(),
+            is_error: false,
+            details: None,
+            raw: json!({}),
+        };
+
+        let msg2 = Message::new(
+            session_id,
+            MessageRole::Assistant,
+            "File read successfully".to_string(),
+            timestamp,
+            2,
+        )
+        .with_tool_results(vec![tool_result]);
+
+        let messages = vec![msg1.clone(), msg2.clone()];
+
+        // Execute: Extract and save tool operations
+        let result = service
+            .extract_and_save_tool_operations(&tool_operation_repo, &messages)
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "Should successfully extract tool operations"
+        );
+        let message_links = result.unwrap();
+
+        // Verify: Both messages should be linked to the same ToolOperation
+        assert_eq!(
+            message_links.len(),
+            2,
+            "Both messages should be linked to tool operation"
+        );
+
+        let (tool_op_id_1, msg_type_1) = message_links.get(&msg1.id).unwrap();
+        let (tool_op_id_2, msg_type_2) = message_links.get(&msg2.id).unwrap();
+
+        // Both should reference the same ToolOperation
+        assert_eq!(
+            tool_op_id_1, tool_op_id_2,
+            "Both messages should link to the same ToolOperation"
+        );
+
+        // Message types should be correct
+        assert_eq!(
+            *msg_type_1,
+            crate::models::message::MessageType::ToolRequest
+        );
+        assert_eq!(*msg_type_2, crate::models::message::MessageType::ToolResult);
+
+        // Verify ToolOperation was actually created in database
+        let saved_op = tool_operation_repo.get_by_id(tool_op_id_1).await.unwrap();
+        assert!(saved_op.is_some(), "ToolOperation should be saved");
+
+        let op = saved_op.unwrap();
+        assert_eq!(op.tool_name, "Read");
+        assert_eq!(op.tool_use_id, "test_tool_123");
+    }
+
+    #[tokio::test]
+    async fn test_extract_tool_operations_with_combined_message() {
+        // Setup
+        let db = DatabaseManager::open_in_memory().await.unwrap();
+        let tool_operation_repo = ToolOperationRepository::new(&db);
+        let service = ImportService::new(Arc::new(db));
+
+        let session_id = Uuid::new_v4();
+        let timestamp = Utc::now();
+
+        // Create message with both tool_use and tool_result
+        let tool_use = ToolUse {
+            id: "test_tool_456".to_string(),
+            name: "Write".to_string(),
+            input: json!({"file_path": "/test/output.rs", "content": "fn main() {}"}),
+            raw: json!({}),
+        };
+
+        let tool_result = ToolResult {
+            tool_use_id: "test_tool_456".to_string(),
+            content: "File written successfully".to_string(),
+            is_error: false,
+            details: None,
+            raw: json!({}),
+        };
+
+        let msg = Message::new(
+            session_id,
+            MessageRole::Assistant,
+            "Writing file".to_string(),
+            timestamp,
+            1,
+        )
+        .with_tool_uses(vec![tool_use])
+        .with_tool_results(vec![tool_result]);
+
+        let messages = vec![msg.clone()];
+
+        // Execute
+        let result = service
+            .extract_and_save_tool_operations(&tool_operation_repo, &messages)
+            .await;
+
+        assert!(result.is_ok());
+        let message_links = result.unwrap();
+
+        // Verify: Only one message should be linked (same message contains both)
+        assert_eq!(message_links.len(), 1);
+
+        let (tool_op_id, msg_type) = message_links.get(&msg.id).unwrap();
+        assert_eq!(*msg_type, crate::models::message::MessageType::ToolRequest);
+
+        // Verify ToolOperation exists with result data
+        let saved_op = tool_operation_repo.get_by_id(tool_op_id).await.unwrap();
+        assert!(saved_op.is_some());
+
+        let op = saved_op.unwrap();
+        assert_eq!(op.tool_name, "Write");
+        assert_eq!(op.success, Some(true)); // Should have result data
+    }
+}

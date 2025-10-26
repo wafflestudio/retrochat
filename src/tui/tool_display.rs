@@ -379,61 +379,7 @@ impl ToolDisplayFormatter {
 
     /// Extract stdout and stderr from bash tool result
     fn extract_bash_output(&self, result: &ToolResult) -> (Option<String>, Option<String>) {
-        let stdout = result
-            .details
-            .as_ref()
-            .or(Some(&result.raw))
-            .and_then(|details| {
-                // Check if details is an array (Claude format)
-                if let Some(array) = details.as_array() {
-                    // Look for toolUseResult in the array
-                    for item in array {
-                        if let Some(obj) = item.as_object() {
-                            if obj.get("type").and_then(|t| t.as_str()) == Some("toolUseResult") {
-                                if let Some(metadata) = obj.get("toolUseResult") {
-                                    return metadata
-                                        .get("stdout")
-                                        .and_then(|s| s.as_str())
-                                        .map(String::from);
-                                }
-                            }
-                        }
-                    }
-                }
-                // Fallback to direct stdout field
-                details
-                    .get("stdout")
-                    .and_then(|s| s.as_str())
-                    .map(String::from)
-            });
-
-        let stderr = result
-            .details
-            .as_ref()
-            .or(Some(&result.raw))
-            .and_then(|details| {
-                // Check if details is an array (Claude format)
-                if let Some(array) = details.as_array() {
-                    for item in array {
-                        if let Some(obj) = item.as_object() {
-                            if obj.get("type").and_then(|t| t.as_str()) == Some("toolUseResult") {
-                                if let Some(metadata) = obj.get("toolUseResult") {
-                                    return metadata
-                                        .get("stderr")
-                                        .and_then(|s| s.as_str())
-                                        .map(String::from);
-                                }
-                            }
-                        }
-                    }
-                }
-                details
-                    .get("stderr")
-                    .and_then(|s| s.as_str())
-                    .map(String::from)
-            });
-
-        (stdout, stderr)
+        crate::utils::bash_utils::extract_bash_output(result)
     }
 }
 

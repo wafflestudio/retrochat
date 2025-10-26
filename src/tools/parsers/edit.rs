@@ -100,6 +100,54 @@ impl EditData {
             false
         }
     }
+
+    /// Count lines in old_string
+    pub fn lines_before(&self) -> Option<i32> {
+        self.old_string.as_ref().map(|s| {
+            if s.is_empty() {
+                return 0;
+            }
+            let newline_count = s.chars().filter(|&c| c == '\n').count();
+            if s.ends_with('\n') {
+                newline_count as i32
+            } else {
+                (newline_count + 1) as i32
+            }
+        })
+    }
+
+    /// Count lines in new_string
+    pub fn lines_after(&self) -> Option<i32> {
+        self.new_string.as_ref().map(|s| {
+            if s.is_empty() {
+                return 0;
+            }
+            let newline_count = s.chars().filter(|&c| c == '\n').count();
+            if s.ends_with('\n') {
+                newline_count as i32
+            } else {
+                (newline_count + 1) as i32
+            }
+        })
+    }
+
+    /// Check if editing a configuration file
+    pub fn is_config_file(&self) -> bool {
+        let config_extensions = ["json", "yaml", "yml", "toml", "ini", "conf", "config"];
+        self.file_extension()
+            .map(|ext| config_extensions.contains(&ext))
+            .unwrap_or(false)
+    }
+
+    /// Check if editing a code file
+    pub fn is_code_file(&self) -> bool {
+        let code_extensions = [
+            "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "c", "cpp", "h", "hpp",
+        ];
+        self.file_extension()
+            .map(|ext| code_extensions.contains(&ext))
+            .unwrap_or(false)
+    }
 }
 
 /// Scope of an edit operation
