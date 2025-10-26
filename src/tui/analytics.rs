@@ -134,7 +134,7 @@ impl AnalyticsWidget {
         self.loading = true;
 
         // Load usage insights using the new API
-        match self.analytics_service.generate_insights().await {
+        match self.analytics_service.generate_usage_insights().await {
             Ok(insights) => {
                 // Convert to the expected format for the TUI
                 self.usage_data = Some(TuiUsageData {
@@ -171,7 +171,7 @@ impl AnalyticsWidget {
                         .top_projects
                         .into_iter()
                         .map(|project| TuiProjectUsage {
-                            project: project.name,
+                            project: project.project_name,
                             sessions: project.sessions as i32,
                             messages: project.messages as i32,
                             tokens: project.tokens as i32,
