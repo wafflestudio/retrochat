@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO flowcharts (\n                id, session_id, nodes, edges, created_at, token_usage\n            ) VALUES (?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "17371301b37431d07bc19575cc78ebe7ce777507f61182589eada5e7c181c147"
+}

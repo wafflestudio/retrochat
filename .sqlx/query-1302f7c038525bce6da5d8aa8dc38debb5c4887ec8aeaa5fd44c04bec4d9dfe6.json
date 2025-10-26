@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM flowcharts WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "1302f7c038525bce6da5d8aa8dc38debb5c4887ec8aeaa5fd44c04bec4d9dfe6"
+}
