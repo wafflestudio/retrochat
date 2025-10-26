@@ -111,7 +111,7 @@ impl FlowchartService {
             r#"Create a simple flowchart with MAXIMUM 8 NODES. Each node represents a major work phase.
 
 CONVERSATION:
-{}
+{conversation}
 
 Return ONLY this JSON (no markdown, no extra text):
 {{
@@ -129,8 +129,7 @@ RULES:
 - Always "portion": null
 - node_type: "action", "context", "decision", "start", "end"
 - edge_type: "sequential", "merge", "branch"
-"#,
-            conversation
+"#
         )
     }
 
@@ -207,14 +206,14 @@ mod tests {
         // Create test messages
         let message_repo = db.message_repo();
         let msg1 = Message::new(
-            session.id.clone(),
+            session.id,
             MessageRole::User,
             "Create a todo list application".to_string(),
             chrono::Utc::now(),
             1,
         );
         let msg2 = Message::new(
-            session.id.clone(),
+            session.id,
             MessageRole::Assistant,
             "I'll create a todo list app for you.".to_string(),
             chrono::Utc::now(),

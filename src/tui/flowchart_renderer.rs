@@ -87,7 +87,7 @@ impl FlowchartRenderer {
         let label = self.truncate_label(&node.label, self.max_width.saturating_sub(8));
 
         // Calculate proper box width based on content
-        let content = format!("{}. {}", number, label);
+        let content = format!("{number}. {label}");
         let box_width = content.chars().count() + 4; // 2 spaces on each side
 
         // Top border
@@ -98,7 +98,7 @@ impl FlowchartRenderer {
 
         // Content with proper padding
         lines.push(Line::from(vec![Span::styled(
-            format!("│ {} │", content),
+            format!("│ {content} │"),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),

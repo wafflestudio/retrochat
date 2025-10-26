@@ -50,30 +50,29 @@ async fn generate_flowchart(session_id: &str, force: bool) -> Result<()> {
     let client = GoogleAiClient::new(config)?;
     let service = FlowchartService::new(db_manager, client);
 
-    println!("Generating flowchart for session: {}", session_id);
+    println!("Generating flowchart for session: {session_id}");
 
     if force {
         // Delete existing flowchart first
         service
             .delete_flowchart(session_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to delete existing flowchart: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to delete existing flowchart: {e}"))?;
     }
 
     let flowchart = service
         .get_or_generate_flowchart(session_id)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to generate flowchart: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to generate flowchart: {e}"))?;
 
     println!("✓ Flowchart generated successfully!");
     println!("  - {} nodes", flowchart.nodes.len());
     println!("  - {} edges", flowchart.edges.len());
     if let Some(tokens) = flowchart.token_usage {
-        println!("  - {} tokens used", tokens);
+        println!("  - {tokens} tokens used");
     }
     println!(
-        "\nUse 'retrochat flowchart show {}' to view the flowchart",
-        session_id
+        "\nUse 'retrochat flowchart show {session_id}' to view the flowchart"
     );
     Ok(())
 }
@@ -86,10 +85,10 @@ async fn show_flowchart(session_id: &str) -> Result<()> {
     let flowcharts = flowchart_repo
         .get_by_session_id(session_id)
         .await
-        .map_err(|e| anyhow::anyhow!("Error loading flowchart: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Error loading flowchart: {e}"))?;
 
     if let Some(flowchart) = flowcharts.first() {
-        println!("Flowchart for session: {}\n", session_id);
+        println!("Flowchart for session: {session_id}\n");
 
         // Render using the same renderer as TUI
         use crate::tui::flowchart_renderer::FlowchartRenderer;
@@ -103,7 +102,7 @@ async fn show_flowchart(session_id: &str) -> Result<()> {
                 .iter()
                 .map(|span| span.content.as_ref())
                 .collect();
-            println!("{}", text);
+            println!("{text}");
         }
 
         println!("\nMetadata:");
@@ -112,17 +111,16 @@ async fn show_flowchart(session_id: &str) -> Result<()> {
             flowchart.created_at.format("%Y-%m-%d %H:%M:%S")
         );
         if let Some(tokens) = flowchart.token_usage {
-            println!("  Tokens: {}", tokens);
+            println!("  Tokens: {tokens}");
         }
         println!("  Nodes: {}", flowchart.nodes.len());
         println!("  Edges: {}", flowchart.edges.len());
 
         Ok(())
     } else {
-        println!("No flowchart found for session: {}", session_id);
+        println!("No flowchart found for session: {session_id}");
         println!(
-            "Generate one with: retrochat flowchart generate {}",
-            session_id
+            "Generate one with: retrochat flowchart generate {session_id}"
         );
         Ok(())
     }
@@ -133,12 +131,12 @@ async fn delete_flowchart(session_id: &str) -> Result<()> {
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
     let flowchart_repo = crate::database::FlowchartRepository::new(db_manager);
 
-    println!("Deleting flowchart for session: {}", session_id);
+    println!("Deleting flowchart for session: {session_id}");
 
     flowchart_repo
         .delete_by_session_id(session_id)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to delete flowchart: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to delete flowchart: {e}"))?;
 
     println!("✓ Flowchart deleted successfully");
     Ok(())
