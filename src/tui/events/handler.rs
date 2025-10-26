@@ -118,6 +118,7 @@ impl EventHandler {
             KeyCode::Home => vec![UserAction::SessionDetailHome],
             KeyCode::End => vec![UserAction::SessionDetailEnd],
             KeyCode::Char('w') => vec![UserAction::SessionDetailToggleWrap],
+            KeyCode::Char('f') => vec![UserAction::SessionDetailToggleFlowchart],
             KeyCode::Char('t') | KeyCode::Char('r')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {

@@ -9,10 +9,11 @@ use ratatui::{
 };
 use std::sync::Arc;
 
-use crate::database::{DatabaseManager, RetrospectionRepository};
+use crate::database::{DatabaseManager, FlowchartRepository, RetrospectionRepository};
 use crate::models::{Message, MessageRole};
-use crate::services::{MessageGroup, QueryService, SessionDetailRequest};
+use crate::services::{FlowchartService, GoogleAiClient, GoogleAiConfig, MessageGroup, QueryService, SessionDetailRequest};
 
+use super::flowchart_renderer::FlowchartRenderer;
 use super::state::SessionDetailState;
 use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
 use super::utils::text::{truncate_text, wrap_text};
@@ -21,15 +22,29 @@ pub struct SessionDetailWidget {
     pub state: SessionDetailState,
     query_service: QueryService,
     retrospection_repo: RetrospectionRepository,
+    flowchart_repo: FlowchartRepository,
+    flowchart_service: Option<FlowchartService>,
     tool_formatter: ToolDisplayFormatter,
 }
 
 impl SessionDetailWidget {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
+        // Try to initialize flowchart service with Google AI
+        let flowchart_service = if let Ok(api_key) = std::env::var("GOOGLE_AI_API_KEY") {
+            let config = GoogleAiConfig::new(api_key);
+            GoogleAiClient::new(config)
+                .ok()
+                .map(|client| FlowchartService::new(db_manager.clone(), client))
+        } else {
+            None
+        };
+
         Self {
             state: SessionDetailState::new(),
             query_service: QueryService::with_database(db_manager.clone()),
-            retrospection_repo: RetrospectionRepository::new(db_manager),
+            retrospection_repo: RetrospectionRepository::new(db_manager.clone()),
+            flowchart_repo: FlowchartRepository::new(db_manager.clone()),
+            flowchart_service,
             tool_formatter: ToolDisplayFormatter::new(),
         }
     }
@@ -61,6 +76,9 @@ impl SessionDetailWidget {
 
                     // Load retrospection results for this session
                     self.load_retrospections().await;
+
+                    // Load flowchart if exists (cached only, no generation)
+                    self.load_flowchart_cached(session_id).await;
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to load session details");
@@ -117,6 +135,17 @@ impl SessionDetailWidget {
                 // T: Toggle retrospection view
                 self.state.toggle_retrospection();
             }
+            KeyCode::Char('f') => {
+                // F: Toggle flowchart view
+                self.state.toggle_flowchart();
+                
+                // Load flowchart data if showing flowchart and we have a session
+                if self.state.show_flowchart {
+                    if let Some(session_id) = self.state.session_id.clone() {
+                        self.load_flowchart_cached(&session_id).await;
+                    }
+                }
+            }
             KeyCode::Char('d') => {
                 // D: Toggle tool details (expand/collapse)
                 self.state.toggle_tool_details();
@@ -145,18 +174,27 @@ impl SessionDetailWidget {
         self.render_session_header(f, chunks[0]);
 
         // Render main content area
-        if self.state.show_retrospection && !self.state.retrospections.is_empty() {
-            // Split horizontally for messages and retrospection
+        let show_right_panel = (self.state.show_retrospection && !self.state.retrospections.is_empty())
+            || self.state.show_flowchart;
+
+        if show_right_panel {
+            // Split horizontally for messages and right panel
             let main_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
                     Constraint::Percentage(60), // Messages
-                    Constraint::Percentage(40), // Retrospection
+                    Constraint::Percentage(40), // Right panel
                 ])
                 .split(chunks[1]);
 
             self.render_messages(f, main_chunks[0]);
-            self.render_retrospections(f, main_chunks[1]);
+
+            // Render appropriate right panel
+            if self.state.show_flowchart {
+                self.render_flowchart(f, main_chunks[1]);
+            } else if self.state.show_retrospection {
+                self.render_retrospections(f, main_chunks[1]);
+            }
         } else {
             // Full width for messages
             self.render_messages(f, chunks[1]);
@@ -182,7 +220,7 @@ impl SessionDetailWidget {
             };
 
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Keys: 'w'=wrap, 't'=retro, 'd'=tool-details",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Keys: 'w'=wrap, 't'=retro, 'f'=flowchart, 'd'=tool-details",
                 session.provider,
                 project_str,
                 session.message_count,
@@ -567,6 +605,20 @@ impl SessionDetailWidget {
         }
     }
 
+    pub async fn load_flowchart_cached(&mut self, session_id: &str) {
+        // Only load cached flowchart from DB, don't generate
+        match self.flowchart_repo.get_by_session_id(session_id).await {
+            Ok(flowcharts) => {
+                if let Some(flowchart) = flowcharts.first() {
+                    self.state.update_flowchart(Some(flowchart.clone()));
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to load flowchart from DB");
+            }
+        }
+    }
+
     fn render_retrospections(&mut self, f: &mut Frame, area: Rect) {
         if self.state.retrospections.is_empty() {
             let empty_msg = Paragraph::new("No retrospection analysis available\n\nUse 'retrochat retrospect execute' to analyze this session")
@@ -675,6 +727,63 @@ impl SessionDetailWidget {
 
                 f.render_widget(metadata, metadata_area);
             }
+        }
+    }
+
+    fn render_flowchart(&mut self, f: &mut Frame, area: Rect) {
+        if self.state.flowchart_loading {
+            let loading_msg = Paragraph::new("Generating flowchart...\n\nThis may take a moment.")
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Context Flowchart"),
+                )
+                .style(Style::default().fg(Color::Yellow))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(loading_msg, area);
+            return;
+        }
+
+        if let Some(flowchart) = &self.state.flowchart {
+            let renderer = FlowchartRenderer::new(area.width.saturating_sub(4) as usize);
+            let flowchart_lines = renderer.render(flowchart);
+
+            // Handle scrolling for flowchart panel
+            let available_height = area.height.saturating_sub(2) as usize;
+            let visible_lines: Vec<Line> = flowchart_lines
+                .into_iter()
+                .skip(self.state.flowchart_scroll)
+                .take(available_height)
+                .collect();
+
+            let flowchart_block = Paragraph::new(visible_lines)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Context Flowchart"),
+                )
+                .wrap(Wrap { trim: true })
+                .scroll((0, 0));
+
+            f.render_widget(flowchart_block, area);
+        } else {
+            let empty_msg = if self.flowchart_service.is_some() {
+                "No flowchart generated yet\n\nGenerate with: retrochat flowchart generate <session-id>\nPress 'f' to toggle this panel"
+            } else {
+                "Flowchart unavailable\n\nSet GOOGLE_AI_API_KEY environment variable to enable flowchart generation"
+            };
+
+            let paragraph = Paragraph::new(empty_msg)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Context Flowchart"),
+                )
+                .style(Style::default().fg(Color::Gray))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(paragraph, area);
         }
     }
 }

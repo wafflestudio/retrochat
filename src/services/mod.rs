@@ -1,5 +1,6 @@
 pub mod analytics_service;
 pub mod auto_detect;
+pub mod flowchart_service;
 pub mod google_ai;
 pub mod import_service;
 pub mod parser_service;
@@ -12,6 +13,7 @@ pub use analytics_service::{
     MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
 };
 pub use auto_detect::{AutoDetectService, DetectedProvider};
+pub use flowchart_service::FlowchartService;
 pub use google_ai::{
     GenerateContentRequest, GenerateContentResponse, GoogleAiClient, GoogleAiConfig, GoogleAiError,
 };

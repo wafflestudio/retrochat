@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod flowchart;
 pub mod help;
 pub mod import;
 pub mod init;
@@ -14,6 +15,7 @@ use tokio::runtime::Runtime;
 
 use crate::env::apis as env_vars;
 use crate::models::Provider;
+use flowchart::FlowchartCommands;
 use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
@@ -93,6 +95,11 @@ pub enum Commands {
     Retrospect {
         #[command(subcommand)]
         command: RetrospectCommands,
+    },
+    /// Generate context flowchart for chat sessions
+    Flowchart {
+        #[command(subcommand)]
+        command: FlowchartCommands,
     },
     /// Interactive setup wizard for first-time users
     Setup,
@@ -342,6 +349,9 @@ impl Cli {
                     RetrospectCommands::Cancel { request_id, all } => {
                         retrospect::handle_cancel_command(request_id, all).await
                     }
+                },
+                Commands::Flowchart { command } => {
+                    flowchart::handle_flowchart_command(command).await
                 },
                 // New commands
                 Commands::Setup => setup::run_setup_wizard().await,

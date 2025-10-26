@@ -43,6 +43,7 @@ pub enum UserAction {
     SessionDetailEnd,
     SessionDetailToggleWrap,
     SessionDetailToggleRetrospection,
+    SessionDetailToggleFlowchart,
 
     // Analytics actions
     AnalyticsNavigate(NavigationDirection),
