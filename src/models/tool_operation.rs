@@ -4,6 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::message::{ToolResult, ToolUse};
+use super::bash_metadata::BashMetadata;
 
 /// File-related metadata for tool operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,10 +30,6 @@ pub struct FileMetadata {
     pub is_bulk_edit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_refactoring: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bash_operation_type: Option<String>, // "git_add", "copy", "delete", etc.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_indirect_operation: Option<bool>, // true for Bash, false for Read/Write/Edit
 }
 
 impl FileMetadata {
@@ -54,8 +51,6 @@ impl FileMetadata {
             content_size: None,
             is_bulk_edit: None,
             is_refactoring: None,
-            bash_operation_type: None,
-            is_indirect_operation: None,
         }
     }
 }
@@ -70,6 +65,10 @@ pub struct ToolOperation {
     // File-related metadata (None for non-file tools)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_metadata: Option<FileMetadata>,
+
+    // Bash-specific metadata (None for non-bash tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bash_metadata: Option<BashMetadata>,
 
     // Generic fields for all tools
     pub success: Option<bool>,
@@ -88,6 +87,7 @@ impl ToolOperation {
             tool_name,
             timestamp,
             file_metadata: None,
+            bash_metadata: None,
             success: None,
             result_summary: None,
             raw_input: None,
@@ -191,12 +191,9 @@ impl ToolOperation {
         self
     }
 
-    /// Builder method: set bash operation type and indirect flag
-    pub fn with_bash_operation(mut self, operation_type: String) -> Self {
-        if let Some(meta) = &mut self.file_metadata {
-            meta.bash_operation_type = Some(operation_type);
-            meta.is_indirect_operation = Some(true);
-        }
+    /// Builder method: set bash metadata
+    pub fn with_bash_metadata(mut self, bash_metadata: BashMetadata) -> Self {
+        self.bash_metadata = Some(bash_metadata);
         self
     }
 

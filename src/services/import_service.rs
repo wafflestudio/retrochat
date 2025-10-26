@@ -19,6 +19,7 @@ use crate::parsers::ParserRegistry;
 use crate::tools::parsers::{
     bash::BashParser, edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
 };
+use crate::models::bash_metadata::BashMetadata;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanRequest {
@@ -555,6 +556,15 @@ impl ImportService {
                             let parser = BashParser;
                             if let Ok(parsed) = parser.parse(tool_use) {
                                 if let ToolData::Bash(data) = parsed.data {
+                                    // Create bash metadata for the main operation
+                                    let bash_metadata = BashMetadata::new(
+                                        "BashCommand".to_string(),
+                                        data.command.clone(),
+                                    );
+
+                                    // Set the bash metadata on the main operation
+                                    operation = operation.with_bash_metadata(bash_metadata);
+
                                     // For each file operation, create a separate ToolOperation
                                     if data.has_file_operations() {
                                         for file_op in &data.file_operations {
@@ -566,13 +576,16 @@ impl ImportService {
                                                         message.timestamp,
                                                     );
 
-                                                // Set file metadata with bash operation info
+                                                // Create bash metadata for this specific file operation
+                                                let file_bash_metadata = BashMetadata::new(
+                                                    format!("{:?}", file_op.operation_type),
+                                                    data.command.clone(),
+                                                );
+
+                                                // Set file metadata and bash metadata
                                                 file_operation = file_operation
                                                     .with_file_path(file_path.clone())
-                                                    .with_bash_operation(format!(
-                                                        "{:?}",
-                                                        file_op.operation_type
-                                                    ));
+                                                    .with_bash_metadata(file_bash_metadata);
 
                                                 // Determine file type based on extension
                                                 let is_code = file_path.ends_with(".rs")

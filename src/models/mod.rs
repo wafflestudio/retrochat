@@ -1,3 +1,4 @@
+pub mod bash_metadata;
 pub mod chat_session;
 pub mod message;
 pub mod project;
@@ -6,6 +7,7 @@ pub mod retrospect_request;
 pub mod retrospection;
 pub mod tool_operation;
 
+pub use bash_metadata::BashMetadata;
 pub use chat_session::{ChatSession, SessionState};
 pub use message::{Message, MessageRole, ToolCall, ToolResult, ToolUse};
 pub use project::Project;

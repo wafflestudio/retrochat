@@ -33,14 +33,19 @@ impl ToolOperationRepository {
             .as_ref()
             .and_then(|meta| serde_json::to_string(meta).ok());
 
+        let bash_metadata_json = operation
+            .bash_metadata
+            .as_ref()
+            .and_then(|meta| serde_json::to_string(meta).ok());
+
         sqlx::query(
             r#"
             INSERT INTO tool_operations (
                 id, tool_use_id, tool_name, timestamp,
-                file_metadata,
+                file_metadata, bash_metadata,
                 success, result_summary, raw_input, raw_result,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(operation.id.to_string())
@@ -48,6 +53,7 @@ impl ToolOperationRepository {
         .bind(&operation.tool_name)
         .bind(operation.timestamp.to_rfc3339())
         .bind(file_metadata_json)
+        .bind(bash_metadata_json)
         .bind(operation.success)
         .bind(&operation.result_summary)
         .bind(raw_input_json)
@@ -83,14 +89,19 @@ impl ToolOperationRepository {
                 .as_ref()
                 .and_then(|meta| serde_json::to_string(meta).ok());
 
+            let bash_metadata_json = operation
+                .bash_metadata
+                .as_ref()
+                .and_then(|meta| serde_json::to_string(meta).ok());
+
             sqlx::query(
                 r#"
                 INSERT INTO tool_operations (
                     id, tool_use_id, tool_name, timestamp,
-                    file_metadata,
+                    file_metadata, bash_metadata,
                     success, result_summary, raw_input, raw_result,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(operation.id.to_string())
@@ -98,6 +109,7 @@ impl ToolOperationRepository {
             .bind(&operation.tool_name)
             .bind(operation.timestamp.to_rfc3339())
             .bind(file_metadata_json)
+            .bind(bash_metadata_json)
             .bind(operation.success)
             .bind(&operation.result_summary)
             .bind(raw_input_json)
@@ -422,6 +434,9 @@ impl ToolOperationRepository {
         let file_metadata_json: Option<String> = row.try_get("file_metadata").ok();
         let file_metadata = file_metadata_json.and_then(|json| serde_json::from_str(&json).ok());
 
+        let bash_metadata_json: Option<String> = row.try_get("bash_metadata").ok();
+        let bash_metadata = bash_metadata_json.and_then(|json| serde_json::from_str(&json).ok());
+
         let success: Option<bool> = row.try_get("success").ok();
         let result_summary: Option<String> = row.try_get("result_summary").ok();
 
@@ -442,6 +457,7 @@ impl ToolOperationRepository {
             tool_name,
             timestamp,
             file_metadata,
+            bash_metadata,
             success,
             result_summary,
             raw_input,
