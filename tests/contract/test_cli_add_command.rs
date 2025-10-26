@@ -80,8 +80,7 @@ fn test_stats_command() {
 
     match stats_cmd {
         Commands::Stats => {
-            // Stats command has no fields
-            assert!(true);
+            // Stats command has no fields, test passes if we match this variant
         }
         _ => panic!("Expected Stats command"),
     }
@@ -92,12 +91,21 @@ fn test_search_command_structure() {
     let search_cmd = Commands::Search {
         query: "test query".to_string(),
         limit: Some(10),
+        since: None,
+        until: None,
     };
 
     match search_cmd {
-        Commands::Search { query, limit } => {
+        Commands::Search {
+            query,
+            limit,
+            since,
+            until,
+        } => {
             assert_eq!(query, "test query");
             assert_eq!(limit, Some(10));
+            assert!(since.is_none());
+            assert!(until.is_none());
         }
         _ => panic!("Expected Search command"),
     }
@@ -108,12 +116,46 @@ fn test_search_command_without_limit() {
     let search_cmd = Commands::Search {
         query: "test".to_string(),
         limit: None,
+        since: None,
+        until: None,
     };
 
     match search_cmd {
-        Commands::Search { query, limit } => {
+        Commands::Search {
+            query,
+            limit,
+            since,
+            until,
+        } => {
             assert_eq!(query, "test");
             assert!(limit.is_none());
+            assert!(since.is_none());
+            assert!(until.is_none());
+        }
+        _ => panic!("Expected Search command"),
+    }
+}
+
+#[test]
+fn test_search_command_with_time_range() {
+    let search_cmd = Commands::Search {
+        query: "test".to_string(),
+        limit: Some(10),
+        since: Some("7 days ago".to_string()),
+        until: Some("now".to_string()),
+    };
+
+    match search_cmd {
+        Commands::Search {
+            query,
+            limit,
+            since,
+            until,
+        } => {
+            assert_eq!(query, "test");
+            assert_eq!(limit, Some(10));
+            assert_eq!(since, Some("7 days ago".to_string()));
+            assert_eq!(until, Some("now".to_string()));
         }
         _ => panic!("Expected Search command"),
     }
@@ -139,8 +181,7 @@ fn test_setup_command() {
 
     match setup_cmd {
         Commands::Setup => {
-            // Setup command has no fields
-            assert!(true);
+            // Setup command has no fields, test passes if we match this variant
         }
         _ => panic!("Expected Setup command"),
     }
@@ -162,7 +203,9 @@ fn test_cli_with_command() {
 
     assert!(cli.command.is_some(), "Command should be present");
     match cli.command {
-        Some(Commands::Stats) => assert!(true),
+        Some(Commands::Stats) => {
+            // Test passes if we match this variant
+        }
         _ => panic!("Expected Stats command"),
     }
 }

@@ -364,3 +364,73 @@ async fn test_search_performance() {
     assert!(duration.as_millis() < 5000); // 5 seconds max
     assert!(response.search_duration_ms < 5000);
 }
+
+#[tokio::test]
+async fn test_search_messages_with_datetime_range() {
+    let service = setup_test_data().await;
+
+    // Test with full datetime format (RFC3339)
+    let request = SearchRequest {
+        query: "test".to_string(),
+        providers: None,
+        projects: None,
+        date_range: Some(DateRange {
+            start_date: "2025-01-01T00:00:00Z".to_string(),
+            end_date: "2025-12-31T23:59:59Z".to_string(),
+        }),
+        search_type: None,
+        page: None,
+        page_size: None,
+    };
+
+    let result = service.search_messages(request).await;
+    assert!(result.is_ok());
+
+    let response = result.unwrap();
+    // Since test data was created with Utc::now(), we should get results if current date is in 2025
+    // Otherwise, we just verify the query executes without error
+    assert!(response.search_duration_ms >= 0);
+}
+
+#[tokio::test]
+async fn test_search_messages_with_recent_time_range() {
+    use chrono::Duration;
+
+    let service = setup_test_data().await;
+
+    // Create time range for messages from last hour to now
+    let now = Utc::now();
+    let one_hour_ago = now - Duration::hours(1);
+
+    let request = SearchRequest {
+        query: "test".to_string(),
+        providers: None,
+        projects: None,
+        date_range: Some(DateRange {
+            start_date: one_hour_ago.to_rfc3339(),
+            end_date: now.to_rfc3339(),
+        }),
+        search_type: None,
+        page: None,
+        page_size: None,
+    };
+
+    let result = service.search_messages(request).await;
+    assert!(result.is_ok());
+
+    let response = result.unwrap();
+    // Since we just created the test data, it should be within the last hour
+    assert!(
+        response.total_count > 0,
+        "Should find messages created in the last hour"
+    );
+
+    // Verify all results are within the time range
+    for search_result in &response.results {
+        let timestamp = chrono::DateTime::parse_from_rfc3339(&search_result.timestamp)
+            .unwrap()
+            .with_timezone(&Utc);
+        assert!(timestamp >= one_hour_ago);
+        assert!(timestamp <= now);
+    }
+}
