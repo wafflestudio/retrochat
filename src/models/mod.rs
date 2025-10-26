@@ -9,7 +9,5 @@ pub use chat_session::{ChatSession, SessionState};
 pub use message::{Message, MessageRole, ToolCall, ToolResult, ToolUse};
 pub use project::Project;
 pub use provider::{ParserType, Provider, ProviderConfig, ProviderRegistry};
-pub use retrospect_request::{
-    OperationStatus, RetrospectRequest, RetrospectionAnalysisType, RetrospectionRequest,
-};
+pub use retrospect_request::{OperationStatus, RetrospectRequest, RetrospectionRequest};
 pub use retrospection::Retrospection;

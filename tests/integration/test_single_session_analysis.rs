@@ -1,5 +1,5 @@
 use retrochat::database::DatabaseManager;
-use retrochat::models::RetrospectionAnalysisType;
+
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::services::RetrospectionService;
 use std::sync::Arc;
@@ -23,12 +23,7 @@ async fn test_single_session_analysis_workflow() {
 
     // Step 1: Create analysis request
     let request = service
-        .create_analysis_request(
-            session_id.clone(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        )
+        .create_analysis_request(session_id.clone(), Some("test_user".to_string()), None)
         .await;
 
     let request = match request {
@@ -90,7 +85,6 @@ async fn test_single_session_analysis_with_custom_prompt() {
     let result = service
         .create_analysis_request(
             session_id.clone(),
-            RetrospectionAnalysisType::Custom(custom_prompt.clone()),
             Some("test_user".to_string()),
             Some(custom_prompt.clone()),
         )
@@ -99,11 +93,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
     match result {
         Ok(request) => {
             // Verify custom prompt is stored
-            if let RetrospectionAnalysisType::Custom(stored_prompt) = &request.analysis_type {
-                assert_eq!(*stored_prompt, custom_prompt);
-            } else {
-                panic!("Expected Custom analysis type");
-            }
+            assert_eq!(request.custom_prompt.as_ref().unwrap(), &custom_prompt);
         }
         Err(e) => {
             println!("Expected: Analysis request creation may fail: {e:?}");
@@ -126,7 +116,6 @@ async fn test_single_session_analysis_error_handling() {
     let result = service
         .create_analysis_request(
             "nonexistent-session".to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
             Some("test_user".to_string()),
             None,
         )
@@ -178,12 +167,7 @@ async fn test_single_session_analysis_cancellation() {
 
     // Create analysis request
     let result = service
-        .create_analysis_request(
-            session_id.clone(),
-            RetrospectionAnalysisType::TaskBreakdown,
-            Some("test_user".to_string()),
-            None,
-        )
+        .create_analysis_request(session_id.clone(), Some("test_user".to_string()), None)
         .await;
 
     match result {

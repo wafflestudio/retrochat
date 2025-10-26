@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::models::{OperationStatus, RetrospectRequest, RetrospectionAnalysisType};
+use crate::models::{OperationStatus, RetrospectRequest};
 
 #[derive(Clone)]
 pub struct RetrospectRequestRepository {
@@ -20,7 +20,6 @@ impl RetrospectRequestRepository {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let analysis_type_str = request.analysis_type.to_string();
         let status_str = request.status.to_string();
         let started_at_str = request.started_at.to_rfc3339();
         let completed_at_str = request.completed_at.map(|dt| dt.to_rfc3339());
@@ -28,13 +27,12 @@ impl RetrospectRequestRepository {
         sqlx::query!(
             r#"
             INSERT INTO retrospect_requests (
-                id, session_id, analysis_type, status, started_at, completed_at,
+                id, session_id, status, started_at, completed_at,
                 created_by, error_message, custom_prompt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             request.id,
             request.session_id,
-            analysis_type_str,
             status_str,
             started_at_str,
             completed_at_str,
@@ -57,12 +55,11 @@ impl RetrospectRequestRepository {
         sqlx::query(
             r#"
             UPDATE retrospect_requests
-            SET analysis_type = ?, status = ?, started_at = ?, completed_at = ?,
+            SET status = ?, started_at = ?, completed_at = ?,
                 created_by = ?, error_message = ?, custom_prompt = ?
             WHERE id = ?
             "#,
         )
-        .bind(request.analysis_type.to_string())
         .bind(request.status.to_string())
         .bind(request.started_at.to_rfc3339())
         .bind(request.completed_at.map(|dt| dt.to_rfc3339()))
@@ -87,11 +84,6 @@ impl RetrospectRequestRepository {
             .await?;
 
         if let Some(row) = row {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -112,7 +104,6 @@ impl RetrospectRequestRepository {
             Ok(Some(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -140,11 +131,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -165,7 +151,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -191,11 +176,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -216,7 +196,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -245,11 +224,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -270,7 +244,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -298,11 +271,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -323,7 +291,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -353,11 +320,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -378,7 +340,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -407,11 +368,6 @@ impl RetrospectRequestRepository {
 
         let mut requests = Vec::new();
         for row in rows {
-            let analysis_type = row
-                .analysis_type
-                .parse::<RetrospectionAnalysisType>()
-                .map_err(|e| format!("Invalid analysis type '{}': {}", row.analysis_type, e))?;
-
             let status = row
                 .status
                 .parse::<OperationStatus>()
@@ -432,7 +388,6 @@ impl RetrospectRequestRepository {
             requests.push(RetrospectRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
-                analysis_type,
                 status,
                 started_at,
                 completed_at,
@@ -528,12 +483,8 @@ mod tests {
 
         let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
 
-        let request = RetrospectRequest::new(
-            session.id.to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        );
+        let request =
+            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
 
         repo.create(&request).await.unwrap();
 
@@ -542,7 +493,6 @@ mod tests {
 
         let found_request = found.unwrap();
         assert_eq!(found_request.session_id, request.session_id);
-        assert_eq!(found_request.analysis_type, request.analysis_type);
         assert_eq!(found_request.status, request.status);
     }
 
@@ -563,12 +513,8 @@ mod tests {
 
         let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
 
-        let mut request = RetrospectRequest::new(
-            session.id.to_string(),
-            RetrospectionAnalysisType::CollaborationInsights,
-            Some("test_user".to_string()),
-            None,
-        );
+        let mut request =
+            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
 
         repo.create(&request).await.unwrap();
 
@@ -599,19 +545,11 @@ mod tests {
 
         let session_id = session.id.to_string();
 
-        let request1 = RetrospectRequest::new(
-            session_id.clone(),
-            RetrospectionAnalysisType::QuestionQuality,
-            Some("test_user".to_string()),
-            None,
-        );
+        let request1 =
+            RetrospectRequest::new(session_id.clone(), Some("test_user".to_string()), None);
 
-        let request2 = RetrospectRequest::new(
-            session_id.clone(),
-            RetrospectionAnalysisType::TaskBreakdown,
-            Some("test_user".to_string()),
-            None,
-        );
+        let request2 =
+            RetrospectRequest::new(session_id.clone(), Some("test_user".to_string()), None);
 
         repo.create(&request1).await.unwrap();
         repo.create(&request2).await.unwrap();

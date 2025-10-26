@@ -6,7 +6,6 @@ use crate::database::{
 };
 use crate::models::{
     ChatSession, Message, MessageRole, OperationStatus, RetrospectRequest, Retrospection,
-    RetrospectionAnalysisType,
 };
 use crate::services::google_ai::{AnalysisRequest, AnalysisResponse, GoogleAiClient};
 
@@ -37,7 +36,6 @@ impl RetrospectionService {
     pub async fn create_analysis_request(
         &self,
         session_id: String,
-        analysis_type: RetrospectionAnalysisType,
         created_by: Option<String>,
         custom_prompt: Option<String>,
     ) -> Result<RetrospectRequest, Box<dyn std::error::Error + Send + Sync>> {
@@ -55,7 +53,7 @@ impl RetrospectionService {
             }
         }
 
-        let request = RetrospectRequest::new(session_id, analysis_type, created_by, custom_prompt);
+        let request = RetrospectRequest::new(session_id, created_by, custom_prompt);
 
         self.request_repo.create(&request).await?;
 
@@ -262,7 +260,7 @@ impl RetrospectionService {
         request: &RetrospectRequest,
         data: &AnalysisData,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let base_prompt = self.get_base_prompt(&request.analysis_type);
+        let base_prompt = self.get_base_prompt();
         let context = self.build_context(data)?;
 
         let prompt = if let Some(custom_prompt) = &request.custom_prompt {
@@ -278,47 +276,14 @@ impl RetrospectionService {
         Ok(prompt)
     }
 
-    fn get_base_prompt(&self, analysis_type: &RetrospectionAnalysisType) -> &'static str {
-        match analysis_type {
-            RetrospectionAnalysisType::UserInteractionAnalysis => {
-                "Analyze the user interaction patterns in this conversation. Focus on:\n\
-                - Communication style and preferences\n\
-                - Types of questions and requests\n\
-                - Response patterns and engagement levels\n\
-                - Areas where the user seemed most/least satisfied"
-            }
-            RetrospectionAnalysisType::CollaborationInsights => {
-                "Analyze the collaboration dynamics in this conversation. Focus on:\n\
-                - Quality of back-and-forth communication\n\
-                - Problem-solving approaches\n\
-                - Knowledge sharing and learning moments\n\
-                - Opportunities for improved collaboration"
-            }
-            RetrospectionAnalysisType::QuestionQuality => {
-                "Analyze the quality and effectiveness of questions in this conversation. Focus on:\n\
-                - Clarity and specificity of questions\n\
-                - Context provided with questions\n\
-                - Question types and their appropriateness\n\
-                - Opportunities for better question formulation"
-            }
-            RetrospectionAnalysisType::TaskBreakdown => {
-                "Analyze how tasks and problems were broken down in this conversation. Focus on:\n\
-                - Decomposition strategies used\n\
-                - Logical flow from high-level to specific\n\
-                - Identification of dependencies and blockers\n\
-                - Effectiveness of the breakdown approach"
-            }
-            RetrospectionAnalysisType::FollowUpPatterns => {
-                "Identify follow-up opportunities in this conversation. Focus on:\n\
-                - Topics that could have been explored deeper\n\
-                - Questions that weren't asked but should have been\n\
-                - Implementation details that were skipped\n\
-                - Areas for continued learning or exploration"
-            }
-            RetrospectionAnalysisType::Custom(_) => {
-                "Perform a custom analysis of this conversation based on the provided instructions."
-            }
-        }
+    fn get_base_prompt(&self) -> &'static str {
+        "Analyze the user interaction patterns in this conversation. Focus on:\n\
+        - Communication style and preferences\n\
+        - Types of questions and requests\n\
+        - Response patterns and engagement levels\n\
+        - Areas where the user seemed most/least satisfied\n\
+        - Quality of back-and-forth communication\n\
+        - Problem-solving approaches and effectiveness"
     }
 
     fn build_context(
@@ -536,20 +501,11 @@ mod tests {
 
         let session_id = test_session.id.to_string();
         let request = service
-            .create_analysis_request(
-                session_id.clone(),
-                RetrospectionAnalysisType::UserInteractionAnalysis,
-                Some("test_user".to_string()),
-                None,
-            )
+            .create_analysis_request(session_id.clone(), Some("test_user".to_string()), None)
             .await
             .unwrap();
 
         assert_eq!(request.session_id, session_id);
-        assert_eq!(
-            request.analysis_type,
-            RetrospectionAnalysisType::UserInteractionAnalysis
-        );
         assert_eq!(request.status, OperationStatus::Pending);
     }
 
@@ -581,12 +537,7 @@ mod tests {
 
         let session_id = test_session.id.to_string();
         let request = service
-            .create_analysis_request(
-                session_id,
-                RetrospectionAnalysisType::CollaborationInsights,
-                Some("test_user".to_string()),
-                None,
-            )
+            .create_analysis_request(session_id, Some("test_user".to_string()), None)
             .await
             .unwrap();
 

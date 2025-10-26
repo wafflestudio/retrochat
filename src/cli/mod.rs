@@ -14,7 +14,7 @@ use tokio::runtime::Runtime;
 
 use crate::env::apis as env_vars;
 use crate::models::Provider;
-use retrospect::{AnalysisTypeArg, RetrospectCommands};
+use retrospect::RetrospectCommands;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -129,9 +129,6 @@ pub enum Commands {
     Review {
         /// Session ID to review (optional, will prompt if not provided)
         session_id: Option<String>,
-        /// Analysis type
-        #[arg(short, long, value_enum)]
-        analysis_type: Option<AnalysisTypeArg>,
     },
 }
 
@@ -305,14 +302,12 @@ impl Cli {
                 Commands::Retrospect { command } => match command {
                     RetrospectCommands::Execute {
                         session_id,
-                        analysis_type,
                         custom_prompt,
                         all,
                         background,
                     } => {
                         retrospect::handle_execute_command(
                             session_id,
-                            analysis_type,
                             custom_prompt,
                             all,
                             background,
@@ -323,11 +318,7 @@ impl Cli {
                         session_id,
                         all,
                         format,
-                        analysis_type,
-                    } => {
-                        retrospect::handle_show_command(session_id, all, format, analysis_type)
-                            .await
-                    }
+                    } => retrospect::handle_show_command(session_id, all, format).await,
                     RetrospectCommands::Status {
                         all,
                         watch,
@@ -355,21 +346,11 @@ impl Cli {
                 Commands::Search { query, limit } => {
                     query::handle_search_command(query, limit).await
                 }
-                Commands::Review {
-                    session_id,
-                    analysis_type,
-                } => {
+                Commands::Review { session_id } => {
                     // For now, delegate to retrospect execute
                     // TODO: Could make this more interactive
                     if let Some(sid) = session_id {
-                        retrospect::handle_execute_command(
-                            Some(sid),
-                            analysis_type,
-                            None,
-                            false,
-                            false,
-                        )
-                        .await
+                        retrospect::handle_execute_command(Some(sid), None, false, false).await
                     } else {
                         Err(anyhow::anyhow!(
                             "Session ID required. Use: retrochat review <SESSION_ID>"

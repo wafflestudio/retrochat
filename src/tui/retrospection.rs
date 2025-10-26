@@ -11,14 +11,13 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::task;
 
-use crate::models::{OperationStatus, RetrospectRequest, Retrospection, RetrospectionAnalysisType};
+use crate::models::{OperationStatus, RetrospectRequest, Retrospection};
 use crate::services::retrospection_service::RetrospectionService;
 
 #[derive(Debug, Clone)]
 pub struct RetrospectionProgress {
     pub request_id: String,
     pub session_id: String,
-    pub analysis_type: RetrospectionAnalysisType,
     pub status: OperationStatus,
     pub progress_percent: u16,
     pub message: String,
@@ -158,11 +157,7 @@ impl RetrospectionWidget {
         self.render_footer(f, chunks[2]);
     }
 
-    pub fn start_analysis(
-        &mut self,
-        session_id: String,
-        _analysis_type: RetrospectionAnalysisType,
-    ) {
+    pub fn start_analysis(&mut self, session_id: String) {
         // This method is kept for backward compatibility
         // Analysis requests are now created through the RetrospectionService
         self.selected_session_id = Some(session_id);
@@ -252,16 +247,6 @@ impl RetrospectionWidget {
                     }
                 };
 
-                // Get analysis type abbreviation
-                let analysis_abbrev = match request.analysis_type {
-                    RetrospectionAnalysisType::UserInteractionAnalysis => "UserInt",
-                    RetrospectionAnalysisType::CollaborationInsights => "Collab",
-                    RetrospectionAnalysisType::QuestionQuality => "Question",
-                    RetrospectionAnalysisType::TaskBreakdown => "TaskBreak",
-                    RetrospectionAnalysisType::FollowUpPatterns => "FollowUp",
-                    RetrospectionAnalysisType::Custom(_) => "Custom",
-                };
-
                 // Status indicator
                 let status_indicator = match request.status {
                     OperationStatus::Pending => "[P]",
@@ -284,10 +269,9 @@ impl RetrospectionWidget {
                 };
 
                 let content = format!(
-                    "{:3} {:8} | {:8} | {:8} | {:9}{}",
+                    "{:3} {:8} | {:8} | {:9}{}",
                     status_indicator,
                     request.session_id.chars().take(8).collect::<String>(),
-                    analysis_abbrev,
                     time_str,
                     format!("{}", request.status),
                     duration_info
@@ -304,7 +288,7 @@ impl RetrospectionWidget {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("St  Session  | Type     | Time     | Status   | Duration"),
+                    .title("St  Session  | Time     | Status   | Duration"),
             )
             .highlight_style(
                 Style::default()
@@ -336,10 +320,6 @@ impl RetrospectionWidget {
                 Line::from(vec![Span::raw(format!(
                     "Session ID: {}",
                     request.session_id
-                ))]),
-                Line::from(vec![Span::raw(format!(
-                    "Analysis Type: {}",
-                    request.analysis_type
                 ))]),
                 Line::from(vec![Span::raw(format!("Status: {}", request.status))]),
                 Line::from(vec![Span::raw(format!(

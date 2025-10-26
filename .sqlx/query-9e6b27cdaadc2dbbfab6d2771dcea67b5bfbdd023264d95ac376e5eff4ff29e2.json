@@ -14,38 +14,33 @@
         "type_info": "Text"
       },
       {
-        "name": "analysis_type",
+        "name": "status",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "status",
+        "name": "started_at",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "started_at",
+        "name": "completed_at",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "completed_at",
+        "name": "created_by",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "created_by",
+        "name": "error_message",
         "ordinal": 6,
         "type_info": "Text"
       },
       {
-        "name": "error_message",
-        "ordinal": 7,
-        "type_info": "Text"
-      },
-      {
         "name": "custom_prompt",
-        "ordinal": 8,
+        "ordinal": 7,
         "type_info": "Text"
       }
     ],
@@ -54,7 +49,6 @@
     },
     "nullable": [
       true,
-      false,
       false,
       false,
       false,

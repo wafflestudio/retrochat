@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::{handle_show_command, AnalysisTypeArg};
+use retrochat::cli::retrospect::handle_show_command;
 
 #[tokio::test]
 async fn test_retrospect_show_command_structure() {
@@ -9,7 +9,6 @@ async fn test_retrospect_show_command_structure() {
         Some("session-123".to_string()), // session_id
         false,                           // all
         "text".to_string(),              // format
-        None,                            // analysis_type
     )
     .await;
 
@@ -43,7 +42,6 @@ async fn test_retrospect_show_all_formats() {
             None,               // session_id (None when using --all)
             true,               // all
             format.to_string(), // format
-            None,               // analysis_type
         )
         .await;
 
@@ -74,10 +72,9 @@ async fn test_retrospect_show_all_formats() {
 async fn test_retrospect_show_filtering() {
     // Test filtering by analysis type
     let result = handle_show_command(
-        None,                                 // session_id
-        true,                                 // all
-        "text".to_string(),                   // format
-        Some(AnalysisTypeArg::Collaboration), // analysis_type filter
+        None,               // session_id
+        true,               // all
+        "text".to_string(), // format
     )
     .await;
 
@@ -110,7 +107,6 @@ async fn test_retrospect_show_specific_session() {
         Some("session-123".to_string()), // session_id
         false,                           // all
         "text".to_string(),              // format
-        None,                            // analysis_type
     )
     .await;
 

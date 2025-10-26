@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::database::DatabaseManager;
 use crate::env::apis as env_vars;
-use crate::models::{OperationStatus, RetrospectionAnalysisType};
+use crate::models::OperationStatus;
 use crate::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
     RetrospectionService,
@@ -16,10 +16,7 @@ pub enum RetrospectCommands {
     Execute {
         /// Session ID to analyze (if not provided, will prompt for selection)
         session_id: Option<String>,
-        /// Analysis type
-        #[arg(short, long, value_enum)]
-        analysis_type: Option<AnalysisTypeArg>,
-        /// Custom prompt for analysis (only used with custom analysis type)
+        /// Custom prompt for analysis
         #[arg(long)]
         custom_prompt: Option<String>,
         /// Analyze all sessions
@@ -39,9 +36,6 @@ pub enum RetrospectCommands {
         /// Output format
         #[arg(short, long, default_value = "text")]
         format: String,
-        /// Filter by analysis type
-        #[arg(long)]
-        analysis_type: Option<AnalysisTypeArg>,
     },
     /// Show retrospection request status
     Status {
@@ -65,32 +59,8 @@ pub enum RetrospectCommands {
     },
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
-pub enum AnalysisTypeArg {
-    UserInteraction,
-    Collaboration,
-    QuestionQuality,
-    TaskBreakdown,
-    FollowUp,
-    Custom,
-}
-
-impl From<AnalysisTypeArg> for RetrospectionAnalysisType {
-    fn from(arg: AnalysisTypeArg) -> Self {
-        match arg {
-            AnalysisTypeArg::UserInteraction => RetrospectionAnalysisType::UserInteractionAnalysis,
-            AnalysisTypeArg::Collaboration => RetrospectionAnalysisType::CollaborationInsights,
-            AnalysisTypeArg::QuestionQuality => RetrospectionAnalysisType::QuestionQuality,
-            AnalysisTypeArg::TaskBreakdown => RetrospectionAnalysisType::TaskBreakdown,
-            AnalysisTypeArg::FollowUp => RetrospectionAnalysisType::FollowUpPatterns,
-            AnalysisTypeArg::Custom => RetrospectionAnalysisType::Custom("".to_string()),
-        }
-    }
-}
-
 pub async fn handle_execute_command(
     session_id: Option<String>,
-    analysis_type: Option<AnalysisTypeArg>,
     custom_prompt: Option<String>,
     all: bool,
     background: bool,
@@ -107,22 +77,10 @@ pub async fn handle_execute_command(
 
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
-    let analysis_type = analysis_type.unwrap_or(AnalysisTypeArg::UserInteraction);
-    let mut analysis_type = RetrospectionAnalysisType::from(analysis_type);
-
-    // Handle custom prompt
-    if let RetrospectionAnalysisType::Custom(_) = analysis_type {
-        if let Some(prompt) = custom_prompt {
-            analysis_type = RetrospectionAnalysisType::Custom(prompt);
-        } else {
-            anyhow::bail!("Custom prompt is required when using custom analysis type");
-        }
-    }
-
     if all {
-        execute_analysis_for_all_sessions(&service, analysis_type, background).await
+        execute_analysis_for_all_sessions(&service, custom_prompt, background).await
     } else if let Some(session_id) = session_id {
-        execute_analysis_for_session(&service, session_id, analysis_type, background).await
+        execute_analysis_for_session(&service, session_id, custom_prompt, background).await
     } else {
         anyhow::bail!("Either provide a session ID or use --all flag");
     }
@@ -131,7 +89,7 @@ pub async fn handle_execute_command(
 async fn execute_analysis_for_session(
     service: &RetrospectionService,
     session_id: String,
-    analysis_type: RetrospectionAnalysisType,
+    custom_prompt: Option<String>,
     background: bool,
 ) -> Result<()> {
     println!("Starting retrospection analysis for session: {session_id}");
@@ -140,9 +98,8 @@ async fn execute_analysis_for_session(
     let request = service
         .create_analysis_request(
             session_id.clone(),
-            analysis_type,
             None, // created_by
-            None, // custom_prompt handled above
+            custom_prompt,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create analysis request: {e}"))?;
@@ -173,7 +130,7 @@ async fn execute_analysis_for_session(
 
 async fn execute_analysis_for_all_sessions(
     _service: &RetrospectionService,
-    _analysis_type: RetrospectionAnalysisType,
+    _custom_prompt: Option<String>,
     background: bool,
 ) -> Result<()> {
     println!("Starting retrospection analysis for all sessions");
@@ -197,7 +154,6 @@ pub async fn handle_show_command(
     session_id: Option<String>,
     all: bool,
     format: String,
-    analysis_type: Option<AnalysisTypeArg>,
 ) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
@@ -209,7 +165,7 @@ pub async fn handle_show_command(
     let service = RetrospectionService::new(db_manager, google_ai_client);
 
     if all {
-        show_all_results(&service, &format, analysis_type).await
+        show_all_results(&service, &format).await
     } else if let Some(session_id) = session_id {
         show_session_results(&service, &session_id, &format).await
     } else {
@@ -248,7 +204,7 @@ async fn show_session_results(
                     println!("{}", serde_json::to_string_pretty(&retrospection)?);
                 }
                 "markdown" => {
-                    println!("## Analysis: {:?}", request.analysis_type);
+                    println!("## Analysis");
                     println!("**Created:** {}", retrospection.created_at);
                     println!();
                     println!("### Insights");
@@ -262,7 +218,6 @@ async fn show_session_results(
                     println!();
                 }
                 _ => {
-                    println!("Analysis Type: {:?}", request.analysis_type);
                     println!("Status: {:?}", request.status);
                     println!("Created: {}", retrospection.created_at);
                     if let Some(token_usage) = retrospection.token_usage {
@@ -281,10 +236,7 @@ async fn show_session_results(
                 }
             },
             None => {
-                println!(
-                    "Request {} ({:?}) - Status: {:?}",
-                    request.id, request.analysis_type, request.status
-                );
+                println!("Request {} - Status: {:?}", request.id, request.status);
                 if let Some(error) = &request.error_message {
                     println!("Error: {error}");
                 }
@@ -296,11 +248,7 @@ async fn show_session_results(
     Ok(())
 }
 
-async fn show_all_results(
-    service: &RetrospectionService,
-    format: &str,
-    _analysis_type: Option<AnalysisTypeArg>,
-) -> Result<()> {
+async fn show_all_results(service: &RetrospectionService, format: &str) -> Result<()> {
     let requests = service
         .list_analyses(None, Some(50))
         .await
@@ -323,8 +271,8 @@ async fn show_all_results(
         {
             Some(retrospection) => {
                 println!(
-                    "Session: {} | Type: {:?} | Status: {:?}",
-                    request.session_id, request.analysis_type, request.status
+                    "Session: {} | Status: {:?}",
+                    request.session_id, request.status
                 );
 
                 if format == "summary" || format == "text" {
@@ -340,8 +288,8 @@ async fn show_all_results(
             }
             None => {
                 println!(
-                    "Session: {} | Type: {:?} | Status: {:?}",
-                    request.session_id, request.analysis_type, request.status
+                    "Session: {} | Status: {:?}",
+                    request.session_id, request.status
                 );
                 if let Some(error) = &request.error_message {
                     println!("  Error: {error}");
@@ -396,7 +344,6 @@ async fn show_current_status(service: &RetrospectionService) -> Result<()> {
     for request in active_requests {
         println!("Request: {}", request.id);
         println!("  Session: {}", request.session_id);
-        println!("  Type: {:?}", request.analysis_type);
         println!("  Status: {:?}", request.status);
         println!("  Started: {}", request.started_at);
         if let Some(error) = &request.error_message {
@@ -423,8 +370,8 @@ async fn show_historical_status(service: &RetrospectionService) -> Result<()> {
 
     for request in all_requests {
         println!(
-            "Request: {} | Session: {} | Type: {:?} | Status: {:?}",
-            request.id, request.session_id, request.analysis_type, request.status
+            "Request: {} | Session: {} | Status: {:?}",
+            request.id, request.session_id, request.status
         );
         println!("  Started: {}", request.started_at);
         if let Some(completed_at) = request.completed_at {
@@ -525,8 +472,8 @@ async fn list_cancellable_requests(service: &RetrospectionService) -> Result<()>
         match request.status {
             OperationStatus::Pending | OperationStatus::Running => {
                 println!(
-                    "ID: {} | Session: {} | Type: {:?} | Status: {:?}",
-                    request.id, request.session_id, request.analysis_type, request.status
+                    "ID: {} | Session: {} | Status: {:?}",
+                    request.id, request.session_id, request.status
                 );
             }
             _ => {} // Skip non-cancellable requests

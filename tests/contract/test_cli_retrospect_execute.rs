@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::{handle_execute_command, AnalysisTypeArg};
+use retrochat::cli::retrospect::handle_execute_command;
 
 #[tokio::test]
 async fn test_retrospect_execute_command_structure() {
@@ -7,11 +7,10 @@ async fn test_retrospect_execute_command_structure() {
 
     // Test command execution with session ID
     let result = handle_execute_command(
-        Some("session-123".to_string()),        // session_id
-        Some(AnalysisTypeArg::UserInteraction), // analysis_type
-        None,                                   // custom_prompt
-        false,                                  // all
-        false,                                  // background
+        Some("session-123".to_string()), // session_id
+        None,                            // custom_prompt
+        false,                           // all
+        false,                           // background
     )
     .await;
 
@@ -41,11 +40,10 @@ async fn test_retrospect_execute_command_structure() {
 async fn test_retrospect_execute_all_sessions() {
     // Test executing retrospection on all sessions
     let result = handle_execute_command(
-        None,                                 // session_id (None when using --all)
-        Some(AnalysisTypeArg::Collaboration), // analysis_type
-        None,                                 // custom_prompt
-        true,                                 // all
-        true,                                 // background
+        None, // session_id (None when using --all)
+        None, // custom_prompt
+        true, // all
+        true, // background
     )
     .await;
 
@@ -76,7 +74,6 @@ async fn test_retrospect_execute_custom_analysis() {
 
     let result = handle_execute_command(
         Some("session-456".to_string()), // session_id
-        Some(AnalysisTypeArg::Custom),   // analysis_type
         Some(custom_prompt),             // custom_prompt
         false,                           // all
         false,                           // background
@@ -108,11 +105,10 @@ async fn test_retrospect_execute_custom_analysis() {
 async fn test_retrospect_execute_validation() {
     // Test argument validation - neither session_id nor all flag
     let result = handle_execute_command(
-        None,                                   // session_id
-        Some(AnalysisTypeArg::UserInteraction), // analysis_type
-        None,                                   // custom_prompt
-        false,                                  // all
-        false,                                  // background
+        None,  // session_id
+        None,  // custom_prompt
+        false, // all
+        false, // background
     )
     .await;
 
@@ -141,7 +137,6 @@ async fn test_retrospect_execute_validation() {
     // Test custom analysis without prompt - should fail
     let result = handle_execute_command(
         Some("session-123".to_string()),
-        Some(AnalysisTypeArg::Custom),
         None, // No custom prompt provided
         false,
         false,

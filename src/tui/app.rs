@@ -398,17 +398,10 @@ impl App {
     }
 
     async fn handle_start_analysis(&mut self, session_id: String) -> Result<()> {
-        use crate::models::RetrospectionAnalysisType;
-
         if let Some(ref service) = self.retrospection_service {
             // Start actual analysis
             match service
-                .create_analysis_request(
-                    session_id.clone(),
-                    RetrospectionAnalysisType::UserInteractionAnalysis,
-                    None,
-                    None,
-                )
+                .create_analysis_request(session_id.clone(), None, None)
                 .await
             {
                 Ok(request) => {

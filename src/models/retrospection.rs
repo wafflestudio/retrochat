@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use uuid::Uuid;
 
-use super::retrospect_request::RetrospectionAnalysisType;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Retrospection {
     pub id: String,
@@ -52,11 +50,5 @@ impl Retrospection {
     pub fn with_response_time(mut self, response_time: Duration) -> Self {
         self.response_time = Some(response_time);
         self
-    }
-
-    pub fn get_analysis_type(&self) -> Option<RetrospectionAnalysisType> {
-        // This could be derived from metadata or stored separately
-        // For now, return None as this info is stored in the RetrospectRequest
-        None
     }
 }

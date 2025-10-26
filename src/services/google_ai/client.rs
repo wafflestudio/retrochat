@@ -8,7 +8,6 @@ use super::errors::{GoogleAiError, RetryError};
 use super::models::{GenerateContentRequest, GenerateContentResponse, GenerationConfig};
 use super::retry::{with_retry, RetryConfig};
 use crate::env::apis as env_vars;
-use crate::models::RetrospectionAnalysisType;
 
 #[derive(Debug, Clone)]
 pub struct GoogleAiConfig {
@@ -193,22 +192,16 @@ impl GoogleAiClient {
         }
     }
 
-    pub fn build_analysis_request(
-        &self,
-        analysis_type: &RetrospectionAnalysisType,
-        chat_data: &str,
-    ) -> GenerateContentRequest {
-        let prompt = self.build_analysis_prompt(analysis_type);
+    pub fn build_analysis_request(&self, chat_data: &str) -> GenerateContentRequest {
+        let prompt = self.build_analysis_prompt();
         let full_content = format!("{prompt}\n\nChat Session:\n{chat_data}");
 
         GenerateContentRequest::new(full_content)
             .with_generation_config(GenerationConfig::default())
     }
 
-    fn build_analysis_prompt(&self, analysis_type: &RetrospectionAnalysisType) -> String {
-        match analysis_type {
-            RetrospectionAnalysisType::UserInteractionAnalysis => {
-                r#"Analyze this chat session between a user and an AI coding assistant. Focus on the user's communication patterns, question quality, and interaction effectiveness.
+    fn build_analysis_prompt(&self) -> String {
+        r#"Analyze this chat session between a user and an AI coding assistant. Focus on the user's communication patterns, question quality, and interaction effectiveness.
 
 Evaluate the following aspects:
 1. Communication Clarity: How clearly does the user express their needs and problems?
@@ -221,81 +214,10 @@ Provide:
 - Overall assessment (1-10 scale for each aspect)
 - Specific examples of strengths and areas for improvement
 - Actionable recommendations for better AI collaboration"#.to_string()
-            }
-            RetrospectionAnalysisType::CollaborationInsights => {
-                r#"Analyze this coding session to identify collaboration patterns between the user and AI assistant.
-
-Focus on:
-1. Problem-solving approach and methodology
-2. Use of AI capabilities and limitations awareness
-3. Iteration and refinement patterns
-4. Technical communication effectiveness
-5. Learning and adaptation throughout the session
-
-Provide insights on:
-- What collaboration patterns work well
-- Areas where collaboration could be improved
-- Specific examples of effective/ineffective interactions
-- Recommendations for optimizing AI-assisted coding workflows"#.to_string()
-            }
-            RetrospectionAnalysisType::QuestionQuality => {
-                r#"Evaluate the quality and effectiveness of user questions in this coding session.
-
-Analyze:
-1. Question specificity and clarity
-2. Context provision and background information
-3. Technical accuracy and appropriate terminology
-4. Follow-up question effectiveness
-5. Progressive questioning strategy
-
-For each question category, provide:
-- Quality rating (1-10)
-- Best examples from the session
-- Areas for improvement
-- Recommendations for better question formulation"#.to_string()
-            }
-            RetrospectionAnalysisType::TaskBreakdown => {
-                r#"Analyze how effectively the user breaks down and approaches complex coding tasks in this session.
-
-Examine:
-1. Problem decomposition strategy
-2. Sequential approach and logical flow
-3. Dependency identification and management
-4. Scope management and focus
-5. Iterative refinement approach
-
-Provide:
-- Assessment of task breakdown effectiveness
-- Examples of good/poor decomposition
-- Patterns in problem-solving approach
-- Suggestions for improved task management"#.to_string()
-            }
-            RetrospectionAnalysisType::FollowUpPatterns => {
-                r#"Analyze the user's follow-up patterns and iteration strategies in this coding session.
-
-Focus on:
-1. Response to AI suggestions and feedback
-2. Clarification-seeking behavior
-3. Building on previous responses
-4. Error correction and debugging approach
-5. Learning progression throughout the session
-
-Evaluate:
-- Follow-up timing and relevance
-- Quality of iterative improvements
-- Adaptation based on AI feedback
-- Overall learning and progression patterns"#.to_string()
-            }
-            RetrospectionAnalysisType::Custom(prompt) => prompt.clone(),
-        }
     }
 
-    pub async fn analyze_session(
-        &self,
-        session_data: &str,
-        analysis_type: RetrospectionAnalysisType,
-    ) -> Result<String, GoogleAiError> {
-        let request = self.build_analysis_request(&analysis_type, session_data);
+    pub async fn analyze_session(&self, session_data: &str) -> Result<String, GoogleAiError> {
+        let request = self.build_analysis_request(session_data);
         let response = self.generate_content(request).await?;
 
         response
@@ -371,15 +293,9 @@ mod tests {
         let config = GoogleAiConfig::new("test_key".to_string());
         let client = GoogleAiClient::new(config).unwrap();
 
-        let prompt =
-            client.build_analysis_prompt(&RetrospectionAnalysisType::UserInteractionAnalysis);
+        let prompt = client.build_analysis_prompt();
         assert!(prompt.contains("communication patterns"));
-
-        let custom_prompt = "Custom analysis prompt";
-        let custom_analysis_prompt = client.build_analysis_prompt(
-            &RetrospectionAnalysisType::Custom(custom_prompt.to_string()),
-        );
-        assert_eq!(custom_analysis_prompt, custom_prompt);
+        assert!(prompt.contains("Communication Clarity"));
     }
 
     #[test]
@@ -396,10 +312,7 @@ mod tests {
         let config = GoogleAiConfig::new("test_key".to_string());
         let client = GoogleAiClient::new(config).unwrap();
 
-        let request = client.build_analysis_request(
-            &RetrospectionAnalysisType::UserInteractionAnalysis,
-            "Test chat data",
-        );
+        let request = client.build_analysis_request("Test chat data");
 
         assert!(!request.contents.is_empty());
         assert!(request.generation_config.is_some());

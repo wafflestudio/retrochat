@@ -1,5 +1,5 @@
 use retrochat::database::DatabaseManager;
-use retrochat::models::RetrospectionAnalysisType;
+
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use retrochat::services::RetrospectionService;
 use std::sync::Arc;
@@ -25,12 +25,7 @@ async fn test_google_ai_api_error_recovery() {
 
     // Test creating analysis request
     let result = service
-        .create_analysis_request(
-            session_id.clone(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        )
+        .create_analysis_request(session_id.clone(), Some("test_user".to_string()), None)
         .await;
 
     match result {
@@ -79,7 +74,6 @@ async fn test_service_creation_with_invalid_config() {
     let result = service
         .create_analysis_request(
             "test-session".to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
             Some("test_user".to_string()),
             None,
         )
@@ -118,7 +112,6 @@ async fn test_analysis_execution_error_handling() {
     let result = service
         .create_analysis_request(
             "timeout-test-session".to_string(),
-            RetrospectionAnalysisType::TaskBreakdown,
             Some("test_user".to_string()),
             None,
         )
@@ -161,7 +154,6 @@ async fn test_nonexistent_session_handling() {
     let result = service
         .create_analysis_request(
             "definitely-nonexistent-session-12345".to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
             Some("test_user".to_string()),
             None,
         )
@@ -213,28 +205,14 @@ async fn test_database_error_handling() {
 
     // Try various operations that might trigger database errors
     let operations = vec![
-        (
-            "test-db-session-1",
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-        ),
-        (
-            "test-db-session-2",
-            RetrospectionAnalysisType::CollaborationInsights,
-        ),
-        (
-            "test-db-session-3",
-            RetrospectionAnalysisType::Custom("Test prompt".to_string()),
-        ),
+        "test-db-session-1",
+        "test-db-session-2",
+        "test-db-session-3",
     ];
 
-    for (session_id, analysis_type) in operations {
+    for session_id in operations {
         let result = service
-            .create_analysis_request(
-                session_id.to_string(),
-                analysis_type,
-                Some("test_user".to_string()),
-                None,
-            )
+            .create_analysis_request(session_id.to_string(), Some("test_user".to_string()), None)
             .await;
 
         // All these should succeed or fail gracefully

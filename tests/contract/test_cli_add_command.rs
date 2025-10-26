@@ -123,16 +123,11 @@ fn test_search_command_without_limit() {
 fn test_review_command_structure() {
     let review_cmd = Commands::Review {
         session_id: Some("session-123".to_string()),
-        analysis_type: None,
     };
 
     match review_cmd {
-        Commands::Review {
-            session_id,
-            analysis_type,
-        } => {
+        Commands::Review { session_id } => {
             assert_eq!(session_id, Some("session-123".to_string()));
-            assert!(analysis_type.is_none());
         }
         _ => panic!("Expected Review command"),
     }

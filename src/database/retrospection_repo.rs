@@ -349,7 +349,7 @@ impl RetrospectionRepository {
 mod tests {
     use super::*;
     use crate::database::{ChatSessionRepository, Database, RetrospectRequestRepository};
-    use crate::models::{ChatSession, Provider, RetrospectRequest, RetrospectionAnalysisType};
+    use crate::models::{ChatSession, Provider, RetrospectRequest};
     use std::sync::Arc;
 
     #[tokio::test]
@@ -371,12 +371,8 @@ mod tests {
 
         // Create a retrospect request (required for foreign key constraint)
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
-        let request = RetrospectRequest::new(
-            session.id.to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        );
+        let request =
+            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
         request_repo.create(&request).await.unwrap();
 
         let repo = RetrospectionRepository::new(db_manager);
@@ -423,12 +419,8 @@ mod tests {
 
         // Create a retrospect request (required for foreign key constraint)
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
-        let request = RetrospectRequest::new(
-            session.id.to_string(),
-            RetrospectionAnalysisType::UserInteractionAnalysis,
-            Some("test_user".to_string()),
-            None,
-        );
+        let request =
+            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
         request_repo.create(&request).await.unwrap();
 
         let repo = RetrospectionRepository::new(db_manager);
