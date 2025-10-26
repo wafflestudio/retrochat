@@ -238,7 +238,7 @@ async fn print_unified_analysis(analysis: &crate::services::ComprehensiveAnalysi
     {
         println!("  Tool Distribution:");
         for (tool, count) in &analysis.quantitative_input.tool_usage.tool_distribution {
-            println!("    {}: {}", tool, count);
+            println!("    {tool}: {count}");
         }
     }
 

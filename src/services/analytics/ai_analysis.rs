@@ -279,7 +279,7 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
             Ok(QualitativeOutput {
                 insights: vec![Insight {
                     title: "Analysis Error".to_string(),
-                    description: format!("Failed to parse AI response: {}", e),
+                    description: format!("Failed to parse AI response: {e}"),
                     category: "System".to_string(),
                     confidence: 0.0,
                 }],

@@ -50,7 +50,7 @@ impl AnalyticsService {
         let (sessions, messages, tokens) = analytics_repo.get_total_stats().await?;
         let total_sessions = sessions as u64;
         let total_messages = messages as u64;
-        let total_tokens = tokens as u64;
+        let total_tokens = tokens;
 
         // Create a simple date range (last 30 days)
         let end_date = chrono::Utc::now();
@@ -106,19 +106,19 @@ impl AnalyticsService {
             "json" => {
                 let json = serde_json::to_string_pretty(&insights)?;
                 std::fs::write(output_path, &json)?;
-                Ok(format!("Data exported to {} in JSON format", output_path))
+                Ok(format!("Data exported to {output_path} in JSON format"))
             }
             "csv" => {
                 let csv = self.convert_to_csv(&insights)?;
                 std::fs::write(output_path, &csv)?;
-                Ok(format!("Data exported to {} in CSV format", output_path))
+                Ok(format!("Data exported to {output_path} in CSV format"))
             }
             "txt" => {
                 let text = self.convert_to_text(&insights)?;
                 std::fs::write(output_path, &text)?;
-                Ok(format!("Data exported to {} in text format", output_path))
+                Ok(format!("Data exported to {output_path} in text format"))
             }
-            _ => Err(anyhow::anyhow!("Unsupported format: {}", format)),
+            _ => Err(anyhow::anyhow!("Unsupported format: {format}")),
         }
     }
 
@@ -142,13 +142,13 @@ impl AnalyticsService {
 
         // Parse session_id to UUID
         let session_uuid = uuid::Uuid::parse_str(session_id)
-            .map_err(|e| anyhow::anyhow!("Invalid session ID format: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Invalid session ID format: {e}"))?;
 
         // Get session data
         let session = session_repo
             .get_by_id(&session_uuid)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Session not found: {}", session_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Session not found: {session_id}"))?;
 
         // Get messages and tool operations
         let messages = message_repo.get_by_session(&session_uuid).await?;
