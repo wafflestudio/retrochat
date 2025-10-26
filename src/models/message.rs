@@ -163,6 +163,42 @@ impl Message {
     pub fn is_system_message(&self) -> bool {
         matches!(self.role, MessageRole::System)
     }
+
+    /// Check if this message has any tool uses
+    pub fn has_tool_uses(&self) -> bool {
+        self.tool_uses.as_ref().is_some_and(|uses| !uses.is_empty())
+    }
+
+    /// Check if this message has any tool results
+    pub fn has_tool_results(&self) -> bool {
+        self.tool_results
+            .as_ref()
+            .is_some_and(|results| !results.is_empty())
+    }
+
+    /// Get all tool operations associated with this message
+    ///
+    /// This retrieves structured ToolOperation records from the database
+    /// which contain parsed file change metrics and other tool-specific data.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use retrochat::database::ToolOperationRepository;
+    /// # async fn example(message: retrochat::models::Message, repo: &ToolOperationRepository) {
+    /// let operations = message.get_tool_operations(repo).await.unwrap();
+    /// for op in operations {
+    ///     if op.is_file_operation() {
+    ///         println!("File: {:?}, Lines changed: {}", op.file_path, op.total_line_changes());
+    ///     }
+    /// }
+    /// # }
+    /// ```
+    pub async fn get_tool_operations(
+        &self,
+        repo: &crate::database::ToolOperationRepository,
+    ) -> anyhow::Result<Vec<crate::models::ToolOperation>> {
+        repo.get_by_message(&self.id).await
+    }
 }
 
 impl PartialOrd for Message {
@@ -293,5 +329,94 @@ mod tests {
 
         assert_eq!(message.word_count(), 6);
         assert_eq!(message.content_length(), 26);
+    }
+
+    #[tokio::test]
+    async fn test_get_tool_operations() {
+        use crate::database::{
+            ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
+        };
+        use crate::models::{ChatSession, Provider, SessionState, ToolOperation};
+
+        let db = DatabaseManager::open_in_memory().await.unwrap();
+        let session_repo = ChatSessionRepository::new(&db);
+        let message_repo = MessageRepository::new(&db);
+        let tool_op_repo = ToolOperationRepository::new(&db);
+
+        // Create session
+        let session_id = Uuid::new_v4();
+        let mut session = ChatSession::new(
+            Provider::ClaudeCode,
+            "/test/file.jsonl".to_string(),
+            "test_hash".to_string(),
+            Utc::now(),
+        );
+        session.id = session_id;
+        session.set_state(SessionState::Imported);
+        session_repo.create(&session).await.unwrap();
+
+        // Create message with tool uses
+        let message_id = Uuid::new_v4();
+        let tool_use = ToolUse {
+            id: "tool_1".to_string(),
+            name: "Write".to_string(),
+            input: serde_json::json!({"file_path": "/test.rs", "content": "test"}),
+            raw: serde_json::json!({}),
+        };
+        let mut message = Message::new(
+            session_id,
+            MessageRole::Assistant,
+            "test message".to_string(),
+            Utc::now(),
+            1,
+        )
+        .with_tool_uses(vec![tool_use]);
+        message.id = message_id;
+        message_repo.create(&message).await.unwrap();
+
+        // Create tool operations
+        let tool_op = ToolOperation::new(
+            message_id,
+            "tool_1".to_string(),
+            session_id,
+            "Write".to_string(),
+            Utc::now(),
+        )
+        .with_file_path("/test.rs".to_string());
+        tool_op_repo.create(&tool_op).await.unwrap();
+
+        // Test helper method
+        let operations = message.get_tool_operations(&tool_op_repo).await.unwrap();
+        assert_eq!(operations.len(), 1);
+        assert_eq!(operations[0].tool_name, "Write");
+        assert_eq!(operations[0].file_path, Some("/test.rs".to_string()));
+    }
+
+    #[test]
+    fn test_has_tool_uses() {
+        let message_with_tools = Message::new(
+            Uuid::new_v4(),
+            MessageRole::Assistant,
+            "test".to_string(),
+            Utc::now(),
+            1,
+        )
+        .with_tool_uses(vec![ToolUse {
+            id: "test".to_string(),
+            name: "Write".to_string(),
+            input: serde_json::json!({}),
+            raw: serde_json::json!({}),
+        }]);
+
+        let message_without_tools = Message::new(
+            Uuid::new_v4(),
+            MessageRole::User,
+            "test".to_string(),
+            Utc::now(),
+            1,
+        );
+
+        assert!(message_with_tools.has_tool_uses());
+        assert!(!message_without_tools.has_tool_uses());
     }
 }

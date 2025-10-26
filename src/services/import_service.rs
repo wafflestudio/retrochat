@@ -11,8 +11,13 @@ use tokio::time::Instant;
 
 use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ProjectRepository,
+    ToolOperationRepository,
 };
+use crate::models::ToolOperation;
 use crate::parsers::ParserRegistry;
+use crate::tools::parsers::{
+    edit::EditParser, read::ReadParser, write::WriteParser, ToolData, ToolParser,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanRequest {
@@ -206,6 +211,7 @@ impl ImportService {
         let session_repo = ChatSessionRepository::new(&self.db_manager);
         let message_repo = MessageRepository::new(&self.db_manager);
         let project_repo = ProjectRepository::new(&self.db_manager);
+        let tool_operation_repo = ToolOperationRepository::new(&self.db_manager);
 
         for (session, messages) in sessions {
             // Check if session already exists
@@ -275,6 +281,18 @@ impl ImportService {
                 // Try to rollback session insertion
                 let _ = session_repo.delete(&session.id).await;
                 continue;
+            }
+
+            // Extract and save tool operations
+            let tool_operations = self.extract_tool_operations(&session, &messages);
+            if !tool_operations.is_empty() {
+                if let Err(e) = tool_operation_repo.bulk_create(&tool_operations).await {
+                    warnings.push(format!(
+                        "Failed to insert tool operations for session {}: {}",
+                        session.id, e
+                    ));
+                    // Don't fail the entire import if tool operations fail
+                }
             }
 
             sessions_imported += 1;
@@ -440,6 +458,98 @@ impl ImportService {
             batch_duration_ms,
             errors,
         })
+    }
+
+    /// Extract tool operations from messages
+    fn extract_tool_operations(
+        &self,
+        session: &crate::models::ChatSession,
+        messages: &[crate::models::Message],
+    ) -> Vec<ToolOperation> {
+        let mut tool_operations = Vec::new();
+
+        for message in messages {
+            // Skip if no tool uses
+            let Some(tool_uses) = &message.tool_uses else {
+                continue;
+            };
+
+            // Create a map of tool_use_id to tool_result for quick lookup
+            let tool_results_map: std::collections::HashMap<
+                String,
+                &crate::models::message::ToolResult,
+            > = message
+                .tool_results
+                .as_ref()
+                .map(|results| results.iter().map(|r| (r.tool_use_id.clone(), r)).collect())
+                .unwrap_or_default();
+
+            for tool_use in tool_uses {
+                // Get matching tool result if any
+                let tool_result = tool_results_map.get(&tool_use.id);
+
+                // Create base ToolOperation
+                let mut operation = ToolOperation::from_tool_use(
+                    tool_use,
+                    tool_result.copied(),
+                    message.id,
+                    session.id,
+                    message.timestamp,
+                );
+
+                // Parse tool-specific data and extract metrics
+                match tool_use.name.as_str() {
+                    "Edit" => {
+                        let parser = EditParser;
+                        if let Ok(parsed) = parser.parse(tool_use) {
+                            if let ToolData::Edit(data) = parsed.data {
+                                operation = operation
+                                    .with_file_path(data.file_path.clone())
+                                    .with_file_type(data.is_code_file(), data.is_config_file())
+                                    .with_line_metrics(data.lines_before(), data.lines_after())
+                                    .with_edit_flags(
+                                        data.is_bulk_replacement(),
+                                        data.is_refactoring(),
+                                    );
+                            }
+                        }
+                    }
+                    "Write" => {
+                        let parser = WriteParser;
+                        if let Ok(parsed) = parser.parse(tool_use) {
+                            if let ToolData::Write(data) = parsed.data {
+                                operation = operation
+                                    .with_file_path(data.file_path.clone())
+                                    .with_file_type(data.is_code_file(), data.is_config_file())
+                                    .with_line_metrics(None, data.lines_after());
+
+                                if let Some(size) = data.content_size {
+                                    operation = operation.with_content_size(size as i32);
+                                }
+                            }
+                        }
+                    }
+                    "Read" => {
+                        let parser = ReadParser;
+                        if let Ok(parsed) = parser.parse(tool_use) {
+                            if let ToolData::Read(data) = parsed.data {
+                                operation = operation
+                                    .with_file_path(data.file_path.clone())
+                                    .with_file_type(data.is_code_file(), data.is_config_file());
+                            }
+                        }
+                    }
+                    _ => {
+                        // For other tools (Bash, Task, etc.), just save the basic info
+                        // File-related fields will be None
+                    }
+                }
+
+                tool_operations.push(operation);
+            }
+        }
+
+        tool_operations
     }
 
     /// Import files with progress reporting

@@ -78,6 +78,21 @@ impl WriteData {
     pub fn is_large_write(&self) -> bool {
         self.content_size.map(|size| size > 10240).unwrap_or(false)
     }
+
+    /// Count lines in content
+    pub fn lines_after(&self) -> Option<i32> {
+        self.content.as_ref().map(|s| {
+            if s.is_empty() {
+                return 0;
+            }
+            let newline_count = s.chars().filter(|&c| c == '\n').count();
+            if s.ends_with('\n') {
+                newline_count as i32
+            } else {
+                (newline_count + 1) as i32
+            }
+        })
+    }
 }
 
 #[cfg(test)]
