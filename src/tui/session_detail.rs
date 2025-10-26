@@ -19,7 +19,7 @@ use crate::services::{
 use super::flowchart_renderer::FlowchartRenderer;
 use super::state::SessionDetailState;
 use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
-use super::utils::text::{truncate_text, wrap_text};
+use super::utils::text::wrap_text;
 
 pub struct SessionDetailWidget {
     pub state: SessionDetailState,
@@ -377,104 +377,30 @@ impl SessionDetailWidget {
             )]));
         }
 
-        // Show tool uses inline (new unified format)
-        if let Some(tool_uses) = &message.tool_uses {
-            if !tool_uses.is_empty() {
-                let tool_results = message.tool_results.as_deref().unwrap_or(&[]);
+        // Show tool operation indicator if message has tool operations
+        if message.has_tool_operation() {
+            let indicator_text = match message.message_type {
+                crate::models::message::MessageType::ToolRequest => "  [Tool Request]",
+                crate::models::message::MessageType::ToolResult => "  [Tool Result]",
+                _ => "  [Tool Operation]",
+            };
 
-                // Create tool display config
-                let tool_config = ToolDisplayConfig {
-                    width: width.saturating_sub(4),
-                    show_details: self.state.show_tool_details,
-                    max_output_lines: 10,
-                };
+            lines.push(Line::from(vec![Span::styled(
+                indicator_text,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
 
-                // Format and add tool display lines
-                let tool_lines =
-                    self.tool_formatter
-                        .format_tools(tool_uses, tool_results, &tool_config);
-
-                // Indent tool lines
-                for tool_line in tool_lines {
-                    let indented_spans: Vec<Span> = std::iter::once(Span::raw("  "))
-                        .chain(tool_line.spans.into_iter())
-                        .collect();
-                    lines.push(Line::from(indented_spans));
-                }
-            }
-        }
-        // Show tool results if present without tool uses (separate message pattern)
-        else if let Some(tool_results) = &message.tool_results {
-            if !tool_results.is_empty() {
+            // TODO: Load and display full tool operation details from database
+            // This would require fetching ToolOperation via tool_operation_id
+            if self.state.show_tool_details {
                 lines.push(Line::from(vec![Span::styled(
-                    "  [Tool Results]",
+                    "    (Tool details available - future enhancement)",
                     Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::ITALIC),
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::DIM),
                 )]));
-
-                // Display each tool result
-                for result in tool_results {
-                    let status_icon = if result.is_error { "✗" } else { "✓" };
-                    let status_color = if result.is_error {
-                        Color::Red
-                    } else {
-                        Color::Green
-                    };
-
-                    lines.push(Line::from(vec![
-                        Span::raw("    "),
-                        Span::styled(status_icon, Style::default().fg(status_color)),
-                        Span::raw(" "),
-                        Span::styled(
-                            format!("Tool: {}", result.tool_use_id),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
-
-                    // Show result content preview if show_details is enabled
-                    if self.state.show_tool_details && !result.content.is_empty() {
-                        let preview_lines: Vec<&str> = result.content.lines().take(5).collect();
-                        for line in preview_lines {
-                            lines.push(Line::from(vec![
-                                Span::raw("      "),
-                                Span::styled(line.to_string(), Style::default().fg(Color::Gray)),
-                            ]));
-                        }
-                        if result.content.lines().count() > 5 {
-                            lines.push(Line::from(vec![
-                                Span::raw("      "),
-                                Span::styled(
-                                    "...",
-                                    Style::default()
-                                        .fg(Color::DarkGray)
-                                        .add_modifier(Modifier::ITALIC),
-                                ),
-                            ]));
-                        }
-                    }
-                }
-            }
-        }
-        // Show old tool calls format for backwards compatibility (if no tool_uses)
-        else if let Some(tool_calls) = &message.tool_calls {
-            if !tool_calls.is_empty() {
-                lines.push(Line::from(vec![Span::styled(
-                    "  [Tool Calls - Legacy Format]",
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::ITALIC),
-                )]));
-
-                // Parse and display tool calls (simplified)
-                let tools_preview =
-                    truncate_text(&format!("{tool_calls:?}"), width.saturating_sub(4));
-                for tool_line in wrap_text(&tools_preview, width.saturating_sub(4)) {
-                    lines.push(Line::from(vec![Span::styled(
-                        format!("    {tool_line}"),
-                        Style::default().fg(Color::DarkGray),
-                    )]));
-                }
             }
         }
 

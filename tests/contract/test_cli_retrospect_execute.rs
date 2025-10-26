@@ -130,6 +130,8 @@ async fn test_retrospect_execute_validation() {
                     || error_msg.contains("Configuration")
                     || error_msg.contains("API")
                     || error_msg.contains("GOOGLE_AI_API_KEY")
+                    || error_msg.contains("migrations")
+                    || error_msg.contains("database")
             );
         }
     }

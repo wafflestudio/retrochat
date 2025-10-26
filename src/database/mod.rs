@@ -9,6 +9,7 @@ pub mod project_repo;
 pub mod retrospect_request_repo;
 pub mod retrospection_repo;
 pub mod schema;
+pub mod tool_operation_repo;
 
 // Main repositories (now using SQLx)
 pub use analytics_repo::{
@@ -24,6 +25,7 @@ pub use project_repo::ProjectRepository;
 pub use retrospect_request_repo::RetrospectRequestRepository;
 pub use retrospection_repo::RetrospectionRepository;
 pub use schema::{create_schema, SCHEMA_VERSION};
+pub use tool_operation_repo::ToolOperationRepository;
 
 // Main database structure (now using SQLx by default)
 pub struct Database {
@@ -78,6 +80,10 @@ impl Database {
 
     pub fn flowchart_repo(&self) -> FlowchartRepository {
         FlowchartRepository::new(std::sync::Arc::new(self.manager.clone()))
+    }
+
+    pub fn tool_operation_repo(&self) -> ToolOperationRepository {
+        ToolOperationRepository::new(&self.manager)
     }
 
     pub fn migration_manager(&self) -> MigrationManager {
