@@ -18,13 +18,37 @@ impl MessageRepository {
         }
     }
 
+    /// Convert embedding vector to BLOB (bytes) for storage
+    fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
+        embedding.iter().flat_map(|&f| f.to_le_bytes()).collect()
+    }
+
+    /// Convert BLOB (bytes) back to embedding vector
+    fn blob_to_embedding(blob: &[u8]) -> Option<Vec<f32>> {
+        if !blob.len().is_multiple_of(4) {
+            return None;
+        }
+
+        let mut embedding = Vec::with_capacity(blob.len() / 4);
+        for chunk in blob.chunks_exact(4) {
+            let bytes: [u8; 4] = chunk.try_into().ok()?;
+            embedding.push(f32::from_le_bytes(bytes));
+        }
+        Some(embedding)
+    }
+
     pub async fn create(&self, message: &Message) -> AnyhowResult<()> {
+        let embedding_blob = message
+            .embedding
+            .as_ref()
+            .map(|emb| Self::embedding_to_blob(emb));
+
         sqlx::query(
             r#"
             INSERT INTO messages (
                 id, session_id, role, content, timestamp, token_count,
-                metadata, sequence_number, message_type, tool_operation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                metadata, sequence_number, message_type, tool_operation_id, embedding
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(message.id.to_string())
@@ -37,6 +61,7 @@ impl MessageRepository {
         .bind(message.sequence_number)
         .bind(message.message_type.to_string())
         .bind(message.tool_operation_id.map(|id| id.to_string()))
+        .bind(embedding_blob)
         .execute(&self.pool)
         .await
         .context("Failed to create message")?;
@@ -48,7 +73,7 @@ impl MessageRepository {
         let row = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   metadata, sequence_number, message_type, tool_operation_id
+                   metadata, sequence_number, message_type, tool_operation_id, embedding
             FROM messages
             WHERE id = ?
             "#,
@@ -71,7 +96,7 @@ impl MessageRepository {
         let rows = sqlx::query(
             r#"
             SELECT id, session_id, role, content, timestamp, token_count,
-                   metadata, sequence_number, message_type, tool_operation_id
+                   metadata, sequence_number, message_type, tool_operation_id, embedding
             FROM messages
             WHERE session_id = ?
             ORDER BY sequence_number ASC
@@ -142,7 +167,7 @@ impl MessageRepository {
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -197,7 +222,7 @@ impl MessageRepository {
         let mut sql = r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             JOIN messages_fts fts ON m.rowid = fts.rowid
             WHERE messages_fts MATCH ?
@@ -291,7 +316,7 @@ impl MessageRepository {
             r#"
             SELECT m.id, m.session_id, m.role, m.content, m.timestamp,
                    m.token_count, m.metadata, m.sequence_number,
-                   m.message_type, m.tool_operation_id
+                   m.message_type, m.tool_operation_id, m.embedding
             FROM messages m
             "#,
         );
@@ -376,12 +401,17 @@ impl MessageRepository {
             .context("Failed to start transaction")?;
 
         for message in messages {
+            let embedding_blob = message
+                .embedding
+                .as_ref()
+                .map(|emb| Self::embedding_to_blob(emb));
+
             sqlx::query(
                 r#"
                 INSERT INTO messages (
                     id, session_id, role, content, timestamp, token_count,
-                    metadata, sequence_number, message_type, tool_operation_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    metadata, sequence_number, message_type, tool_operation_id, embedding
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(message.id.to_string())
@@ -394,6 +424,7 @@ impl MessageRepository {
             .bind(message.sequence_number)
             .bind(message.message_type.to_string())
             .bind(message.tool_operation_id.map(|id| id.to_string()))
+            .bind(embedding_blob)
             .execute(&mut *tx)
             .await
             .context("Failed to insert message in bulk")?;
@@ -417,6 +448,7 @@ impl MessageRepository {
         let sequence_number: i64 = row.try_get("sequence_number")?;
         let message_type_str: String = row.try_get("message_type")?;
         let tool_operation_id_str: Option<String> = row.try_get("tool_operation_id")?;
+        let embedding_blob: Option<Vec<u8>> = row.try_get("embedding")?;
 
         let id = Uuid::parse_str(&id_str).context("Invalid message ID format")?;
         let session_id = Uuid::parse_str(&session_id_str).context("Invalid session ID format")?;
@@ -433,6 +465,8 @@ impl MessageRepository {
             None
         };
 
+        let embedding = embedding_blob.and_then(|blob| Self::blob_to_embedding(&blob));
+
         let metadata: Option<serde_json::Value> = serde_json::from_str("{}").ok();
 
         Ok(Message {
@@ -448,6 +482,7 @@ impl MessageRepository {
             tool_operation_id,
             tool_uses: None,
             tool_results: None,
+            embedding,
         })
     }
 }

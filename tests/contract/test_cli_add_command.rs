@@ -93,6 +93,7 @@ fn test_search_command_structure() {
         limit: Some(10),
         since: None,
         until: None,
+        use_embedding: false,
     };
 
     match search_cmd {
@@ -101,11 +102,13 @@ fn test_search_command_structure() {
             limit,
             since,
             until,
+            use_embedding,
         } => {
             assert_eq!(query, "test query");
             assert_eq!(limit, Some(10));
             assert!(since.is_none());
             assert!(until.is_none());
+            assert!(!use_embedding);
         }
         _ => panic!("Expected Search command"),
     }
@@ -118,6 +121,7 @@ fn test_search_command_without_limit() {
         limit: None,
         since: None,
         until: None,
+        use_embedding: false,
     };
 
     match search_cmd {
@@ -126,11 +130,13 @@ fn test_search_command_without_limit() {
             limit,
             since,
             until,
+            use_embedding,
         } => {
             assert_eq!(query, "test");
             assert!(limit.is_none());
             assert!(since.is_none());
             assert!(until.is_none());
+            assert!(!use_embedding);
         }
         _ => panic!("Expected Search command"),
     }
@@ -143,6 +149,7 @@ fn test_search_command_with_time_range() {
         limit: Some(10),
         since: Some("7 days ago".to_string()),
         until: Some("now".to_string()),
+        use_embedding: false,
     };
 
     match search_cmd {
@@ -151,11 +158,41 @@ fn test_search_command_with_time_range() {
             limit,
             since,
             until,
+            use_embedding,
         } => {
             assert_eq!(query, "test");
             assert_eq!(limit, Some(10));
             assert_eq!(since, Some("7 days ago".to_string()));
             assert_eq!(until, Some("now".to_string()));
+            assert!(!use_embedding);
+        }
+        _ => panic!("Expected Search command"),
+    }
+}
+
+#[test]
+fn test_search_command_with_embedding() {
+    let search_cmd = Commands::Search {
+        query: "semantic search test".to_string(),
+        limit: Some(5),
+        since: None,
+        until: None,
+        use_embedding: true,
+    };
+
+    match search_cmd {
+        Commands::Search {
+            query,
+            limit,
+            since,
+            until,
+            use_embedding,
+        } => {
+            assert_eq!(query, "semantic search test");
+            assert_eq!(limit, Some(5));
+            assert!(since.is_none());
+            assert!(until.is_none());
+            assert!(use_embedding);
         }
         _ => panic!("Expected Search command"),
     }
