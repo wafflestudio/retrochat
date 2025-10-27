@@ -1,0 +1,15 @@
+[alias]
+# Development aliases
+t = "test --verbose"
+c = "check --verbose"
+b = "build"
+
+# Code quality aliases
+fmt-check = "fmt --all -- --check"
+fmt-fix = "fmt --all"
+clippy-strict = "clippy -- -D warnings"
+
+# Application run aliases
+tui = "run -- tui"
+watch = "run -- watch all --verbose"
+init = "run -- init"

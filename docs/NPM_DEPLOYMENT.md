@@ -31,10 +31,10 @@ npm/
 
 ```bash
 # Build binary and prepare npm package
-make npm-prepare
+./scripts/prepare-npm.sh
 
 # Link globally for testing
-make npm-link
+./scripts/npm-link.sh
 
 # Test the command
 retrochat --help
@@ -45,7 +45,7 @@ retrochat tui
 
 ```bash
 # Create a tarball
-make npm-pack
+./scripts/npm-pack.sh
 
 # Install the tarball globally
 npm install -g npm/sanggggg-retrochat-*.tgz
@@ -115,7 +115,7 @@ If you need to publish manually:
 
 ```bash
 # 1. Build for your current platform
-make npm-prepare
+./scripts/prepare-npm.sh
 
 # 2. Login to npm
 npm login
@@ -194,7 +194,7 @@ cargo build --release
 
 ## Best Practices
 
-1. **Test locally first**: Use `make npm-link` before creating a release
+1. **Test locally first**: Use `./scripts/npm-link.sh` before creating a release
 2. **Use semantic versioning**: Follow semver (major.minor.patch)
 3. **Update CHANGELOG**: Document changes for each release
 4. **Test installation**: After publishing, test install on a clean machine

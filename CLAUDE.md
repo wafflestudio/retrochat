@@ -24,19 +24,32 @@ tests/
 
 ## Commands
 
-### Development & Testing (using Makefile)
+### Development & Testing
+
+#### Cargo Aliases (defined in .cargo/config.toml)
 ```bash
-make help          # Show all available targets
-make test          # Run test suite (like CI)
-make clippy        # Run clippy with -D warnings (like CI)
-make fmt           # Check formatting with rustfmt --check
-make fmt-fix       # Apply formatting changes
-make clippy-fix    # Apply clippy auto-fixes
-make fix           # Apply rustfmt and clippy fixes, then verify
-make check         # Cargo check
-make build         # Cargo build
-make build-release # Cargo build --release
-make ci            # Run fmt, clippy, then tests (full CI validation)
+# Short aliases for common commands
+cargo t              # Run test suite (test --verbose)
+cargo c              # Cargo check (check --verbose)
+cargo b              # Cargo build
+cargo br             # Cargo build --release
+
+# Code quality
+cargo fmt-check      # Check formatting (fmt --all -- --check)
+cargo fmt-fix        # Apply formatting (fmt --all)
+cargo clippy-strict  # Run clippy with -D warnings
+
+# Application shortcuts
+cargo tui            # Launch TUI interface (run -- tui)
+cargo watch          # Watch all providers with verbose output (run -- watch all --verbose)
+cargo init           # Initialize retrochat (run -- init)
+```
+
+#### Shell Scripts (in ./scripts)
+```bash
+./scripts/clean-db.sh    # Remove retrochat database files
+./scripts/doctor.sh      # Check system dependencies (rustc, cargo, python)
+./scripts/e2e.sh         # Run end-to-end tests (generate + import examples)
 ```
 
 ### Direct Cargo Commands
