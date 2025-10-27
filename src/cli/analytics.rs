@@ -1,6 +1,4 @@
 use anyhow::Result;
-use chrono::Utc;
-use std::path::PathBuf;
 
 use crate::database::DatabaseManager;
 use crate::services::analytics_service::AnalyticsService;
@@ -37,31 +35,6 @@ async fn print_insights_summary(analytics_service: &AnalyticsService) -> Result<
         );
     }
 
-    println!("\nFor detailed analysis, use: retrochat analyze export json");
-
-    Ok(())
-}
-
-pub async fn handle_export_command(format: String, output_path: Option<String>) -> Result<()> {
-    let db_path = crate::database::config::get_default_db_path()?;
-    let db_manager = DatabaseManager::new(&db_path).await?;
-    let analytics_service = AnalyticsService::new(db_manager);
-
-    let path = match output_path {
-        Some(p) => PathBuf::from(p),
-        None => {
-            let filename = format!(
-                "retrochat_export_{}.{}",
-                Utc::now().format("%Y%m%d_%H%M%S"),
-                format
-            );
-            PathBuf::from(filename)
-        }
-    };
-
-    let _response = analytics_service
-        .export_data(&format, &path.to_string_lossy())
-        .await?;
     Ok(())
 }
 
