@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod analytics_service;
 pub mod auto_detect;
 pub mod flowchart_service;
@@ -8,10 +9,16 @@ pub mod query_service;
 pub mod retrospection_service;
 pub mod watch_service;
 
-pub use analytics_service::{
-    AnalyticsService, DailyActivity, DurationStats, ExportFilters, ExportRequest, ExportResponse,
-    MessageRoleDistribution, ProjectStats, ProviderStats, UsageInsights,
+pub use analytics::{
+    ChatContext, ComprehensiveAnalysis, DailyActivity, DurationStats, FileChangeMetrics,
+    FileContext, GoodPattern, ImprovementArea, Insight, LearningObservation,
+    MessageRoleDistribution, ProcessedCodeMetrics, ProcessedQuantitativeOutput,
+    ProcessedTokenMetrics, ProjectContext, ProjectStats, ProviderStats, QualitativeInput,
+    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, SessionMetrics,
+    TimeConsumptionMetrics, TimeEfficiencyMetrics, TokenConsumptionMetrics, ToolUsageMetrics,
+    UsageInsights,
 };
+pub use analytics_service::AnalyticsService;
 pub use auto_detect::{AutoDetectService, DetectedProvider};
 pub use flowchart_service::FlowchartService;
 pub use google_ai::{
@@ -28,6 +35,7 @@ pub use query_service::{
     SessionsQueryRequest, SessionsQueryResponse,
 };
 pub use retrospection_service::{
-    AnalysisData, RetrospectionCleanupHandler, RetrospectionService, SessionMetrics,
+    AnalysisData, RetrospectionCleanupHandler, RetrospectionService,
+    SessionMetrics as RetrospectionSessionMetrics,
 };
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};

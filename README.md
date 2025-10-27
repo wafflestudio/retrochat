@@ -89,7 +89,7 @@ Watch files for changes and show diffs in real-time:
 retrochat watch all --verbose
 
 # Watch specific providers
-retrochat watch claude cursor --verbose
+retrochat watch claude gemini --verbose
 
 # Watch a specific path
 retrochat watch --path /path/to/chat/directory --verbose
@@ -131,9 +131,6 @@ Import from configured default directories for each provider:
 # Import from Claude Code default directories
 retrochat import claude
 
-# Import from Cursor default directories
-retrochat import cursor
-
 # Import from Gemini default directories
 retrochat import gemini
 
@@ -144,7 +141,7 @@ retrochat import codex
 retrochat import all
 
 # Import from multiple providers at once
-retrochat import claude cursor --overwrite
+retrochat import claude gemini --overwrite
 ```
 
 #### Environment Configuration
@@ -154,9 +151,6 @@ Configure default directories for each provider (optional):
 ```bash
 # Claude Code directories (default: ~/.claude/projects)
 export RETROCHAT_CLAUDE_DIRS="~/.claude/projects:/another/path"
-
-# Cursor directories (default: ~/.cursor/chats)
-export RETROCHAT_CURSOR_DIRS="~/.cursor/chats"
 
 # Gemini directories (default: ~/.gemini/tmp)
 export RETROCHAT_GEMINI_DIRS="/path/to/gemini/chats"
@@ -184,24 +178,6 @@ This provides:
 - Session duration statistics
 - Top projects by usage
 
-#### Export Data
-
-Export analytics data in various formats:
-
-```bash
-# Export to JSON (default format)
-retrochat analyze export json
-
-# Export to CSV
-retrochat analyze export csv
-
-# Export to text file
-retrochat analyze export txt
-
-# Export to specific file
-retrochat analyze export json --output my_analysis.json
-```
-
 ## Supported Chat Providers
 
 RetroChat currently supports importing from:
@@ -211,12 +187,6 @@ RetroChat currently supports importing from:
 - **Default Location**: `~/.claude/projects`
 - **File Pattern**: `*.jsonl`
 - **Environment Variable**: `RETROCHAT_CLAUDE_DIRS`
-
-### Cursor
-- **File Format**: SQLite database (store.db)
-- **Default Location**: `~/.cursor/chats`
-- **File Pattern**: `store.db`
-- **Environment Variable**: `RETROCHAT_CURSOR_DIRS`
 
 ### Gemini
 - **File Format**: JSON export files
@@ -327,7 +297,7 @@ tests/
 2. **Import your chat history:**
    ```bash
    # Import from provider default directories
-   retrochat import claude cursor
+   retrochat import claude gemini
 
    # Import from all providers
    retrochat import all

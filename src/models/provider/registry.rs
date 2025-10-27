@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use super::config::{
-    ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig, ProviderConfig,
-};
+use super::config::{ClaudeCodeConfig, CodexConfig, GeminiCliConfig, ProviderConfig};
 use super::r#enum::Provider;
 
 /// Global singleton instance of provider registry
@@ -39,7 +37,6 @@ impl ProviderRegistry {
                 Provider::ClaudeCode => ClaudeCodeConfig::create(),
                 Provider::GeminiCLI => GeminiCliConfig::create(),
                 Provider::Codex => CodexConfig::create(),
-                Provider::CursorAgent => CursorAgentConfig::create(),
                 Provider::All => continue,      // Skip aggregate
                 Provider::Other(_) => continue, // Skip unknown providers
             };
@@ -59,10 +56,6 @@ impl ProviderRegistry {
                 "Gemini CLI",
             ),
             (self.get_provider(&Provider::Codex).unwrap(), "Codex"),
-            (
-                self.get_provider(&Provider::CursorAgent).unwrap(),
-                "Cursor Agent",
-            ),
         ]
     }
 
@@ -143,17 +136,5 @@ mod tests {
         assert!(registry.get_provider(&Provider::ClaudeCode).is_some());
         assert!(registry.get_provider(&Provider::GeminiCLI).is_some());
         assert!(registry.get_provider(&Provider::Codex).is_some());
-        assert!(registry.get_provider(&Provider::CursorAgent).is_some());
-
-        // Test detection
-        // TODO: add codex, cursor and gemini detection
-        // let claude_provider = registry.detect_provider_from_file("claude.jsonl");
-        // assert!(claude_provider.is_some());
-        // assert_eq!(claude_provider.unwrap().name, "Claude Code");
-
-        // Test Cursor detection
-        let cursor_provider = registry.detect_provider_from_file("store.db");
-        assert!(cursor_provider.is_some());
-        assert_eq!(cursor_provider.unwrap().name, "Cursor Agent");
     }
 }

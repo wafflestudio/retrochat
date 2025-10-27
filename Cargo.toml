@@ -76,11 +76,6 @@ path = "tests/contract/test_session_detail.rs"
 name = "test_search"
 path = "tests/contract/test_search.rs"
 
-
-[[test]]
-name = "test_analytics_export"
-path = "tests/contract/test_analytics_export.rs"
-
 [[test]]
 name = "test_google_ai_api"
 path = "tests/contract/test_google_ai_api.rs"
@@ -100,14 +95,6 @@ path = "tests/contract/test_cli_retrospect_status.rs"
 [[test]]
 name = "test_cli_retrospect_cancel"
 path = "tests/contract/test_cli_retrospect_cancel.rs"
-
-[[test]]
-name = "test_cursor_integration"
-path = "tests/contract/test_cursor_integration.rs"
-
-[[test]]
-name = "test_cursor_agent_parser"
-path = "tests/unit/test_cursor_agent_parser.rs"
 
 [[test]]
 name = "test_gemini_cli_parser"
@@ -137,10 +124,6 @@ path = "tests/integration/test_first_time_setup.rs"
 [[test]]
 name = "test_session_detail_integration"
 path = "tests/integration/test_session_detail.rs"
-
-[[test]]
-name = "test_export_reporting"
-path = "tests/integration/test_export_reporting.rs"
 
 [[test]]
 name = "test_single_session_analysis"

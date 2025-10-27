@@ -19,7 +19,6 @@ impl AutoDetectService {
     pub fn scan_all() -> Vec<DetectedProvider> {
         vec![
             Self::detect_claude_code(),
-            Self::detect_cursor(),
             Self::detect_gemini(),
             Self::detect_codex(),
         ]
@@ -35,22 +34,6 @@ impl AutoDetectService {
 
         DetectedProvider {
             provider: Provider::ClaudeCode,
-            paths: vec![default_path],
-            estimated_sessions,
-            is_valid,
-        }
-    }
-
-    /// Detect Cursor installation
-    fn detect_cursor() -> DetectedProvider {
-        let default_path = dirs::home_dir()
-            .map(|h| h.join(".cursor").join("chats"))
-            .unwrap_or_default();
-
-        let (is_valid, estimated_sessions) = Self::check_directory(&default_path, &["store.db"]);
-
-        DetectedProvider {
-            provider: Provider::CursorAgent,
             paths: vec![default_path],
             estimated_sessions,
             is_valid,
@@ -178,6 +161,6 @@ mod tests {
     #[test]
     fn test_scan_all() {
         let detected = AutoDetectService::scan_all();
-        assert_eq!(detected.len(), 4); // Should detect all 4 providers
+        assert_eq!(detected.len(), 3); // Should detect all 3 providers
     }
 }

@@ -1,6 +1,5 @@
 pub mod claude_code;
 pub mod codex;
-pub mod cursor_agent;
 pub mod gemini_cli;
 pub mod project_inference;
 
@@ -12,13 +11,11 @@ use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
 pub use codex::CodexParser;
-pub use cursor_agent::CursorAgentParser;
 pub use gemini_cli::GeminiCLIParser;
 
 pub enum ChatParser {
     ClaudeCode(ClaudeCodeParser),
     Codex(CodexParser),
-    CursorAgent(CursorAgentParser),
     GeminiCLI(GeminiCLIParser),
 }
 
@@ -33,10 +30,6 @@ impl ChatParser {
                 let (session, messages) = parser.parse().await?;
                 Ok(vec![(session, messages)])
             }
-            ChatParser::CursorAgent(parser) => {
-                let (session, messages) = parser.parse().await?;
-                Ok(vec![(session, messages)])
-            }
             ChatParser::GeminiCLI(parser) => parser.parse().await,
         }
     }
@@ -48,7 +41,6 @@ impl ChatParser {
         match self {
             ChatParser::ClaudeCode(parser) => parser.parse_streaming(callback).await,
             ChatParser::Codex(parser) => parser.parse_streaming(callback).await,
-            ChatParser::CursorAgent(parser) => parser.parse_streaming(callback).await,
             ChatParser::GeminiCLI(parser) => parser.parse_streaming(callback).await,
         }
     }
@@ -57,7 +49,6 @@ impl ChatParser {
         match self {
             ChatParser::ClaudeCode(_) => Provider::ClaudeCode,
             ChatParser::Codex(_) => Provider::Codex,
-            ChatParser::CursorAgent(_) => Provider::CursorAgent,
             ChatParser::GeminiCLI(_) => Provider::GeminiCLI,
         }
     }
@@ -78,10 +69,6 @@ impl ParserRegistry {
             return Some(Provider::Codex);
         }
 
-        if CursorAgentParser::is_valid_file(path) {
-            return Some(Provider::CursorAgent);
-        }
-
         if GeminiCLIParser::is_valid_file(path) {
             return Some(Provider::GeminiCLI);
         }
@@ -95,10 +82,6 @@ impl ParserRegistry {
 
         if file_name.contains("claude") || file_name.contains("anthropic") {
             return Some(Provider::ClaudeCode);
-        }
-
-        if file_name.contains("cursor") {
-            return Some(Provider::CursorAgent);
         }
 
         if file_name.contains("gemini")
@@ -138,7 +121,6 @@ impl ParserRegistry {
         match provider {
             Provider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
             Provider::Codex => Ok(ChatParser::Codex(CodexParser::new(file_path))),
-            Provider::CursorAgent => Ok(ChatParser::CursorAgent(CursorAgentParser::new(file_path))),
             Provider::GeminiCLI => Ok(ChatParser::GeminiCLI(GeminiCLIParser::new(file_path))),
             Provider::All => Err(anyhow!(
                 "'All' is a CLI-only provider and cannot be used for parsing"
@@ -152,12 +134,7 @@ impl ParserRegistry {
     }
 
     pub fn get_supported_providers() -> Vec<Provider> {
-        vec![
-            Provider::ClaudeCode,
-            Provider::Codex,
-            Provider::CursorAgent,
-            Provider::GeminiCLI,
-        ]
+        vec![Provider::ClaudeCode, Provider::Codex, Provider::GeminiCLI]
     }
 
     pub async fn parse_file(
@@ -249,14 +226,6 @@ mod tests {
         let gemini_file = temp_dir.path().join("gemini_export.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
-        // Create Cursor test structure
-        let cursor_chats = temp_dir.path().join("chats");
-        let cursor_hash = cursor_chats.join("53460df9022de1a66445a5b78b067dd9");
-        let cursor_uuid = cursor_hash.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
-        fs::create_dir_all(&cursor_uuid).unwrap();
-        let cursor_file = cursor_uuid.join("store.db");
-        fs::write(&cursor_file, "").unwrap();
-
         assert_eq!(
             ParserRegistry::detect_provider(&claude_file),
             Some(Provider::ClaudeCode)
@@ -264,10 +233,6 @@ mod tests {
         assert_eq!(
             ParserRegistry::detect_provider(&gemini_file),
             Some(Provider::GeminiCLI)
-        );
-        assert_eq!(
-            ParserRegistry::detect_provider(&cursor_file),
-            Some(Provider::CursorAgent)
         );
     }
 
@@ -282,26 +247,17 @@ mod tests {
         let gemini_file = temp_dir.path().join("gemini.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
-        // Create Cursor test structure
-        let cursor_chats = temp_dir.path().join("chats");
-        let cursor_hash = cursor_chats.join("53460df9022de1a66445a5b78b067dd9");
-        let cursor_uuid = cursor_hash.join("557abc41-6f00-41e7-bf7b-696c80d4ee94");
-        fs::create_dir_all(&cursor_uuid).unwrap();
-        let cursor_file = cursor_uuid.join("store.db");
-        fs::write(&cursor_file, "").unwrap();
-
         let unknown_file = temp_dir.path().join("unknown.txt");
         fs::write(&unknown_file, "some text").unwrap();
 
         let result = ParserRegistry::scan_directory(temp_dir.path(), true, None).unwrap();
 
-        // Should find 3 files (claude, gemini, and cursor)
-        assert_eq!(result.len(), 3);
+        // Should find 2 files (claude and gemini)
+        assert_eq!(result.len(), 2);
 
         let providers: Vec<_> = result.iter().map(|(_, p)| p.clone()).collect();
         assert!(providers.contains(&Provider::ClaudeCode));
         assert!(providers.contains(&Provider::GeminiCLI));
-        assert!(providers.contains(&Provider::CursorAgent));
     }
 
     #[test]
@@ -313,7 +269,6 @@ mod tests {
 
         let providers = ParserRegistry::get_supported_providers();
         assert!(providers.contains(&Provider::ClaudeCode));
-        assert!(providers.contains(&Provider::CursorAgent));
         assert!(providers.contains(&Provider::GeminiCLI));
     }
 }

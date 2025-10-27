@@ -46,14 +46,14 @@ cargo check && cargo test && cargo clippy
 cargo run -- tui                                      # Launch TUI interface
 
 # Import commands
-cargo run -- import claude cursor                     # Import from provider directories
-cargo run -- import gemini codex                      # Import from other providers
+cargo run -- import claude gemini                     # Import from provider directories
+cargo run -- import codex                             # Import from other providers
 cargo run -- import --path /path/to/files             # Import from specific path
 cargo run -- import --path /path/to/file.jsonl        # Import a single file
 
 # Watch commands
 cargo run -- watch all --verbose                      # Watch all providers with detailed output
-cargo run -- watch claude cursor --verbose            # Watch specific providers
+cargo run -- watch claude gemini --verbose            # Watch specific providers
 cargo run -- watch --path /path/to/files --verbose    # Watch specific path
 
 # Analytics commands
