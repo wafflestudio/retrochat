@@ -81,8 +81,8 @@ pub enum Commands {
     },
     /// Analyze usage data
     Analyze {
-        #[command(subcommand)]
-        command: AnalyzeCommands,
+        /// Session ID to analyze (optional - will prompt if not provided)
+        session_id: Option<String>,
     },
     /// Query sessions and search messages
     Query {
@@ -135,20 +135,6 @@ pub enum Commands {
     Review {
         /// Session ID to review (optional, will prompt if not provided)
         session_id: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum AnalyzeCommands {
-    /// Generate usage insights
-    Insights,
-    /// Export analytics data
-    Export {
-        /// Export format (json, csv, txt)
-        format: String,
-        /// Output file path (optional)
-        #[arg(short, long)]
-        output: Option<String>,
     },
 }
 
@@ -265,12 +251,9 @@ impl Cli {
                     verbose,
                     import,
                 } => watch::handle_watch_command(path, providers, verbose, import).await,
-                Commands::Analyze { command } => match command {
-                    AnalyzeCommands::Insights => analytics::handle_insights_command().await,
-                    AnalyzeCommands::Export { format, output } => {
-                        analytics::handle_export_command(format, output).await
-                    }
-                },
+                Commands::Analyze { session_id } => {
+                    analytics::handle_analyze_command(session_id).await
+                }
                 Commands::Query { command } => match command {
                     QueryCommands::Sessions {
                         page,
