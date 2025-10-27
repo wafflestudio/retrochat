@@ -44,7 +44,7 @@ fn test_add_command_with_path() {
 fn test_add_command_with_providers() {
     let add_cmd = Commands::Add {
         path: None,
-        providers: vec![Provider::ClaudeCode, Provider::CursorAgent],
+        providers: vec![Provider::ClaudeCode, Provider::GeminiCLI],
         overwrite: false,
     };
 
@@ -52,7 +52,7 @@ fn test_add_command_with_providers() {
         Commands::Add { providers, .. } => {
             assert_eq!(providers.len(), 2);
             assert_eq!(providers[0], Provider::ClaudeCode);
-            assert_eq!(providers[1], Provider::CursorAgent);
+            assert_eq!(providers[1], Provider::GeminiCLI);
         }
         _ => panic!("Expected Add command"),
     }

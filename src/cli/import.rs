@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use crate::cli::help;
 use crate::database::DatabaseManager;
-use crate::models::provider::config::{
-    ClaudeCodeConfig, CodexConfig, CursorAgentConfig, GeminiCliConfig,
-};
+use crate::models::provider::config::{ClaudeCodeConfig, CodexConfig, GeminiCliConfig};
 use crate::models::Provider;
 use crate::services::ImportService;
 
@@ -94,19 +92,6 @@ async fn import_providers(providers: Vec<Provider>, overwrite: bool) -> Result<(
                 .await
                 {
                     eprintln!("Error importing Codex directories: {e}");
-                } else {
-                    imported_any = true;
-                }
-                println!();
-            }
-            Provider::CursorAgent => {
-                println!("Importing from Cursor directories...");
-                if let Err(e) = CursorAgentConfig::import_directories(overwrite, |path, ow| {
-                    Box::pin(import_batch(path, ow))
-                })
-                .await
-                {
-                    eprintln!("Error importing Cursor directories: {e}");
                 } else {
                     imported_any = true;
                 }
