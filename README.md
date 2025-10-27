@@ -94,8 +94,8 @@ retrochat watch claude gemini --verbose
 # Watch a specific path
 retrochat watch --path /path/to/chat/directory --verbose
 
-# Use with make
-make watch
+# Use with cargo alias
+cargo watch
 ```
 
 The watch command monitors file changes and displays:
@@ -225,32 +225,51 @@ The application stores:
 
 ### Build and Test
 
-The project includes a Makefile for convenient development workflows that replicate CI checks locally:
+The project uses cargo aliases and shell scripts for development workflows:
+
+#### Cargo Aliases
 
 ```bash
-# Show all available commands
-make help
+# Short aliases for common commands
+cargo t              # Run test suite (test --verbose)
+cargo c              # Cargo check (check --verbose)
+cargo b              # Cargo build
+cargo br             # Cargo build --release
 
-# Run full CI validation locally (format check, clippy, tests)
-make ci
+# Code quality
+cargo fmt-check      # Check formatting (fmt --all -- --check)
+cargo fmt-fix        # Apply formatting (fmt --all)
+cargo clippy-strict  # Run clippy with -D warnings
 
-# Individual checks
-make fmt           # Check code formatting
-make clippy        # Run clippy with strict warnings
-make test          # Run all tests
-
-# Quick fixes
-make fmt-fix       # Auto-format code
-make clippy-fix    # Auto-fix clippy issues
-make fix           # Auto-format + auto-fix clippy + verify
-
-# Build commands
-make check         # Quick compilation check
-make build         # Debug build
-make build-release # Optimized release build
+# Application shortcuts
+cargo tui            # Launch TUI interface
+cargo watch          # Watch all providers with verbose output
+cargo init           # Initialize retrochat
 ```
 
-You can also use cargo directly:
+#### Shell Scripts
+
+```bash
+# Full CI validation (format check, clippy, tests)
+./scripts/ci.sh
+
+# Auto-format + auto-fix clippy + verify
+./scripts/fix.sh
+
+# Apply clippy auto-fixes
+./scripts/clippy-fix.sh
+
+# Remove retrochat database files
+./scripts/clean-db.sh
+
+# Check system dependencies (rustc, cargo, python)
+./scripts/doctor.sh
+
+# Run end-to-end tests
+./scripts/e2e.sh
+```
+
+You can also use cargo commands directly:
 
 ```bash
 # Check code quality
