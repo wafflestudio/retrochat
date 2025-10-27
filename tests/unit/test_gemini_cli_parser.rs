@@ -273,3 +273,154 @@ async fn test_gemini_parser_filename_session_id() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_gemini_parser_tool_operations() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+
+    // Create a file with session-*.json pattern
+    let test_file = base_path.join("session-2025-10-23T08-55-test.json");
+
+    // Create sample data with tool calls
+    // Note: Using concat to avoid raw string escaping issues
+    let sample_data = r#"[{"id":"msg-1","timestamp":"2024-01-01T10:00:00Z","type":"user","content":"Please edit the file"},{"id":"msg-2","timestamp":"2024-01-01T10:01:00Z","type":"gemini","content":"edit","toolCalls":[{"id":"replace-123","name":"replace","args":{"old_string":"hello","new_string":"goodbye","file_path":"/test/file.txt"},"result":[{"functionResponse":{"id":"replace-123","name":"replace","response":{"output":"Successfully modified file: /test/file.txt"}}}],"status":"success","timestamp":"2024-01-01T10:01:30Z"}]},{"id":"msg-3","timestamp":"2024-01-01T10:02:00Z","type":"gemini","content":"bash","toolCalls":[{"id":"bash-456","name":"run_shell_command","args":{"command":"ls -la"},"result":[{"functionResponse":{"id":"bash-456","name":"run_shell_command","response":{"output":"total 0"}}}],"status":"success","timestamp":"2024-01-01T10:02:30Z"}]},{"id":"msg-4","timestamp":"2024-01-01T10:03:00Z","type":"gemini","content":"read","toolCalls":[{"id":"read-789","name":"read_file","args":{"file_path":"/test/config.json"},"result":[{"functionResponse":{"id":"read-789","name":"read_file","response":{"output":"config data"}}}],"status":"success","timestamp":"2024-01-01T10:03:30Z"}]}]"#;
+
+    fs::write(&test_file, sample_data).unwrap();
+
+    let parser = GeminiCLIParser::new(&test_file);
+    let result = parser.parse().await;
+
+    if let Err(e) = &result {
+        eprintln!("Parse error: {:?}", e);
+    }
+    assert!(result.is_ok());
+    let sessions = result.unwrap();
+
+    assert_eq!(sessions.len(), 1);
+
+    let (session, messages) = &sessions[0];
+    assert_eq!(session.provider, Provider::GeminiCLI);
+    assert_eq!(session.message_count, 4);
+    assert_eq!(messages.len(), 4);
+
+    // Check first message has no tools
+    assert!(messages[0].tool_uses.is_none());
+    assert!(messages[0].tool_results.is_none());
+
+    // Check second message has Edit tool
+    let msg2_tool_uses = messages[1].tool_uses.as_ref().unwrap();
+    let msg2_tool_results = messages[1].tool_results.as_ref().unwrap();
+    assert_eq!(msg2_tool_uses.len(), 1);
+    assert_eq!(msg2_tool_results.len(), 1);
+    assert_eq!(msg2_tool_uses[0].name, "Edit"); // Normalized from "replace"
+    assert_eq!(msg2_tool_uses[0].id, "replace-123");
+    assert_eq!(msg2_tool_results[0].tool_use_id, "replace-123");
+    assert_eq!(msg2_tool_results[0].is_error, false);
+    assert!(msg2_tool_results[0]
+        .content
+        .contains("Successfully modified"));
+
+    // Check third message has Bash tool
+    let msg3_tool_uses = messages[2].tool_uses.as_ref().unwrap();
+    let msg3_tool_results = messages[2].tool_results.as_ref().unwrap();
+    assert_eq!(msg3_tool_uses.len(), 1);
+    assert_eq!(msg3_tool_results.len(), 1);
+    assert_eq!(msg3_tool_uses[0].name, "Bash"); // Normalized from "run_shell_command"
+    assert_eq!(msg3_tool_uses[0].id, "bash-456");
+    assert!(msg3_tool_results[0].content.contains("total"));
+
+    // Check fourth message has Read tool
+    let msg4_tool_uses = messages[3].tool_uses.as_ref().unwrap();
+    let msg4_tool_results = messages[3].tool_results.as_ref().unwrap();
+    assert_eq!(msg4_tool_uses.len(), 1);
+    assert_eq!(msg4_tool_results.len(), 1);
+    assert_eq!(msg4_tool_uses[0].name, "Read"); // Normalized from "read_file"
+    assert_eq!(msg4_tool_uses[0].id, "read-789");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_gemini_parser_tool_name_normalization() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+    let test_file = base_path.join("session-test-tool-norm.json");
+
+    // Test various tool names get normalized correctly
+    let sample_data = r#"[
+        {"id":"msg-1","timestamp":"2024-01-01T10:00:00Z","type":"gemini","content":"Tools","toolCalls":[
+            {"id":"1","name":"replace","args":{},"status":"success"},
+            {"id":"2","name":"run_shell_command","args":{},"status":"success"},
+            {"id":"3","name":"read_file","args":{},"status":"success"},
+            {"id":"4","name":"write_file","args":{},"status":"success"},
+            {"id":"5","name":"write_to_file","args":{},"status":"success"},
+            {"id":"6","name":"some_unknown_tool","args":{},"status":"success"}
+        ]}
+    ]"#;
+
+    fs::write(&test_file, sample_data).unwrap();
+
+    let parser = GeminiCLIParser::new(&test_file);
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let sessions = result.unwrap();
+    let (_, messages) = &sessions[0];
+
+    let tool_uses = messages[0].tool_uses.as_ref().unwrap();
+    assert_eq!(tool_uses.len(), 6);
+
+    // Check name normalization
+    assert_eq!(tool_uses[0].name, "Edit");
+    assert_eq!(tool_uses[1].name, "Bash");
+    assert_eq!(tool_uses[2].name, "Read");
+    assert_eq!(tool_uses[3].name, "Write");
+    assert_eq!(tool_uses[4].name, "Write");
+    assert_eq!(tool_uses[5].name, "Some_unknown_tool"); // Capitalized
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_gemini_parser_tool_error_status() -> Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let base_path = temp_dir.path();
+    let test_file = base_path.join("session-test-tool-error.json");
+
+    // Test error status detection
+    let sample_data = r#"[
+        {"id":"msg-1","timestamp":"2024-01-01T10:00:00Z","type":"gemini","content":"Error test","toolCalls":[
+            {
+                "id":"err-1","name":"replace","args":{},"status":"failed",
+                "result":[{"functionResponse":{"id":"err-1","name":"replace","response":{"output":"Error: file not found"}}}]
+            },
+            {
+                "id":"ok-1","name":"replace","args":{},"status":"success",
+                "result":[{"functionResponse":{"id":"ok-1","name":"replace","response":{"output":"Success"}}}]
+            }
+        ]}
+    ]"#;
+
+    fs::write(&test_file, sample_data).unwrap();
+
+    let parser = GeminiCLIParser::new(&test_file);
+    let result = parser.parse().await;
+
+    assert!(result.is_ok());
+    let sessions = result.unwrap();
+    let (_, messages) = &sessions[0];
+
+    let tool_results = messages[0].tool_results.as_ref().unwrap();
+    assert_eq!(tool_results.len(), 2);
+
+    // First result should be marked as error
+    assert_eq!(tool_results[0].is_error, true);
+    assert!(tool_results[0].content.contains("Error"));
+
+    // Second result should be marked as success
+    assert_eq!(tool_results[1].is_error, false);
+    assert!(tool_results[1].content.contains("Success"));
+
+    Ok(())
+}
