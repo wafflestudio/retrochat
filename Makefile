@@ -33,7 +33,7 @@ help:
 	@echo "  make build           - Cargo build"
 	@echo "  make build-release   - Cargo build --release"
 	@echo "  make clean           - Remove build artifacts"
-	@echo "  make clean-db        - Remove retrochat database (~/.retrochat/retrochat.db)"
+	@echo "  make clean-db        - Remove retrochat database files (~/.retrochat/retrochat.db*)"
 	@echo "  make generate-example - Generate example files from provider directories"
 	@echo "  make e2e-import      - Generate and import example files from all providers"
 	@echo "  make e2e             - Run end-to-end tests"
@@ -81,9 +81,12 @@ clean:
 	$(CARGO_BIN) clean
 
 clean-db:
-	@echo "Removing retrochat database..."
-	@rm -f ~/.retrochat/retrochat.db
-	@echo "Database removed: ~/.retrochat/retrochat.db"
+	@echo "Removing retrochat database and related files..."
+	@rm -f ~/.retrochat/retrochat.db ~/.retrochat/retrochat.db-wal ~/.retrochat/retrochat.db-shm
+	@echo "Database files removed:"
+	@echo "  - ~/.retrochat/retrochat.db"
+	@echo "  - ~/.retrochat/retrochat.db-wal"
+	@echo "  - ~/.retrochat/retrochat.db-shm"
 
 generate-example:
 	@python3 scripts/generate-example.py
