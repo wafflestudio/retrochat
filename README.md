@@ -184,24 +184,6 @@ This provides:
 - Session duration statistics
 - Top projects by usage
 
-#### Export Data
-
-Export analytics data in various formats:
-
-```bash
-# Export to JSON (default format)
-retrochat analyze export json
-
-# Export to CSV
-retrochat analyze export csv
-
-# Export to text file
-retrochat analyze export txt
-
-# Export to specific file
-retrochat analyze export json --output my_analysis.json
-```
-
 ## Supported Chat Providers
 
 RetroChat currently supports importing from:
