@@ -9,8 +9,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  validate-version:
+    name: Validate version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Git tag version: $VERSION"
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./npm/package.json').version")
+          echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "Package.json version: $PACKAGE_VERSION"
+
+      - name: Validate versions match
+        run: |
+          if [ "${{ steps.get_version.outputs.version }}" != "${{ steps.package_version.outputs.package_version }}" ]; then
+            echo "Error: Git tag version (${{ steps.get_version.outputs.version }}) does not match package.json version (${{ steps.package_version.outputs.package_version }})"
+            exit 1
+          fi
+          echo "Version validation successful: ${{ steps.get_version.outputs.version }}"
+
   build-binaries:
     name: Build ${{ matrix.platform }}
+    needs: validate-version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -76,7 +107,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: build-binaries
+    needs: [validate-version, build-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,19 +140,10 @@ jobs:
           # Verify all binaries are present
           ls -lh npm/vendor/*/retrochat/
 
-      # Extract version from tag
-      - name: Get version from tag
-        id: get_version
+      # Use version from validation job
+      - name: Set version variable
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Publishing version: $VERSION"
-
-      # Update package.json version
-      - name: Update package version
-        run: |
-          cd npm
-          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+          echo "Publishing version: ${{ needs.validate-version.outputs.version }}"
 
       # Setup Node.js
       - uses: actions/setup-node@v4
@@ -141,7 +163,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ steps.get_version.outputs.version }}
+          name: Release ${{ needs.validate-version.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
