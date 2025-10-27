@@ -4,6 +4,14 @@ use retrochat::logging::LoggingConfig;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
+    // Load environment variables from .env file if it exists
+    if let Err(e) = dotenvy::dotenv() {
+        // Only warn if .env file exists but couldn't be loaded
+        if std::path::Path::new(".env").exists() {
+            eprintln!("Warning: Could not load .env file: {e}");
+        }
+    }
+
     let cli = Cli::parse();
 
     // Configure logging based on command

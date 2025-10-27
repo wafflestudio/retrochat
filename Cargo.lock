@@ -2126,6 +2126,7 @@ dependencies = [
  "criterion",
  "crossterm 0.27.0",
  "dirs",
+ "dotenvy",
  "flate2",
  "futures",
  "hex",

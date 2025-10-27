@@ -1,6 +1,6 @@
 use ratatui::widgets::ScrollbarState;
 
-use crate::models::{ChatSession, Message, Retrospection};
+use crate::models::{ChatSession, Flowchart, Message, Retrospection};
 
 /// State for the session detail view
 #[derive(Debug)]
@@ -11,6 +11,8 @@ pub struct SessionDetailState {
     pub messages: Vec<Message>,
     /// Retrospection analyses for this session
     pub retrospections: Vec<Retrospection>,
+    /// Flowchart for this session
+    pub flowchart: Option<Flowchart>,
     /// Currently selected session ID
     pub session_id: Option<String>,
     /// Scrollbar state for messages
@@ -19,12 +21,18 @@ pub struct SessionDetailState {
     pub current_scroll: usize,
     /// Scroll position for retrospection panel
     pub retrospection_scroll: usize,
+    /// Scroll position for flowchart panel
+    pub flowchart_scroll: usize,
     /// Loading indicator
     pub loading: bool,
+    /// Whether flowchart is currently being generated
+    pub flowchart_loading: bool,
     /// Whether to wrap message text
     pub message_wrap: bool,
     /// Whether to show the retrospection panel
     pub show_retrospection: bool,
+    /// Whether to show the flowchart panel
+    pub show_flowchart: bool,
     /// Whether to show detailed tool output (expanded view)
     pub show_tool_details: bool,
 }
@@ -36,13 +44,17 @@ impl SessionDetailState {
             session: None,
             messages: Vec::new(),
             retrospections: Vec::new(),
+            flowchart: None,
             session_id: None,
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
             retrospection_scroll: 0,
+            flowchart_scroll: 0,
             loading: false,
+            flowchart_loading: false,
             message_wrap: true,
             show_retrospection: false,
+            show_flowchart: false,
             show_tool_details: false,
         }
     }
@@ -55,8 +67,10 @@ impl SessionDetailState {
             self.session = None;
             self.messages.clear();
             self.retrospections.clear();
+            self.flowchart = None;
             self.current_scroll = 0;
             self.retrospection_scroll = 0;
+            self.flowchart_scroll = 0;
         }
     }
 
@@ -130,6 +144,22 @@ impl SessionDetailState {
     /// Toggle tool details visibility
     pub fn toggle_tool_details(&mut self) {
         self.show_tool_details = !self.show_tool_details;
+    }
+
+    /// Toggle flowchart panel visibility
+    pub fn toggle_flowchart(&mut self) {
+        self.show_flowchart = !self.show_flowchart;
+    }
+
+    /// Update flowchart data
+    pub fn update_flowchart(&mut self, flowchart: Option<Flowchart>) {
+        self.flowchart = flowchart;
+        self.flowchart_loading = false;
+    }
+
+    /// Mark flowchart as loading
+    pub fn set_flowchart_loading(&mut self, loading: bool) {
+        self.flowchart_loading = loading;
     }
 
     /// Update the scrollbar state

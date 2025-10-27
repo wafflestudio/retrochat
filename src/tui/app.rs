@@ -16,7 +16,7 @@ use tokio::time::timeout;
 use crate::database::DatabaseManager;
 use crate::env::apis as env_vars;
 use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use crate::services::{AnalyticsService, QueryService, RetrospectionService};
+use crate::services::{AnalyticsService, FlowchartService, QueryService, RetrospectionService};
 
 use super::{
     analytics::AnalyticsWidget,
@@ -146,6 +146,7 @@ pub struct App {
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
     pub retrospection_service: Option<Arc<RetrospectionService>>,
+    pub flowchart_service: Option<Arc<FlowchartService>>,
     pub event_handler: EventHandler,
 }
 
@@ -154,19 +155,23 @@ impl App {
         let query_service = QueryService::with_database(db_manager.clone());
         let analytics_service = AnalyticsService::new((*db_manager).clone());
 
-        // Try to create retrospection service if Google AI API key is available
-        let retrospection_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
-            let config = GoogleAiConfig::default();
-            match GoogleAiClient::new(config) {
-                Ok(client) => Some(Arc::new(RetrospectionService::new(
-                    db_manager.clone(),
-                    client,
-                ))),
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
+        // Try to create retrospection and flowchart services if Google AI API key is available
+        let (retrospection_service, flowchart_service) =
+            if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
+                let config = GoogleAiConfig::default();
+                match GoogleAiClient::new(config) {
+                    Ok(client) => (
+                        Some(Arc::new(RetrospectionService::new(
+                            db_manager.clone(),
+                            client.clone(),
+                        ))),
+                        Some(Arc::new(FlowchartService::new(db_manager.clone(), client))),
+                    ),
+                    Err(_) => (None, None),
+                }
+            } else {
+                (None, None)
+            };
 
         Ok(Self {
             state: AppState::new(),
@@ -176,6 +181,7 @@ impl App {
             query_service,
             analytics_service,
             retrospection_service,
+            flowchart_service,
             event_handler: EventHandler::new(),
         })
     }
@@ -379,6 +385,14 @@ impl App {
             SessionDetailToggleRetrospection => {
                 self.session_detail.state.toggle_retrospection();
             }
+            SessionDetailToggleFlowchart => {
+                self.session_detail.state.toggle_flowchart();
+                if self.session_detail.state.show_flowchart {
+                    if let Some(session_id) = self.session_detail.state.session_id.clone() {
+                        self.session_detail.load_flowchart_cached(&session_id).await;
+                    }
+                }
+            }
 
             // Analytics actions
             AnalyticsNavigate(_direction) => {
@@ -398,9 +412,9 @@ impl App {
     }
 
     async fn handle_start_analysis(&mut self, session_id: String) -> Result<()> {
-        if let Some(ref service) = self.retrospection_service {
-            // Start actual analysis
-            match service
+        if let Some(ref retro_service) = self.retrospection_service {
+            // Start retrospection analysis
+            match retro_service
                 .create_analysis_request(session_id.clone(), None, None)
                 .await
             {
@@ -412,19 +426,33 @@ impl App {
                         tracing::error!(error = %e, "Failed to refresh session list after analysis start");
                     }
 
-                    // Execute the analysis in background task
-                    let service_clone = service.clone();
+                    // Execute retrospection analysis in background task
+                    let service_clone = retro_service.clone();
                     let request_id = request.id.clone();
                     task::spawn(async move {
                         if let Err(e) = service_clone.execute_analysis(request_id).await {
-                            tracing::error!(error = %e, "Background analysis failed");
+                            tracing::error!(error = %e, "Background retrospection analysis failed");
                         }
                     });
                 }
                 Err(e) => {
                     self.state
-                        .show_error(format!("Failed to start analysis: {e}"));
+                        .show_error(format!("Failed to start retrospection: {e}"));
                 }
+            }
+
+            // Also start flowchart generation if service is available
+            if let Some(ref flowchart_service) = self.flowchart_service {
+                let flowchart_service_clone = flowchart_service.clone();
+                let session_id_clone = session_id.clone();
+                task::spawn(async move {
+                    if let Err(e) = flowchart_service_clone
+                        .generate_flowchart(&session_id_clone)
+                        .await
+                    {
+                        tracing::error!(error = %e, "Background flowchart generation failed");
+                    }
+                });
             }
         } else {
             // Show message that Google AI API key is required
