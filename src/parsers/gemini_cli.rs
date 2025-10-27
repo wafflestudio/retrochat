@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::{ChatSession, Message, MessageRole};
+use crate::models::{ChatSession, Message, MessageRole, ToolResult, ToolUse};
 use crate::models::{Provider, SessionState};
 use crate::parsers::project_inference::ProjectInference;
 
@@ -49,6 +49,8 @@ pub struct GeminiSessionMessage {
     pub thoughts: Option<Vec<GeminiThought>>,
     pub tokens: Option<GeminiTokens>,
     pub model: Option<String>,
+    #[serde(rename = "toolCalls")]
+    pub tool_calls: Option<Vec<GeminiToolCall>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,6 +68,32 @@ pub struct GeminiTokens {
     pub thoughts: u32,
     pub tool: u32,
     pub total: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiToolCall {
+    pub id: String,
+    pub name: String,
+    pub args: Value,
+    pub result: Option<Vec<GeminiFunctionResponse>>,
+    pub status: Option<String>,
+    pub timestamp: Option<String>,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiFunctionResponse {
+    #[serde(rename = "functionResponse")]
+    pub function_response: GeminiFunctionResponseData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiFunctionResponseData {
+    pub id: String,
+    pub name: String,
+    pub response: Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -457,6 +485,76 @@ impl GeminiCLIParser {
         Ok(results)
     }
 
+    /// Normalize Gemini tool names to standard retrochat tool names
+    fn normalize_tool_name(gemini_name: &str) -> String {
+        match gemini_name {
+            "replace" => "Edit".to_string(),
+            "run_shell_command" => "Bash".to_string(),
+            "read_file" => "Read".to_string(),
+            "write_file" | "write_to_file" => "Write".to_string(),
+            _ => {
+                // Capitalize first letter for unknown tools
+                let mut chars = gemini_name.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().chain(chars).collect(),
+                }
+            }
+        }
+    }
+
+    /// Extract tool operations from Gemini toolCalls
+    /// Returns (tool_uses, tool_results)
+    fn extract_tool_operations(
+        &self,
+        tool_calls: &[GeminiToolCall],
+    ) -> (Vec<ToolUse>, Vec<ToolResult>) {
+        let mut tool_uses = Vec::new();
+        let mut tool_results = Vec::new();
+
+        for tool_call in tool_calls {
+            // Create ToolUse
+            let normalized_name = Self::normalize_tool_name(&tool_call.name);
+            tool_uses.push(ToolUse {
+                id: tool_call.id.clone(),
+                name: normalized_name.clone(),
+                input: tool_call.args.clone(),
+                raw: serde_json::to_value(tool_call).unwrap_or(Value::Null),
+            });
+
+            // Extract ToolResult if available
+            if let Some(results) = &tool_call.result {
+                for func_response in results {
+                    let response_data = &func_response.function_response;
+
+                    // Extract content from response
+                    let content = if let Some(output) = response_data.response.get("output") {
+                        output.as_str().unwrap_or_default().to_string()
+                    } else {
+                        serde_json::to_string(&response_data.response).unwrap_or_default()
+                    };
+
+                    // Check if it's an error based on status
+                    let is_error = tool_call
+                        .status
+                        .as_ref()
+                        .map(|s| s != "success")
+                        .unwrap_or(false);
+
+                    tool_results.push(ToolResult {
+                        tool_use_id: tool_call.id.clone(),
+                        content,
+                        is_error,
+                        details: Some(response_data.response.clone()),
+                        raw: serde_json::to_value(func_response).unwrap_or(Value::Null),
+                    });
+                }
+            }
+        }
+
+        (tool_uses, tool_results)
+    }
+
     fn convert_session_message(
         &self,
         session_message: &GeminiSessionMessage,
@@ -497,6 +595,13 @@ impl GeminiCLIParser {
         );
 
         message.id = message_id;
+
+        // Extract tool operations if present
+        if let Some(tool_calls) = &session_message.tool_calls {
+            let (tool_uses, tool_results) = self.extract_tool_operations(tool_calls);
+            message.tool_uses = Some(tool_uses);
+            message.tool_results = Some(tool_results);
+        }
 
         // Use actual token count if available
         if let Some(tokens) = &session_message.tokens {
