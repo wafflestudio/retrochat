@@ -23,9 +23,6 @@ pub mod providers {
     /// Gemini CLI chat history directories (colon-separated)
     pub const GEMINI_DIRS: &str = "RETROCHAT_GEMINI_DIRS";
 
-    /// Cursor Agent chat history directories (colon-separated)
-    pub const CURSOR_DIRS: &str = "RETROCHAT_CURSOR_DIRS";
-
     /// Codex chat history directories (colon-separated)
     pub const CODEX_DIRS: &str = "RETROCHAT_CODEX_DIRS";
 }

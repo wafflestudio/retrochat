@@ -194,7 +194,6 @@ fn format_provider_arg(p: &Provider) -> String {
         Provider::ClaudeCode => "claude".to_string(),
         Provider::GeminiCLI => "gemini".to_string(),
         Provider::Codex => "codex".to_string(),
-        Provider::CursorAgent => "cursor".to_string(),
         Provider::Other(name) => name.clone(),
     }
 }

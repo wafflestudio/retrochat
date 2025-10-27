@@ -3,15 +3,14 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
-fn test_scan_all_returns_four_providers() {
+fn test_scan_all_returns_three_providers() {
     let detected = AutoDetectService::scan_all();
-    assert_eq!(detected.len(), 4, "Should detect all 4 providers");
+    assert_eq!(detected.len(), 3, "Should detect all 3 providers");
 
     // Check that all expected providers are present
     let provider_names: Vec<String> = detected.iter().map(|d| d.provider.to_string()).collect();
 
     assert!(provider_names.contains(&"Claude Code".to_string()));
-    assert!(provider_names.contains(&"Cursor Agent".to_string()));
     assert!(provider_names.contains(&"Gemini CLI".to_string()));
     assert!(provider_names.contains(&"Codex".to_string()));
 }
@@ -44,13 +43,13 @@ fn test_total_sessions_calculation() {
             is_valid: true,
         },
         DetectedProvider {
-            provider: retrochat::models::Provider::CursorAgent,
+            provider: retrochat::models::Provider::GeminiCLI,
             paths: vec![PathBuf::from("/test2")],
             estimated_sessions: 20,
             is_valid: true,
         },
         DetectedProvider {
-            provider: retrochat::models::Provider::GeminiCLI,
+            provider: retrochat::models::Provider::Codex,
             paths: vec![],
             estimated_sessions: 0,
             is_valid: false,
@@ -70,7 +69,7 @@ fn test_pattern_matching_via_detection() {
     let detected = AutoDetectService::scan_all();
 
     // All providers should be detected (even if invalid)
-    assert_eq!(detected.len(), 4);
+    assert_eq!(detected.len(), 3);
 
     // This verifies that pattern matching is working internally
     // as it's used by check_directory
@@ -121,7 +120,7 @@ fn test_empty_valid_providers() {
             is_valid: false,
         },
         DetectedProvider {
-            provider: retrochat::models::Provider::CursorAgent,
+            provider: retrochat::models::Provider::GeminiCLI,
             paths: vec![],
             estimated_sessions: 0,
             is_valid: false,

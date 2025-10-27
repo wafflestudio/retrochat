@@ -31,10 +31,7 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
             Provider::All => {
                 unreachable!("Provider::All should have been expanded")
             }
-            Provider::ClaudeCode
-            | Provider::GeminiCLI
-            | Provider::Codex
-            | Provider::CursorAgent => {
+            Provider::ClaudeCode | Provider::GeminiCLI | Provider::Codex => {
                 if let Some(config) = registry.get_provider(&provider) {
                     let dirs = config.get_import_directories();
                     paths.extend(dirs);

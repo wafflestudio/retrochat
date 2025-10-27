@@ -96,14 +96,6 @@ name = "test_cli_retrospect_cancel"
 path = "tests/contract/test_cli_retrospect_cancel.rs"
 
 [[test]]
-name = "test_cursor_integration"
-path = "tests/contract/test_cursor_integration.rs"
-
-[[test]]
-name = "test_cursor_agent_parser"
-path = "tests/unit/test_cursor_agent_parser.rs"
-
-[[test]]
 name = "test_gemini_cli_parser"
 path = "tests/unit/test_gemini_cli_parser.rs"
 
