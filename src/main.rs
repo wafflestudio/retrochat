@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(e) = dotenvy::dotenv() {
         // Only warn if .env file exists but couldn't be loaded
         if std::path::Path::new(".env").exists() {
-            eprintln!("Warning: Could not load .env file: {}", e);
+            eprintln!("Warning: Could not load .env file: {e}");
         }
     }
 

@@ -71,9 +71,7 @@ async fn generate_flowchart(session_id: &str, force: bool) -> Result<()> {
     if let Some(tokens) = flowchart.token_usage {
         println!("  - {tokens} tokens used");
     }
-    println!(
-        "\nUse 'retrochat flowchart show {session_id}' to view the flowchart"
-    );
+    println!("\nUse 'retrochat flowchart show {session_id}' to view the flowchart");
     Ok(())
 }
 
@@ -119,9 +117,7 @@ async fn show_flowchart(session_id: &str) -> Result<()> {
         Ok(())
     } else {
         println!("No flowchart found for session: {session_id}");
-        println!(
-            "Generate one with: retrochat flowchart generate {session_id}"
-        );
+        println!("Generate one with: retrochat flowchart generate {session_id}");
         Ok(())
     }
 }
