@@ -1,7 +1,5 @@
 # retrochat Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-09-21
-
 ## Active Technologies
 - Rust 1.75+ with Ratatui, SQLite, Serde, Clap, Tokio (001-i-want-to)
 - Rust 1.75+ (from existing project) + Ratatui (TUI), SQLite/SQLx (storage), Serde (serialization), Clap (CLI), Tokio (async), reqwest (HTTP client for Google AI) (002-add-retrospection-process)
@@ -83,12 +81,6 @@ cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
 
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
-
-## Recent Changes
-- 002-add-retrospection-process: COMPLETED - Added retrospection analysis with Google AI integration, CLI interface (execute/show/status/cancel), simplified approach without complex background operations
-- 001-i-want-to: Added Rust TUI app for LLM chat history analysis with SQLite persistence
-
-<!-- MANUAL ADDITIONS START -->
 
 ## Development Rules
 

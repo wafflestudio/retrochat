@@ -1,8 +1,8 @@
 use retrochat::cli::analytics::handle_show_command;
 
 #[tokio::test]
-async fn test_retrospect_show_command_structure() {
-    // Test CLI command structure for retrospect show
+async fn test_analytics_show_command_structure() {
+    // Test CLI command structure for analytics show
 
     // Test command execution with session ID
     let result = handle_show_command(
@@ -35,7 +35,7 @@ async fn test_retrospect_show_command_structure() {
 }
 
 #[tokio::test]
-async fn test_retrospect_show_all_formats() {
+async fn test_analytics_show_all_formats() {
     // Test all output formats
     for format in ["text", "json", "markdown"] {
         let result = handle_show_command(
@@ -69,7 +69,7 @@ async fn test_retrospect_show_all_formats() {
 }
 
 #[tokio::test]
-async fn test_retrospect_show_filtering() {
+async fn test_analytics_show_filtering() {
     // Test filtering by analysis type
     let result = handle_show_command(
         None,               // session_id
@@ -101,7 +101,7 @@ async fn test_retrospect_show_filtering() {
 }
 
 #[tokio::test]
-async fn test_retrospect_show_specific_session() {
+async fn test_analytics_show_specific_session() {
     // Test showing results for a specific session
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id

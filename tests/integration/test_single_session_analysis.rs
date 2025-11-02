@@ -8,7 +8,7 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn test_single_session_analysis_workflow() {
     // Integration test for complete single session analysis workflow
-    // This test MUST FAIL until the retrospection service is implemented
+    // This test MUST FAIL until the analytics service is implemented
 
     let _temp_dir = TempDir::new().expect("Failed to create temp directory");
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
@@ -41,9 +41,9 @@ async fn test_single_session_analysis_workflow() {
         Ok(_) => {
             // If successful, try to get the analysis result
             match service.get_analysis_result(request.id.clone()).await {
-                Ok(Some(retrospection)) => {
+                Ok(Some(analytics)) => {
                     // Verify analysis result was stored
-                    assert!(!retrospection.qualitative_output.insights.is_empty());
+                    assert!(!analytics.qualitative_output.insights.is_empty());
                     println!("Analysis completed successfully");
                 }
                 Ok(None) => {

@@ -1,8 +1,8 @@
 use retrochat::cli::analytics::handle_execute_command;
 
 #[tokio::test]
-async fn test_retrospect_execute_command_structure() {
-    // Test CLI command structure for retrospect execute
+async fn test_analytics_execute_command_structure() {
+    // Test CLI command structure for analytics execute
     // This test validates the CLI interface
 
     // Test command execution with session ID
@@ -39,8 +39,8 @@ async fn test_retrospect_execute_command_structure() {
 }
 
 #[tokio::test]
-async fn test_retrospect_execute_all_sessions() {
-    // Test executing retrospection on all sessions
+async fn test_analytics_execute_all_sessions() {
+    // Test executing analytics on all sessions
     let result = handle_execute_command(
         None, // session_id (None when using --all)
         None, // custom_prompt
@@ -72,7 +72,7 @@ async fn test_retrospect_execute_all_sessions() {
 }
 
 #[tokio::test]
-async fn test_retrospect_execute_custom_analysis() {
+async fn test_analytics_execute_custom_analysis() {
     // Test custom analysis type with prompt
     let custom_prompt = "Analytics the coding patterns and provide specific feedback".to_string();
 
@@ -108,7 +108,7 @@ async fn test_retrospect_execute_custom_analysis() {
 }
 
 #[tokio::test]
-async fn test_retrospect_execute_validation() {
+async fn test_analytics_execute_validation() {
     // Test argument validation - neither session_id nor all flag
     let result = handle_execute_command(
         None,  // session_id

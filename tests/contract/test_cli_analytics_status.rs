@@ -1,8 +1,8 @@
 use retrochat::cli::analytics::handle_status_command;
 
 #[tokio::test]
-async fn test_retrospect_status_command_structure() {
-    // Test CLI command structure for retrospect status
+async fn test_analytics_status_command_structure() {
+    // Test CLI command structure for analytics status
 
     // Test command execution
     let result = handle_status_command(
@@ -35,7 +35,7 @@ async fn test_retrospect_status_command_structure() {
 }
 
 #[tokio::test]
-async fn test_retrospect_status_active_only() {
+async fn test_analytics_status_active_only() {
     // Test showing only active operations (same as --all in current implementation)
     let result = handle_status_command(
         true,  // all (shows active operations)
@@ -67,7 +67,7 @@ async fn test_retrospect_status_active_only() {
 }
 
 #[tokio::test]
-async fn test_retrospect_status_history() {
+async fn test_analytics_status_history() {
     // Test showing operation history
     let result = handle_status_command(
         false, // all
@@ -99,7 +99,7 @@ async fn test_retrospect_status_history() {
 }
 
 #[tokio::test]
-async fn test_retrospect_status_watch_mode() {
+async fn test_analytics_status_watch_mode() {
     // Test watch mode (current implementation just shows status once)
     let result = handle_status_command(
         false, // all

@@ -82,20 +82,20 @@ name = "test_google_ai_api"
 path = "tests/contract/test_google_ai_api.rs"
 
 [[test]]
-name = "test_cli_retrospect_execute"
-path = "tests/contract/test_cli_retrospect_execute.rs"
+name = "test_cli_analytics_execute"
+path = "tests/contract/test_cli_analytics_execute.rs"
 
 [[test]]
-name = "test_cli_retrospect_show"
-path = "tests/contract/test_cli_retrospect_show.rs"
+name = "test_cli_analytics_show"
+path = "tests/contract/test_cli_analytics_show.rs"
 
 [[test]]
-name = "test_cli_retrospect_status"
-path = "tests/contract/test_cli_retrospect_status.rs"
+name = "test_cli_analytics_status"
+path = "tests/contract/test_cli_analytics_status.rs"
 
 [[test]]
-name = "test_cli_retrospect_cancel"
-path = "tests/contract/test_cli_retrospect_cancel.rs"
+name = "test_cli_analytics_cancel"
+path = "tests/contract/test_cli_analytics_cancel.rs"
 
 [[test]]
 name = "test_gemini_cli_parser"
@@ -133,10 +133,6 @@ path = "tests/integration/test_single_session_analysis.rs"
 [[test]]
 name = "test_error_handling"
 path = "tests/integration/test_error_handling.rs"
-
-[[test]]
-name = "test_tui_retrospection"
-path = "tests/integration/test_tui_retrospection.rs"
 
 [[test]]
 name = "test_setup_wizard"

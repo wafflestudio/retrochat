@@ -1,13 +1,13 @@
 use retrochat::cli::analytics::handle_cancel_command;
 
 #[tokio::test]
-async fn test_retrospect_cancel_command_structure() {
-    // Test CLI command structure for retrospect cancel
-    // This test MUST FAIL until the retrospect CLI module is implemented
+async fn test_analytics_cancel_command_structure() {
+    // Test CLI command structure for analytics cancel
+    // This test MUST FAIL until the analytics CLI module is implemented
 
     // Test command execution with specific request ID
     let result = handle_cancel_command(
-        Some("retro-123".to_string()), // request_id
+        Some("analytics-123".to_string()), // request_id
         false,                         // all
     )
     .await;
@@ -26,10 +26,10 @@ async fn test_retrospect_cancel_command_structure() {
 }
 
 #[tokio::test]
-async fn test_retrospect_cancel_specific_operations() {
+async fn test_analytics_cancel_specific_operations() {
     // Test cancelling specific operations
     let result = handle_cancel_command(
-        Some("retro-456".to_string()), // request_id
+        Some("analytics-456".to_string()), // request_id
         false,                         // all
     )
     .await;
@@ -50,7 +50,7 @@ async fn test_retrospect_cancel_specific_operations() {
                 error_msg.contains("not found")
                     || error_msg.contains("database")
                     || error_msg.contains("connection")
-                    || error_msg.contains("retro-456")
+                    || error_msg.contains("analytics-456")
                     || error_msg.contains("Failed")
                     || error_msg.contains("No")
                     || error_msg.contains("Configuration")
@@ -61,7 +61,7 @@ async fn test_retrospect_cancel_specific_operations() {
 }
 
 #[tokio::test]
-async fn test_retrospect_cancel_all_operations() {
+async fn test_analytics_cancel_all_operations() {
     // Test cancelling all active operations
     let result = handle_cancel_command(
         None, // request_id (None when using --all)
@@ -95,7 +95,7 @@ async fn test_retrospect_cancel_all_operations() {
 }
 
 #[tokio::test]
-async fn test_retrospect_cancel_validation() {
+async fn test_analytics_cancel_validation() {
     // Test argument validation - neither request_id nor all flag
     let result = handle_cancel_command(
         None,  // request_id
@@ -117,7 +117,7 @@ async fn test_retrospect_cancel_validation() {
 }
 
 #[tokio::test]
-async fn test_retrospect_cancel_nonexistent_operations() {
+async fn test_analytics_cancel_nonexistent_operations() {
     // Test cancelling operations that don't exist
     let result = handle_cancel_command(Some("nonexistent-op-12345".to_string()), false).await;
 
