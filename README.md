@@ -163,6 +163,38 @@ export RETROCHAT_CODEX_DIRS="/path/to/codex/chats"
 
 ### Analytics Commands
 
+#### Session Analytics with AI Analysis
+
+Analyze chat sessions using Google AI to generate comprehensive insights:
+
+```bash
+# Execute analysis for a specific session
+retrochat analytics execute [SESSION_ID]
+
+# Execute analysis for all sessions
+retrochat analytics execute --all
+
+# View analysis results
+retrochat analytics show [SESSION_ID]
+
+# View all analysis results
+retrochat analytics show --all
+
+# Check analysis status
+retrochat analytics status
+
+# Check analysis history
+retrochat analytics status --history
+
+# Cancel an analysis request
+retrochat analytics cancel [REQUEST_ID]
+
+# Cancel all active requests
+retrochat analytics cancel --all
+```
+
+**Note**: Analytics commands require `GOOGLE_AI_API_KEY` environment variable to be set.
+
 #### Generate Usage Insights
 
 Generate comprehensive usage statistics:
@@ -333,6 +365,11 @@ tests/
 
 4. **Generate analytics:**
    ```bash
+   # AI-powered session analysis (requires GOOGLE_AI_API_KEY)
+   retrochat analytics execute --all
+   retrochat analytics show --all
+   
+   # Or generate usage insights
    retrochat analyze insights
    ```
 

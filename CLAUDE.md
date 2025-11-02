@@ -72,11 +72,11 @@ cargo run -- analyze insights                         # Generate usage insights
 cargo run -- analyze export json                      # Export to JSON
 cargo run -- analyze export csv                       # Export to CSV
 
-# Retrospection commands (requires GOOGLE_AI_API_KEY env var)
-cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions
-cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
-cargo run -- retrospect status [--all|--history]      # Check analysis status
-cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
+# Analytics commands (requires GOOGLE_AI_API_KEY env var)
+cargo run -- analytics execute [SESSION_ID] [--all] [--custom-prompt PROMPT]  # Analyze sessions
+cargo run -- analytics show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
+cargo run -- analytics status [--all|--history|--watch]      # Check analysis status
+cargo run -- analytics cancel [REQUEST_ID] [--all]   # Cancel operations
 ```
 
 ## Code Style
@@ -110,7 +110,7 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 
 ### Environment Variable Management
 - **Centralized Constants**: All environment variable names are defined in `src/env.rs`
-- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, retrospection)
+- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, analytics)
 - **Adding New Variables**: When adding or modifying environment variables, always:
   1. Add the constant to the appropriate module in `src/env.rs`
   2. Use the constant throughout the codebase instead of hardcoded strings
