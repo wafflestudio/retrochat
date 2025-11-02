@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::database::{DatabaseManager, RetrospectRequestRepository, RetrospectionRepository};
+use crate::database::{DatabaseManager, RetrospectRequestRepository};
 use crate::models::{OperationStatus, RetrospectRequest, Retrospection};
 use crate::services::analytics_service::AnalyticsService;
 use crate::services::google_ai::GoogleAiClient;
@@ -8,19 +8,16 @@ use crate::services::google_ai::GoogleAiClient;
 pub struct RetrospectionService {
     analytics_service: AnalyticsService,
     request_repo: RetrospectRequestRepository,
-    retrospection_repo: RetrospectionRepository,
 }
 
 impl RetrospectionService {
     pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
-        let retrospection_repo = RetrospectionRepository::new(db_manager.clone());
         let analytics_service = AnalyticsService::new(db_manager).with_google_ai(google_ai_client);
 
         Self {
             analytics_service,
             request_repo,
-            retrospection_repo,
         }
     }
 
@@ -80,10 +77,8 @@ impl RetrospectionService {
         // Perform the analysis synchronously (blocking for CLI, but TUI will handle async)
         match self.perform_analysis(&request).await {
             Ok(retrospection) => {
-                // Save the retrospection result
-                self.retrospection_repo.create(&retrospection).await?;
-
                 // Mark request as completed
+                // Note: retrospection results are now stored via analytics_service
                 request.mark_completed();
                 self.request_repo.update(&request).await?;
 
@@ -135,13 +130,33 @@ impl RetrospectionService {
         &self,
         request_id: String,
     ) -> Result<Option<Retrospection>, Box<dyn std::error::Error + Send + Sync>> {
-        let retrospections = self
-            .retrospection_repo
-            .find_by_request_id(&request_id)
-            .await?;
+        // Get the request to check its status
+        let request = self.request_repo.find_by_id(&request_id).await?
+            .ok_or("Request not found")?;
 
-        // Return the most recent retrospection for this request
-        Ok(retrospections.into_iter().next())
+        // Only return result if the request is completed
+        if !matches!(request.status, OperationStatus::Completed) {
+            return Ok(None);
+        }
+
+        // Note: Retrospection data is now managed by analytics service
+        // For now, if analysis was completed, we can regenerate it on-demand
+        // This could be optimized later by storing results in analytics_repo
+        match self.analytics_service.analyze_session_comprehensive(&request.session_id).await {
+            Ok(analysis) => {
+                let retrospection = Retrospection::from_comprehensive_analysis(
+                    request_id,
+                    analysis,
+                    Some("gemini-pro".to_string()),
+                    None,
+                );
+                Ok(Some(retrospection))
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to regenerate analysis result");
+                Ok(None)
+            }
+        }
     }
 
     pub async fn list_analyses(
@@ -182,16 +197,14 @@ impl RetrospectionService {
     ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let cutoff_date = chrono::Utc::now() - chrono::Duration::days(days_old as i64);
 
-        // Clean up old retrospections first (due to foreign key constraints)
-        let retrospections_deleted = self.retrospection_repo.delete_before(cutoff_date).await?;
-
-        // Then clean up old completed requests
+        // Clean up old completed requests
+        // Note: retrospection data is now managed by analytics_service
         let requests_deleted = self
             .request_repo
             .delete_completed_before(cutoff_date)
             .await?;
 
-        Ok(retrospections_deleted + requests_deleted)
+        Ok(requests_deleted)
     }
 
     async fn perform_analysis(

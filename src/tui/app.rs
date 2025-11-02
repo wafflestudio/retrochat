@@ -376,9 +376,6 @@ impl App {
             SessionDetailToggleWrap => {
                 self.session_detail.state.toggle_wrap();
             }
-            SessionDetailToggleRetrospection => {
-                self.session_detail.state.toggle_retrospection();
-            }
 
             // Analytics actions
             AnalyticsNavigate(_direction) => {

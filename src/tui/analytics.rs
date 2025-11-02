@@ -108,7 +108,6 @@ pub struct AnalyticsWidget {
     current_view: AnalyticsView,
     usage_data: Option<TuiUsageData>,
     insights_data: Option<TuiInsightsData>,
-    analytics_service: AnalyticsService,
     list_state: ListState,
     loading: bool,
     last_refresh: std::time::Instant,

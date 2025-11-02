@@ -1,6 +1,6 @@
 use ratatui::widgets::ScrollbarState;
 
-use crate::models::{ChatSession, Message, Retrospection};
+use crate::models::{ChatSession, Message};
 
 /// State for the session detail view
 #[derive(Debug)]
@@ -9,22 +9,16 @@ pub struct SessionDetailState {
     pub session: Option<ChatSession>,
     /// Messages in this session
     pub messages: Vec<Message>,
-    /// Retrospection analyses for this session
-    pub retrospections: Vec<Retrospection>,
     /// Currently selected session ID
     pub session_id: Option<String>,
     /// Scrollbar state for messages
     pub scroll_state: ScrollbarState,
     /// Current scroll position (line number)
     pub current_scroll: usize,
-    /// Scroll position for retrospection panel
-    pub retrospection_scroll: usize,
     /// Loading indicator
     pub loading: bool,
     /// Whether to wrap message text
     pub message_wrap: bool,
-    /// Whether to show the retrospection panel
-    pub show_retrospection: bool,
     /// Whether to show detailed tool output (expanded view)
     pub show_tool_details: bool,
 }
@@ -35,14 +29,11 @@ impl SessionDetailState {
         Self {
             session: None,
             messages: Vec::new(),
-            retrospections: Vec::new(),
             session_id: None,
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
-            retrospection_scroll: 0,
             loading: false,
             message_wrap: true,
-            show_retrospection: false,
             show_tool_details: false,
         }
     }
@@ -54,9 +45,7 @@ impl SessionDetailState {
             // Clear old data when switching sessions
             self.session = None;
             self.messages.clear();
-            self.retrospections.clear();
             self.current_scroll = 0;
-            self.retrospection_scroll = 0;
         }
     }
 
@@ -76,11 +65,6 @@ impl SessionDetailState {
         if !is_same_session {
             self.current_scroll = 0;
         }
-    }
-
-    /// Update retrospections from query result
-    pub fn update_retrospections(&mut self, retrospections: Vec<Retrospection>) {
-        self.retrospections = retrospections;
     }
 
     /// Scroll up one line
@@ -122,11 +106,6 @@ impl SessionDetailState {
         self.message_wrap = !self.message_wrap;
     }
 
-    /// Toggle retrospection panel visibility
-    pub fn toggle_retrospection(&mut self) {
-        self.show_retrospection = !self.show_retrospection;
-    }
-
     /// Toggle tool details visibility
     pub fn toggle_tool_details(&mut self) {
         self.show_tool_details = !self.show_tool_details;
@@ -154,10 +133,8 @@ mod tests {
         let state = SessionDetailState::new();
         assert!(state.session.is_none());
         assert!(state.messages.is_empty());
-        assert!(state.retrospections.is_empty());
         assert_eq!(state.current_scroll, 0);
         assert!(state.message_wrap);
-        assert!(!state.show_retrospection);
         assert!(!state.show_tool_details);
         assert!(!state.loading);
     }
@@ -166,13 +143,11 @@ mod tests {
     fn test_set_session_id_clears_data() {
         let mut state = SessionDetailState::new();
         state.current_scroll = 10;
-        state.retrospection_scroll = 5;
 
         state.set_session_id(Some("new_session".to_string()));
 
         assert_eq!(state.session_id, Some("new_session".to_string()));
         assert_eq!(state.current_scroll, 0);
-        assert_eq!(state.retrospection_scroll, 0);
     }
 
     #[test]
@@ -231,18 +206,6 @@ mod tests {
 
         state.toggle_wrap();
         assert!(state.message_wrap);
-    }
-
-    #[test]
-    fn test_toggle_retrospection() {
-        let mut state = SessionDetailState::new();
-        assert!(!state.show_retrospection);
-
-        state.toggle_retrospection();
-        assert!(state.show_retrospection);
-
-        state.toggle_retrospection();
-        assert!(!state.show_retrospection);
     }
 
     #[test]

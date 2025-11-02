@@ -6,7 +6,6 @@ pub mod message_repo;
 pub mod migrations;
 pub mod project_repo;
 pub mod retrospect_request_repo;
-pub mod retrospection_repo;
 pub mod schema;
 pub mod tool_operation_repo;
 
@@ -21,7 +20,6 @@ pub use message_repo::MessageRepository;
 pub use migrations::{MigrationManager, MigrationStatus};
 pub use project_repo::ProjectRepository;
 pub use retrospect_request_repo::RetrospectRequestRepository;
-pub use retrospection_repo::RetrospectionRepository;
 pub use schema::{create_schema, SCHEMA_VERSION};
 pub use tool_operation_repo::ToolOperationRepository;
 
@@ -70,10 +68,6 @@ impl Database {
 
     pub fn retrospect_request_repo(&self) -> RetrospectRequestRepository {
         RetrospectRequestRepository::new(std::sync::Arc::new(self.manager.clone()))
-    }
-
-    pub fn retrospection_repo(&self) -> RetrospectionRepository {
-        RetrospectionRepository::new(std::sync::Arc::new(self.manager.clone()))
     }
 
     pub fn tool_operation_repo(&self) -> ToolOperationRepository {

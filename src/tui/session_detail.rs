@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -9,7 +9,7 @@ use ratatui::{
 };
 use std::sync::Arc;
 
-use crate::database::{DatabaseManager, RetrospectionRepository};
+use crate::database::DatabaseManager;
 use crate::models::{Message, MessageRole};
 use crate::services::{MessageGroup, QueryService, SessionDetailRequest};
 
@@ -20,7 +20,6 @@ use super::utils::text::wrap_text;
 pub struct SessionDetailWidget {
     pub state: SessionDetailState,
     query_service: QueryService,
-    retrospection_repo: RetrospectionRepository,
     tool_formatter: ToolDisplayFormatter,
 }
 
@@ -29,7 +28,6 @@ impl SessionDetailWidget {
         Self {
             state: SessionDetailState::new(),
             query_service: QueryService::with_database(db_manager.clone()),
-            retrospection_repo: RetrospectionRepository::new(db_manager),
             tool_formatter: ToolDisplayFormatter::new(),
         }
     }
@@ -59,8 +57,6 @@ impl SessionDetailWidget {
                         .update_session(response.session, response.messages);
                     self.update_scroll_state();
 
-                    // Load retrospection results for this session
-                    self.load_retrospections().await;
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to load session details");
@@ -106,17 +102,6 @@ impl SessionDetailWidget {
             KeyCode::Char('w') => {
                 self.state.toggle_wrap();
             }
-            KeyCode::Char('r') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    // Ctrl+R: Toggle retrospection view
-                    self.state.toggle_retrospection();
-                }
-                // Removed manual refresh - auto-refresh is now handled by the app
-            }
-            KeyCode::Char('t') => {
-                // T: Toggle retrospection view
-                self.state.toggle_retrospection();
-            }
             KeyCode::Char('d') => {
                 // D: Toggle tool details (expand/collapse)
                 self.state.toggle_tool_details();
@@ -145,22 +130,7 @@ impl SessionDetailWidget {
         self.render_session_header(f, chunks[0]);
 
         // Render main content area
-        if self.state.show_retrospection && !self.state.retrospections.is_empty() {
-            // Split horizontally for messages and retrospection
-            let main_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(60), // Messages
-                    Constraint::Percentage(40), // Retrospection
-                ])
-                .split(chunks[1]);
-
-            self.render_messages(f, main_chunks[0]);
-            self.render_retrospections(f, main_chunks[1]);
-        } else {
-            // Full width for messages
-            self.render_messages(f, chunks[1]);
-        }
+        self.render_messages(f, chunks[1]);
     }
 
     fn render_session_header(&self, f: &mut Frame, area: Rect) {
@@ -175,21 +145,14 @@ impl SessionDetailWidget {
                 "Ongoing"
             };
 
-            let retrospection_info = if self.state.retrospections.is_empty() {
-                "No retrospections".to_string()
-            } else {
-                format!("{} retrospections", self.state.retrospections.len())
-            };
-
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | {} | Keys: 'w'=wrap, 't'=retro, 'd'=tool-details",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Keys: 'w'=wrap, 'd'=tool-details",
                 session.provider,
                 project_str,
                 session.message_count,
                 session.token_count.unwrap_or(0),
                 &session.start_time.format("%Y-%m-%d %H:%M").to_string(),
                 session.state,
-                retrospection_info
             )
         } else {
             "No session selected".to_string()
@@ -477,128 +440,5 @@ impl SessionDetailWidget {
     fn update_scroll_state(&mut self) {
         let total_lines = self.get_total_lines();
         self.state.update_scroll_state(total_lines);
-    }
-
-    async fn load_retrospections(&mut self) {
-        if let Some(session_id) = &self.state.session_id.clone() {
-            match self.retrospection_repo.get_by_session_id(session_id).await {
-                Ok(retrospections) => {
-                    self.state.update_retrospections(retrospections);
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Failed to load retrospections");
-                    self.state.update_retrospections(Vec::new());
-                }
-            }
-        }
-    }
-
-    fn render_retrospections(&mut self, f: &mut Frame, area: Rect) {
-        if self.state.retrospections.is_empty() {
-            let empty_msg = Paragraph::new("No retrospection analysis available\n\nUse 'retrochat retrospect execute' to analyze this session")
-                .block(Block::default().borders(Borders::ALL).title("Retrospection"))
-                .style(Style::default().fg(Color::Gray))
-                .wrap(Wrap { trim: true });
-
-            f.render_widget(empty_msg, area);
-            return;
-        }
-
-        // For now, show the most recent retrospection
-        // TODO: Allow user to navigate between multiple retrospections
-        if let Some(retrospection) = self.state.retrospections.first() {
-            let lines = vec![
-                Line::from(vec![Span::styled(
-                    "Retrospection Analysis",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )]),
-                Line::from(""),
-                Line::from(vec![Span::styled(
-                    "Insights:",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )]),
-                Line::from(""),
-            ];
-
-            // Create content from retrospection fields
-            let mut content_lines = Vec::new();
-
-            // Add insights
-            let insights_text = retrospection.get_insights_text();
-            content_lines.extend(insights_text.lines().map(Line::from));
-            content_lines.push(Line::from(""));
-
-            // Add reflection section
-            content_lines.push(Line::from(vec![Span::styled(
-                "Reflection:",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )]));
-            content_lines.push(Line::from(""));
-            let reflection_text = retrospection.get_reflection_text();
-            content_lines.extend(reflection_text.lines().map(Line::from));
-            content_lines.push(Line::from(""));
-
-            // Add recommendations section
-            content_lines.push(Line::from(vec![Span::styled(
-                "Recommendations:",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )]));
-            content_lines.push(Line::from(""));
-            let recommendations_text = retrospection.get_recommendations_text();
-            content_lines.extend(recommendations_text.lines().map(Line::from));
-
-            let all_lines = [lines, content_lines].concat();
-
-            // Handle scrolling for retrospection panel
-            let available_height = area.height.saturating_sub(2) as usize;
-            let visible_lines: Vec<Line> = all_lines
-                .into_iter()
-                .skip(self.state.retrospection_scroll)
-                .take(available_height)
-                .collect();
-
-            let retrospection_block = Paragraph::new(visible_lines)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Retrospection Analysis"),
-                )
-                .wrap(Wrap { trim: true })
-                .scroll((0, 0));
-
-            f.render_widget(retrospection_block, area);
-
-            // Add metadata at bottom if space allows
-            if area.height > 10 {
-                let metadata_area = Rect {
-                    x: area.x,
-                    y: area.y + area.height - 3,
-                    width: area.width,
-                    height: 2,
-                };
-
-                let metadata_text = format!(
-                    "Overall: {:.1}/100 | Quality: {:.1} | Productivity: {:.1} | Generated: {}",
-                    retrospection.overall_score,
-                    retrospection.code_quality_score,
-                    retrospection.productivity_score,
-                    retrospection.generated_at.format("%Y-%m-%d %H:%M")
-                );
-
-                let metadata = Paragraph::new(metadata_text)
-                    .style(Style::default().fg(Color::DarkGray))
-                    .wrap(Wrap { trim: true });
-
-                f.render_widget(metadata, metadata_area);
-            }
-        }
     }
 }
