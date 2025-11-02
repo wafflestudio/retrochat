@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::handle_status_command;
+use retrochat::cli::analytics::handle_status_command;
 
 #[tokio::test]
 async fn test_retrospect_status_command_structure() {

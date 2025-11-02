@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::handle_show_command;
+use retrochat::cli::analytics::handle_show_command;
 
 #[tokio::test]
 async fn test_retrospect_show_command_structure() {

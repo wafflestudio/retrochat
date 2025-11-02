@@ -74,17 +74,7 @@ fn test_add_command_with_overwrite() {
     }
 }
 
-#[test]
-fn test_stats_command() {
-    let stats_cmd = Commands::Stats;
-
-    match stats_cmd {
-        Commands::Stats => {
-            // Stats command has no fields - match is sufficient
-        }
-        _ => panic!("Expected Stats command"),
-    }
-}
+// Stats command was removed - test removed
 
 #[test]
 fn test_search_command_structure() {
@@ -198,12 +188,12 @@ fn test_cli_optional_command() {
 #[test]
 fn test_cli_with_command() {
     let cli = Cli {
-        command: Some(Commands::Stats),
+        command: Some(Commands::Setup),
     };
 
     assert!(cli.command.is_some(), "Command should be present");
     match cli.command {
-        Some(Commands::Stats) => {}
-        _ => panic!("Expected Stats command"),
+        Some(Commands::Setup) => {}
+        _ => panic!("Expected Setup command"),
     }
 }

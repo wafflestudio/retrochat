@@ -3,7 +3,6 @@ pub mod help;
 pub mod import;
 pub mod init;
 pub mod query;
-pub mod retrospect;
 pub mod setup;
 pub mod tui;
 pub mod watch;
@@ -14,7 +13,7 @@ use tokio::runtime::Runtime;
 
 use crate::env::apis as env_vars;
 use crate::models::Provider;
-use retrospect::RetrospectCommands;
+use analytics::AnalyticsCommands;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -79,28 +78,15 @@ pub enum Commands {
         #[arg(short, long)]
         import: bool,
     },
-    /// Analyze usage data
+    /// Analyze sessions with request tracking
     Analyze {
-        /// Session ID to analyze (optional - will prompt if not provided)
-        session_id: Option<String>,
-
-        /// Output format: enhanced (default), markdown, or plain
-        #[arg(long, short = 'f', default_value = "enhanced")]
-        format: String,
-
-        /// Use plain text format (alias for --format=plain)
-        #[arg(long)]
-        plain: bool,
+        #[command(subcommand)]
+        command: AnalyticsCommands,
     },
     /// Query sessions and search messages
     Query {
         #[command(subcommand)]
         command: QueryCommands,
-    },
-    /// Retrospection analysis for chat sessions
-    Retrospect {
-        #[command(subcommand)]
-        command: RetrospectCommands,
     },
     /// Interactive setup wizard for first-time users
     Setup,
@@ -123,8 +109,6 @@ pub enum Commands {
         #[arg(short, long)]
         overwrite: bool,
     },
-    /// [Alias for 'analyze insights'] Show usage statistics
-    Stats,
     /// [Alias for 'query search'] Search messages by content
     Search {
         /// Search query
@@ -139,7 +123,7 @@ pub enum Commands {
         #[arg(long)]
         until: Option<String>,
     },
-    /// [Alias for 'retrospect execute'] Review and analyze a chat session
+    /// [Alias for 'analyze execute'] Review and analyze a chat session
     Review {
         /// Session ID to review (optional, will prompt if not provided)
         session_id: Option<String>,
@@ -222,8 +206,8 @@ impl Cli {
         let rt = Runtime::new()?;
         let rt_arc = Arc::new(rt);
 
-        // Create cleanup handler for retrospection commands
-        let _cleanup_guard = if matches!(self.command, Some(Commands::Retrospect { .. })) {
+        // Create cleanup handler for analyze commands
+        let _cleanup_guard = if matches!(self.command, Some(Commands::Analyze { .. })) {
             Some(self.create_retrospection_cleanup_handler(rt_arc.clone())?)
         } else {
             None
@@ -259,11 +243,39 @@ impl Cli {
                     verbose,
                     import,
                 } => watch::handle_watch_command(path, providers, verbose, import).await,
-                Commands::Analyze {
-                    session_id,
-                    format,
-                    plain,
-                } => analytics::handle_analyze_command(session_id, format, plain).await,
+                Commands::Analyze { command } => match command {
+                    AnalyticsCommands::Execute {
+                        session_id,
+                        custom_prompt,
+                        all,
+                        background,
+                        format,
+                        plain,
+                    } => {
+                        analytics::handle_execute_command(
+                            session_id,
+                            custom_prompt,
+                            all,
+                            background,
+                            format,
+                            plain,
+                        )
+                        .await
+                    }
+                    AnalyticsCommands::Show {
+                        session_id,
+                        all,
+                        format,
+                    } => analytics::handle_show_command(session_id, all, format).await,
+                    AnalyticsCommands::Status {
+                        all,
+                        watch,
+                        history,
+                    } => analytics::handle_status_command(all, watch, history).await,
+                    AnalyticsCommands::Cancel { request_id, all } => {
+                        analytics::handle_cancel_command(request_id, all).await
+                    }
+                },
                 Commands::Query { command } => match command {
                     QueryCommands::Sessions {
                         page,
@@ -307,35 +319,6 @@ impl Cli {
                         .await
                     }
                 },
-                Commands::Retrospect { command } => match command {
-                    RetrospectCommands::Execute {
-                        session_id,
-                        custom_prompt,
-                        all,
-                        background,
-                    } => {
-                        retrospect::handle_execute_command(
-                            session_id,
-                            custom_prompt,
-                            all,
-                            background,
-                        )
-                        .await
-                    }
-                    RetrospectCommands::Show {
-                        session_id,
-                        all,
-                        format,
-                    } => retrospect::handle_show_command(session_id, all, format).await,
-                    RetrospectCommands::Status {
-                        all,
-                        watch,
-                        history,
-                    } => retrospect::handle_status_command(all, watch, history).await,
-                    RetrospectCommands::Cancel { request_id, all } => {
-                        retrospect::handle_cancel_command(request_id, all).await
-                    }
-                },
                 // New commands
                 Commands::Setup => setup::run_setup_wizard().await,
                 Commands::Add {
@@ -350,7 +333,6 @@ impl Cli {
                         import::handle_import_command(path, providers, overwrite).await
                     }
                 }
-                Commands::Stats => analytics::handle_insights_command().await,
                 Commands::Search {
                     query,
                     limit,
@@ -358,10 +340,18 @@ impl Cli {
                     until,
                 } => query::handle_search_command(query, limit, since, until).await,
                 Commands::Review { session_id } => {
-                    // For now, delegate to retrospect execute
+                    // Delegate to analyze execute
                     // TODO: Could make this more interactive
                     if let Some(sid) = session_id {
-                        retrospect::handle_execute_command(Some(sid), None, false, false).await
+                        analytics::handle_execute_command(
+                            Some(sid),
+                            None,
+                            false,
+                            false,
+                            "enhanced".to_string(),
+                            false,
+                        )
+                        .await
                     } else {
                         Err(anyhow::anyhow!(
                             "Session ID required. Use: retrochat review <SESSION_ID>"

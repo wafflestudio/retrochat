@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::handle_execute_command;
+use retrochat::cli::analytics::handle_execute_command;
 
 #[tokio::test]
 async fn test_retrospect_execute_command_structure() {
@@ -11,6 +11,8 @@ async fn test_retrospect_execute_command_structure() {
         None,                            // custom_prompt
         false,                           // all
         false,                           // background
+        "enhanced".to_string(),          // format
+        false,                           // plain
     )
     .await;
 
@@ -44,6 +46,8 @@ async fn test_retrospect_execute_all_sessions() {
         None, // custom_prompt
         true, // all
         true, // background
+        "enhanced".to_string(), // format
+        false, // plain
     )
     .await;
 
@@ -77,6 +81,8 @@ async fn test_retrospect_execute_custom_analysis() {
         Some(custom_prompt),             // custom_prompt
         false,                           // all
         false,                           // background
+        "enhanced".to_string(),          // format
+        false,                           // plain
     )
     .await;
 
@@ -109,6 +115,8 @@ async fn test_retrospect_execute_validation() {
         None,  // custom_prompt
         false, // all
         false, // background
+        "enhanced".to_string(), // format
+        false, // plain
     )
     .await;
 
@@ -142,6 +150,8 @@ async fn test_retrospect_execute_validation() {
         None, // No custom prompt provided
         false,
         false,
+        "enhanced".to_string(), // format
+        false, // plain
     )
     .await;
 

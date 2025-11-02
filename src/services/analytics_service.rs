@@ -1,13 +1,11 @@
 use super::google_ai::GoogleAiClient;
 use crate::database::{
-    AnalyticsRepository, ChatSessionRepository, DatabaseManager, MessageRepository,
+    ChatSessionRepository, DatabaseManager, MessageRepository,
     ToolOperationRepository,
 };
 use crate::models::ChatSession;
-use crate::services::query_service::DateRange;
 use anyhow::Result;
 use chrono::Utc;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // Import from analytics module
@@ -16,8 +14,8 @@ use super::analytics::{
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
     generate_qualitative_analysis_ai, generate_qualitative_analysis_fallback,
     generate_quantitative_analysis_ai, generate_quantitative_analysis_fallback,
-    ComprehensiveAnalysis, DurationStats, MessageRoleDistribution, ProcessedQuantitativeOutput,
-    QuantitativeInput, UsageInsights,
+    ComprehensiveAnalysis, ProcessedQuantitativeOutput,
+    QuantitativeInput,
 };
 
 pub struct AnalyticsService {
@@ -36,68 +34,6 @@ impl AnalyticsService {
     pub fn with_google_ai(mut self, google_ai_client: GoogleAiClient) -> Self {
         self.google_ai_client = Some(google_ai_client);
         self
-    }
-
-    // =============================================================================
-    // Basic Analytics (기존 기능 유지)
-    // =============================================================================
-
-    pub async fn generate_usage_insights(&self) -> Result<UsageInsights> {
-        tracing::info!("Generating usage insights...");
-
-        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
-
-        // Get basic stats using existing methods
-        let (sessions, messages, tokens) = analytics_repo.get_total_stats().await?;
-        let total_sessions = sessions as u64;
-        let total_messages = messages as u64;
-        let total_tokens = tokens;
-
-        // Create a simple date range (last 30 days)
-        let end_date = chrono::Utc::now();
-        let start_date = end_date - chrono::Duration::days(30);
-        let date_range = DateRange {
-            start_date: start_date.to_rfc3339(),
-            end_date: end_date.to_rfc3339(),
-        };
-        let span_days = 30;
-
-        // Create empty provider breakdown for now
-        let provider_breakdown = HashMap::new();
-
-        // Create empty daily activity for now
-        let daily_activity = Vec::new();
-
-        // Create empty message role distribution for now
-        let message_role_distribution = MessageRoleDistribution {
-            user_messages: 0,
-            assistant_messages: 0,
-            system_messages: 0,
-        };
-
-        // Create empty top projects for now
-        let top_projects = Vec::new();
-
-        // Create empty session duration stats for now
-        let session_duration_stats = DurationStats {
-            average_minutes: 0.0,
-            median_minutes: 0.0,
-            min_minutes: 0.0,
-            max_minutes: 0.0,
-        };
-
-        Ok(UsageInsights {
-            total_sessions,
-            total_messages,
-            total_tokens,
-            date_range,
-            span_days,
-            provider_breakdown,
-            daily_activity,
-            message_role_distribution,
-            top_projects,
-            session_duration_stats,
-        })
     }
 
     // =============================================================================

@@ -1,4 +1,4 @@
-use retrochat::cli::retrospect::handle_cancel_command;
+use retrochat::cli::analytics::handle_cancel_command;
 
 #[tokio::test]
 async fn test_retrospect_cancel_command_structure() {
