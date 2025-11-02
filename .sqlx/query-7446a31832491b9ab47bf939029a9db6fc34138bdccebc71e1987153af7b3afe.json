@@ -1,0 +1,140 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                r.id, r.retrospect_request_id, r.generated_at,\n                r.overall_score, r.code_quality_score, r.productivity_score,\n                r.efficiency_score, r.collaboration_score, r.learning_score,\n                r.total_files_modified, r.total_files_read,\n                r.lines_added, r.lines_removed,\n                r.total_tokens_used, r.session_duration_minutes,\n                r.quantitative_input_json, r.qualitative_input_json,\n                r.qualitative_output_json, r.processed_output_json,\n                r.model_used, r.analysis_duration_ms\n            FROM retrospections r\n            JOIN retrospect_requests rr ON r.retrospect_request_id = rr.id\n            WHERE rr.session_id = ?\n            ORDER BY r.generated_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "retrospect_request_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "generated_at",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "overall_score",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "code_quality_score",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "productivity_score",
+        "ordinal": 5,
+        "type_info": "Float"
+      },
+      {
+        "name": "efficiency_score",
+        "ordinal": 6,
+        "type_info": "Float"
+      },
+      {
+        "name": "collaboration_score",
+        "ordinal": 7,
+        "type_info": "Float"
+      },
+      {
+        "name": "learning_score",
+        "ordinal": 8,
+        "type_info": "Float"
+      },
+      {
+        "name": "total_files_modified",
+        "ordinal": 9,
+        "type_info": "Int64"
+      },
+      {
+        "name": "total_files_read",
+        "ordinal": 10,
+        "type_info": "Int64"
+      },
+      {
+        "name": "lines_added",
+        "ordinal": 11,
+        "type_info": "Int64"
+      },
+      {
+        "name": "lines_removed",
+        "ordinal": 12,
+        "type_info": "Int64"
+      },
+      {
+        "name": "total_tokens_used",
+        "ordinal": 13,
+        "type_info": "Int64"
+      },
+      {
+        "name": "session_duration_minutes",
+        "ordinal": 14,
+        "type_info": "Float"
+      },
+      {
+        "name": "quantitative_input_json",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "qualitative_input_json",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "qualitative_output_json",
+        "ordinal": 17,
+        "type_info": "Text"
+      },
+      {
+        "name": "processed_output_json",
+        "ordinal": 18,
+        "type_info": "Text"
+      },
+      {
+        "name": "model_used",
+        "ordinal": 19,
+        "type_info": "Text"
+      },
+      {
+        "name": "analysis_duration_ms",
+        "ordinal": 20,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "7446a31832491b9ab47bf939029a9db6fc34138bdccebc71e1987153af7b3afe"
+}

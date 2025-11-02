@@ -152,7 +152,7 @@ pub struct App {
 impl App {
     pub fn new(db_manager: std::sync::Arc<DatabaseManager>) -> Result<Self> {
         let query_service = QueryService::with_database(db_manager.clone());
-        let analytics_service = AnalyticsService::new((*db_manager).clone());
+        let analytics_service = AnalyticsService::new(db_manager.clone());
 
         // Try to create retrospection service if Google AI API key is available
         let retrospection_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {

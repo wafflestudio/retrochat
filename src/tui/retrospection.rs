@@ -388,18 +388,22 @@ impl RetrospectionWidget {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),      // Header info
+                Constraint::Length(7),      // Header info with scores
                 Constraint::Percentage(33), // Insights
                 Constraint::Percentage(33), // Reflection
                 Constraint::Percentage(34), // Recommendations
             ])
             .split(area);
 
-        // Header
+        // Header with scores
         let header = Paragraph::new(format!(
-            "Retrospection ID: {}\nCreated: {}",
+            "Retrospection ID: {}\nGenerated: {}\nOverall Score: {:.1}/100 | Quality: {:.1} | Productivity: {:.1} | Efficiency: {:.1}",
             retrospection.id,
-            retrospection.created_at.format("%Y-%m-%d %H:%M:%S")
+            retrospection.generated_at.format("%Y-%m-%d %H:%M:%S"),
+            retrospection.overall_score,
+            retrospection.code_quality_score,
+            retrospection.productivity_score,
+            retrospection.efficiency_score
         ))
         .block(
             Block::default()
@@ -411,7 +415,7 @@ impl RetrospectionWidget {
         f.render_widget(header, chunks[0]);
 
         // Insights
-        let insights = Paragraph::new(retrospection.insights.as_str())
+        let insights = Paragraph::new(retrospection.get_insights_text())
             .block(Block::default().borders(Borders::ALL).title("Insights"))
             .style(Style::default().fg(Color::Green))
             .wrap(Wrap { trim: true });
@@ -419,7 +423,7 @@ impl RetrospectionWidget {
         f.render_widget(insights, chunks[1]);
 
         // Reflection
-        let reflection = Paragraph::new(retrospection.reflection.as_str())
+        let reflection = Paragraph::new(retrospection.get_reflection_text())
             .block(Block::default().borders(Borders::ALL).title("Reflection"))
             .style(Style::default().fg(Color::Yellow))
             .wrap(Wrap { trim: true });
@@ -427,7 +431,7 @@ impl RetrospectionWidget {
         f.render_widget(reflection, chunks[2]);
 
         // Recommendations
-        let recommendations = Paragraph::new(retrospection.recommendations.as_str())
+        let recommendations = Paragraph::new(retrospection.get_recommendations_text())
             .block(
                 Block::default()
                     .borders(Borders::ALL)

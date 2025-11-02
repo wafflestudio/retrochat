@@ -1,35 +1,26 @@
 use std::sync::Arc;
 
-use crate::database::{
-    ChatSessionRepository, DatabaseManager, MessageRepository, RetrospectRequestRepository,
-    RetrospectionRepository,
-};
-use crate::models::{
-    ChatSession, Message, MessageRole, OperationStatus, RetrospectRequest, Retrospection,
-};
-use crate::services::google_ai::{AnalysisRequest, AnalysisResponse, GoogleAiClient};
+use crate::database::{DatabaseManager, RetrospectRequestRepository, RetrospectionRepository};
+use crate::models::{OperationStatus, RetrospectRequest, Retrospection};
+use crate::services::analytics_service::AnalyticsService;
+use crate::services::google_ai::GoogleAiClient;
 
 pub struct RetrospectionService {
-    google_ai_client: GoogleAiClient,
+    analytics_service: AnalyticsService,
     request_repo: RetrospectRequestRepository,
     retrospection_repo: RetrospectionRepository,
-    session_repo: ChatSessionRepository,
-    message_repo: MessageRepository,
 }
 
 impl RetrospectionService {
     pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
         let request_repo = RetrospectRequestRepository::new(db_manager.clone());
         let retrospection_repo = RetrospectionRepository::new(db_manager.clone());
-        let session_repo = ChatSessionRepository::new(&db_manager);
-        let message_repo = MessageRepository::new(&db_manager);
+        let analytics_service = AnalyticsService::new(db_manager).with_google_ai(google_ai_client);
 
         Self {
-            google_ai_client,
+            analytics_service,
             request_repo,
             retrospection_repo,
-            session_repo,
-            message_repo,
         }
     }
 
@@ -207,228 +198,24 @@ impl RetrospectionService {
         &self,
         request: &RetrospectRequest,
     ) -> Result<Retrospection, Box<dyn std::error::Error + Send + Sync>> {
-        // Step 1: Gather data for analysis
-        let analysis_data = self.gather_analysis_data(request).await?;
-
-        // Step 2: Prepare the analysis prompt
-        let prompt = self.prepare_analysis_prompt(request, &analysis_data)?;
-
-        // Step 3: Execute the analysis via Google AI
-        let analysis_request = AnalysisRequest {
-            prompt,
-            max_tokens: Some(4000),
-            temperature: Some(0.7),
-        };
-
-        let response = self.google_ai_client.analyze(analysis_request).await?;
-
-        // Step 4: Post-process the results and create retrospection
-        let retrospection = self.create_retrospection_from_response(&response, request)?;
-
-        Ok(retrospection)
-    }
-
-    async fn gather_analysis_data(
-        &self,
-        request: &RetrospectRequest,
-    ) -> Result<AnalysisData, Box<dyn std::error::Error + Send + Sync>> {
-        // Get the chat session
-        let session = self
-            .session_repo
-            .get_by_id(&uuid::Uuid::parse_str(&request.session_id)?)
-            .await?
-            .ok_or("Chat session not found")?;
-
-        // Get messages for the session
-        let messages = self
-            .message_repo
-            .get_by_session_id(&uuid::Uuid::parse_str(&request.session_id)?)
+        // Use analytics service to generate comprehensive analysis
+        let start_time = std::time::Instant::now();
+        let analysis = self
+            .analytics_service
+            .analyze_session_comprehensive(&request.session_id)
             .await?;
+        let analysis_duration_ms = start_time.elapsed().as_millis() as i64;
 
-        // Calculate session metrics
-        let metrics = self.calculate_session_metrics(&session, &messages)?;
-
-        Ok(AnalysisData {
-            session,
-            messages,
-            metrics,
-        })
-    }
-
-    fn prepare_analysis_prompt(
-        &self,
-        request: &RetrospectRequest,
-        data: &AnalysisData,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let base_prompt = self.get_base_prompt();
-        let context = self.build_context(data)?;
-
-        let prompt = if let Some(custom_prompt) = &request.custom_prompt {
-            format!(
-                "{base_prompt}\n\nCustom Instructions: {custom_prompt}\n\nContext:\n{context}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields."
-            )
-        } else {
-            format!(
-                "{base_prompt}\n\nContext:\n{context}\n\nPlease provide your analysis in JSON format with 'insights', 'reflection', and 'recommendations' fields."
-            )
-        };
-
-        Ok(prompt)
-    }
-
-    fn get_base_prompt(&self) -> &'static str {
-        "Analyze the user interaction patterns in this conversation. Focus on:\n\
-        - Communication style and preferences\n\
-        - Types of questions and requests\n\
-        - Response patterns and engagement levels\n\
-        - Areas where the user seemed most/least satisfied\n\
-        - Quality of back-and-forth communication\n\
-        - Problem-solving approaches and effectiveness"
-    }
-
-    fn build_context(
-        &self,
-        data: &AnalysisData,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let mut context = String::new();
-
-        // Session information
-        context.push_str(&format!(
-            "Session Information:\n\
-            - ID: {}\n\
-            - Project: {}\n\
-            - Created: {}\n\
-            - Duration: {} minutes\n\
-            - Message Count: {}\n\
-            - Provider: {}\n\n",
-            data.session.id,
-            data.session.project_name.as_deref().unwrap_or("Unknown"),
-            data.session.created_at.format("%Y-%m-%d %H:%M:%S"),
-            data.metrics.duration_minutes,
-            data.metrics.message_count,
-            data.session.provider
-        ));
-
-        // Conversation flow
-        context.push_str("Conversation Flow:\n");
-        for (i, message) in data.messages.iter().enumerate() {
-            let role = match message.role {
-                MessageRole::User => "User",
-                MessageRole::Assistant => "Assistant",
-                MessageRole::System => "System",
-            };
-            let content_preview = if message.content.len() > 200 {
-                let truncated: String = message.content.chars().take(200).collect();
-                format!("{truncated}...")
-            } else {
-                message.content.clone()
-            };
-
-            context.push_str(&format!(
-                "{}. {} ({}): {}\n",
-                i + 1,
-                role,
-                message.timestamp.format("%H:%M:%S"),
-                content_preview
-            ));
-        }
-
-        // Session metrics
-        context.push_str(&format!(
-            "\nSession Metrics:\n\
-            - Average message length: {} characters\n\
-            - User messages: {}\n\
-            - Assistant messages: {}\n\
-            - Conversation turns: {}\n",
-            data.metrics.avg_message_length,
-            data.metrics.user_message_count,
-            data.metrics.assistant_message_count,
-            data.metrics.conversation_turns
-        ));
-
-        Ok(context)
-    }
-
-    fn create_retrospection_from_response(
-        &self,
-        response: &AnalysisResponse,
-        request: &RetrospectRequest,
-    ) -> Result<Retrospection, Box<dyn std::error::Error + Send + Sync>> {
-        // Parse the JSON response to extract insights, reflection, and recommendations
-        // For now, we'll use the response text directly and create a simple structure
-        // In a real implementation, this would parse the JSON and extract structured data
-
-        let insights = response.text.clone();
-        let reflection = "Analysis completed successfully".to_string();
-        let recommendations = "Review the insights above for actionable next steps".to_string();
-
-        let retrospection = Retrospection::new(
+        // Convert to retrospection
+        let retrospection = Retrospection::from_comprehensive_analysis(
             request.id.clone(),
-            insights,
-            reflection,
-            recommendations,
-            None, // metadata
+            analysis,
+            Some("gemini-pro".to_string()),
+            Some(analysis_duration_ms),
         );
 
         Ok(retrospection)
     }
-
-    fn calculate_session_metrics(
-        &self,
-        _session: &ChatSession,
-        messages: &[Message],
-    ) -> Result<SessionMetrics, Box<dyn std::error::Error + Send + Sync>> {
-        let message_count = messages.len();
-        let user_messages: Vec<_> = messages
-            .iter()
-            .filter(|m| m.role == MessageRole::User)
-            .collect();
-        let assistant_messages: Vec<_> = messages
-            .iter()
-            .filter(|m| m.role == MessageRole::Assistant)
-            .collect();
-
-        let total_chars: usize = messages.iter().map(|m| m.content.len()).sum();
-        let avg_message_length = if message_count > 0 {
-            total_chars / message_count
-        } else {
-            0
-        };
-
-        let duration_minutes =
-            if let (Some(first), Some(last)) = (messages.first(), messages.last()) {
-                let duration = last.timestamp - first.timestamp;
-                duration.num_minutes() as u32
-            } else {
-                0
-            };
-
-        Ok(SessionMetrics {
-            message_count: message_count as u32,
-            user_message_count: user_messages.len() as u32,
-            assistant_message_count: assistant_messages.len() as u32,
-            avg_message_length: avg_message_length as u32,
-            duration_minutes,
-            conversation_turns: (message_count / 2) as u32, // Approximate
-        })
-    }
-}
-
-#[derive(Debug)]
-pub struct AnalysisData {
-    pub session: ChatSession,
-    pub messages: Vec<Message>,
-    pub metrics: SessionMetrics,
-}
-
-#[derive(Debug)]
-pub struct SessionMetrics {
-    pub message_count: u32,
-    pub user_message_count: u32,
-    pub assistant_message_count: u32,
-    pub avg_message_length: u32,
-    pub duration_minutes: u32,
-    pub conversation_turns: u32,
 }
 
 /// A cleanup handler that automatically cancels running retrospection requests when dropped.

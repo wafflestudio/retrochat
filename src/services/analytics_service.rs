@@ -8,6 +8,7 @@ use crate::services::query_service::DateRange;
 use anyhow::Result;
 use chrono::Utc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 // Import from analytics module
 use super::analytics::{
@@ -20,12 +21,12 @@ use super::analytics::{
 };
 
 pub struct AnalyticsService {
-    db_manager: DatabaseManager,
+    db_manager: Arc<DatabaseManager>,
     google_ai_client: Option<GoogleAiClient>,
 }
 
 impl AnalyticsService {
-    pub fn new(db_manager: DatabaseManager) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
             google_ai_client: None,

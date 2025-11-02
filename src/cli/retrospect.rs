@@ -205,33 +205,34 @@ async fn show_session_results(
                 }
                 "markdown" => {
                     println!("## Analysis");
-                    println!("**Created:** {}", retrospection.created_at);
+                    println!("**Generated:** {}", retrospection.generated_at);
+                    println!("**Overall Score:** {:.1}/100", retrospection.overall_score);
                     println!();
                     println!("### Insights");
-                    println!("{}", retrospection.insights);
+                    println!("{}", retrospection.get_insights_text());
                     println!();
                     println!("### Reflection");
-                    println!("{}", retrospection.reflection);
+                    println!("{}", retrospection.get_reflection_text());
                     println!();
                     println!("### Recommendations");
-                    println!("{}", retrospection.recommendations);
+                    println!("{}", retrospection.get_recommendations_text());
                     println!();
                 }
                 _ => {
                     println!("Status: {:?}", request.status);
-                    println!("Created: {}", retrospection.created_at);
-                    if let Some(token_usage) = retrospection.token_usage {
-                        println!("Token Usage: {token_usage}");
-                    }
+                    println!("Generated: {}", retrospection.generated_at);
+                    println!("Overall Score: {:.1}/100", retrospection.overall_score);
+                    println!("Quality Score: {:.1}/100", retrospection.code_quality_score);
+                    println!("Total Tokens: {}", retrospection.total_tokens_used);
                     println!();
                     println!("Insights:");
-                    println!("{}", retrospection.insights);
+                    println!("{}", retrospection.get_insights_text());
                     println!();
                     println!("Reflection:");
-                    println!("{}", retrospection.reflection);
+                    println!("{}", retrospection.get_reflection_text());
                     println!();
                     println!("Recommendations:");
-                    println!("{}", retrospection.recommendations);
+                    println!("{}", retrospection.get_recommendations_text());
                     println!();
                 }
             },
@@ -276,11 +277,12 @@ async fn show_all_results(service: &RetrospectionService, format: &str) -> Resul
                 );
 
                 if format == "summary" || format == "text" {
-                    let preview = if retrospection.insights.chars().count() > 100 {
-                        let truncated: String = retrospection.insights.chars().take(100).collect();
+                    let insights_text = retrospection.get_insights_text();
+                    let preview = if insights_text.chars().count() > 100 {
+                        let truncated: String = insights_text.chars().take(100).collect();
                         format!("{truncated}...")
                     } else {
-                        retrospection.insights.clone()
+                        insights_text
                     };
                     println!("  {preview}");
                 }

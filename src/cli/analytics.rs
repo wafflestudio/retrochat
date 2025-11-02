@@ -1,12 +1,15 @@
 use anyhow::Result;
+use std::sync::Arc;
 
-use crate::database::DatabaseManager;
+use crate::database::{DatabaseManager, RetrospectRequestRepository, RetrospectionRepository};
+use crate::models::{RetrospectRequest, Retrospection};
+use crate::services::analytics::formatters::{AnalyticsFormatter, OutputFormat};
 use crate::services::analytics_service::AnalyticsService;
 use crate::services::google_ai::GoogleAiClient;
 
 pub async fn handle_insights_command() -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
-    let db_manager = DatabaseManager::new(&db_path).await?;
+    let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
     let analytics_service = AnalyticsService::new(db_manager);
     print_insights_summary(&analytics_service).await
 }
@@ -43,9 +46,20 @@ async fn print_insights_summary(analytics_service: &AnalyticsService) -> Result<
 // =============================================================================
 
 /// Handle unified analysis command - combines all analysis types
-pub async fn handle_analyze_command(session_id: Option<String>) -> Result<()> {
+pub async fn handle_analyze_command(
+    session_id: Option<String>,
+    format: String,
+    plain: bool,
+) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
-    let db_manager = DatabaseManager::new(&db_path).await?;
+    let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
+
+    // Determine output format
+    let output_format = if plain {
+        OutputFormat::Plain
+    } else {
+        OutputFormat::parse(&format)
+    };
 
     // Try to initialize Google AI client if API key is available
     let analytics_service = if let Ok(api_key) = std::env::var("GOOGLE_AI_API_KEY") {
@@ -54,17 +68,54 @@ pub async fn handle_analyze_command(session_id: Option<String>) -> Result<()> {
             ..Default::default()
         };
         let google_ai_client = GoogleAiClient::new(config)?;
-        AnalyticsService::new(db_manager).with_google_ai(google_ai_client)
+        AnalyticsService::new(db_manager.clone()).with_google_ai(google_ai_client)
     } else {
-        AnalyticsService::new(db_manager)
+        AnalyticsService::new(db_manager.clone())
     };
 
     if let Some(session_id) = session_id {
+        // Create a retrospect request first
+        let request_repo = RetrospectRequestRepository::new(db_manager.clone());
+        let request =
+            RetrospectRequest::new(session_id.clone(), Some("analytics-cli".to_string()), None);
+        request_repo
+            .create(&request)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
         // Analyze specific session with all analysis types
+        let start_time = std::time::Instant::now();
         let analysis = analytics_service
             .analyze_session_comprehensive(&session_id)
             .await?;
-        print_unified_analysis(&analysis).await?;
+        let analysis_duration_ms = start_time.elapsed().as_millis() as i64;
+
+        // Save analysis to database
+        let retrospection = Retrospection::from_comprehensive_analysis(
+            request.id.clone(),
+            analysis.clone(),
+            Some("gemini-pro".to_string()),
+            Some(analysis_duration_ms),
+        );
+
+        let retrospection_repo = RetrospectionRepository::new(db_manager.clone());
+        retrospection_repo
+            .create(&retrospection)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        // Mark request as completed
+        let mut completed_request = request;
+        completed_request.mark_completed();
+        request_repo
+            .update(&completed_request)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        println!("Analysis saved to database (ID: {})\n", retrospection.id);
+
+        // Print analysis
+        print_unified_analysis(&analysis, output_format).await?;
     } else {
         // Show usage insights if no session ID provided
         print_insights_summary(&analytics_service).await?;
@@ -77,331 +128,10 @@ pub async fn handle_analyze_command(session_id: Option<String>) -> Result<()> {
 // Print Functions
 // =============================================================================
 
-async fn print_unified_analysis(analysis: &crate::services::ComprehensiveAnalysis) -> Result<()> {
-    println!("\n🔍 Session Analysis Report");
-    println!("==========================");
-    println!("Session ID: {}", analysis.session_id);
-    println!(
-        "Generated: {}",
-        analysis.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
-    );
-
-    // =============================================================================
-    // 1. QUANTITATIVE SCORES
-    // =============================================================================
-    println!("\n📊 QUANTITATIVE SCORES");
-    println!("─────────────────────");
-    println!(
-        "  Overall Score: {:.1}/100",
-        analysis.quantitative_output.overall_score
-    );
-    println!(
-        "  Code Quality: {:.1}/100",
-        analysis.quantitative_output.code_quality_score
-    );
-    println!(
-        "  Productivity: {:.1}/100",
-        analysis.quantitative_output.productivity_score
-    );
-    println!(
-        "  Efficiency: {:.1}/100",
-        analysis.quantitative_output.efficiency_score
-    );
-    println!(
-        "  Collaboration: {:.1}/100",
-        analysis.quantitative_output.collaboration_score
-    );
-    println!(
-        "  Learning: {:.1}/100",
-        analysis.quantitative_output.learning_score
-    );
-
-    // =============================================================================
-    // 2. QUANTITATIVE METRICS
-    // =============================================================================
-    println!("\n📈 QUANTITATIVE METRICS");
-    println!("─────────────────────");
-
-    // File changes
-    println!("\n📁 File Changes:");
-    println!(
-        "  Files Modified: {}",
-        analysis
-            .quantitative_input
-            .file_changes
-            .total_files_modified
-    );
-    println!(
-        "  Files Read: {}",
-        analysis.quantitative_input.file_changes.total_files_read
-    );
-    println!(
-        "  Lines Added: {}",
-        analysis.quantitative_input.file_changes.lines_added
-    );
-    println!(
-        "  Lines Removed: {}",
-        analysis.quantitative_input.file_changes.lines_removed
-    );
-    println!(
-        "  Net Code Growth: {}",
-        analysis.quantitative_input.file_changes.net_code_growth
-    );
-    println!(
-        "  Refactoring Operations: {}",
-        analysis
-            .quantitative_input
-            .file_changes
-            .refactoring_operations
-    );
-
-    // Time metrics
-    println!("\n⏱️ Time Metrics:");
-    println!(
-        "  Session Duration: {:.1} minutes",
-        analysis
-            .quantitative_input
-            .time_metrics
-            .total_session_time_minutes
-    );
-    println!(
-        "  Peak Hours: {:?}",
-        analysis.quantitative_input.time_metrics.peak_hours
-    );
-
-    // Token metrics
-    println!("\n🔤 Token Metrics:");
-    println!(
-        "  Total Tokens: {}",
-        analysis.quantitative_input.token_metrics.total_tokens_used
-    );
-    println!(
-        "  Input Tokens: {}",
-        analysis.quantitative_input.token_metrics.input_tokens
-    );
-    println!(
-        "  Output Tokens: {}",
-        analysis.quantitative_input.token_metrics.output_tokens
-    );
-    println!(
-        "  Token Efficiency: {:.2}",
-        analysis.quantitative_input.token_metrics.token_efficiency
-    );
-
-    // Tool usage
-    println!("\n🛠️ Tool Usage:");
-    println!(
-        "  Total Operations: {}",
-        analysis.quantitative_input.tool_usage.total_operations
-    );
-    println!(
-        "  Successful: {}",
-        analysis.quantitative_input.tool_usage.successful_operations
-    );
-    println!(
-        "  Failed: {}",
-        analysis.quantitative_input.tool_usage.failed_operations
-    );
-
-    if !analysis
-        .quantitative_input
-        .tool_usage
-        .tool_distribution
-        .is_empty()
-    {
-        println!("  Tool Distribution:");
-        for (tool, count) in &analysis.quantitative_input.tool_usage.tool_distribution {
-            println!("    {tool}: {count}");
-        }
-    }
-
-    // =============================================================================
-    // 3. PROCESSED STATISTICS
-    // =============================================================================
-    println!("\n⚙️ PROCESSED STATISTICS");
-    println!("─────────────────────");
-
-    // Session metrics
-    println!("\n📊 Session Metrics:");
-    println!(
-        "  Total Sessions: {}",
-        analysis.processed_output.session_metrics.total_sessions
-    );
-    println!(
-        "  Avg Duration: {:.1} min",
-        analysis
-            .processed_output
-            .session_metrics
-            .average_session_duration_minutes
-    );
-    println!(
-        "  Consistency Score: {:.1}%",
-        analysis
-            .processed_output
-            .session_metrics
-            .session_consistency_score
-            * 100.0
-    );
-
-    // Token metrics
-    println!("\n🔤 Token Statistics:");
-    println!(
-        "  Total Tokens: {}",
-        analysis.processed_output.token_metrics.total_tokens
-    );
-    println!(
-        "  Tokens/Hour: {:.1}",
-        analysis.processed_output.token_metrics.tokens_per_hour
-    );
-    println!(
-        "  I/O Ratio: {:.2}",
-        analysis.processed_output.token_metrics.input_output_ratio
-    );
-    println!(
-        "  Efficiency Score: {:.1}%",
-        analysis
-            .processed_output
-            .token_metrics
-            .token_efficiency_score
-            * 100.0
-    );
-    println!(
-        "  Cost Estimate: ${:.4}",
-        analysis.processed_output.token_metrics.cost_estimate
-    );
-
-    // Code metrics
-    println!("\n💻 Code Statistics:");
-    println!(
-        "  Net Lines Changed: {}",
-        analysis
-            .processed_output
-            .code_change_metrics
-            .net_lines_changed
-    );
-    println!(
-        "  Files/Session: {:.1}",
-        analysis
-            .processed_output
-            .code_change_metrics
-            .files_per_session
-    );
-    println!(
-        "  Lines/Hour: {:.1}",
-        analysis.processed_output.code_change_metrics.lines_per_hour
-    );
-    println!(
-        "  Refactoring Ratio: {:.1}%",
-        analysis
-            .processed_output
-            .code_change_metrics
-            .refactoring_ratio
-            * 100.0
-    );
-    println!(
-        "  Code Velocity: {:.1}",
-        analysis.processed_output.code_change_metrics.code_velocity
-    );
-
-    // Time efficiency
-    println!("\n⏱️ Time Efficiency:");
-    println!(
-        "  Productivity Score: {:.1}%",
-        analysis
-            .processed_output
-            .time_efficiency_metrics
-            .productivity_score
-            * 100.0
-    );
-    println!(
-        "  Context Switching Cost: {:.1}%",
-        analysis
-            .processed_output
-            .time_efficiency_metrics
-            .context_switching_cost
-            * 100.0
-    );
-    println!(
-        "  Deep Work Ratio: {:.1}%",
-        analysis
-            .processed_output
-            .time_efficiency_metrics
-            .deep_work_ratio
-            * 100.0
-    );
-    println!(
-        "  Time Utilization: {:.1}%",
-        analysis
-            .processed_output
-            .time_efficiency_metrics
-            .time_utilization
-            * 100.0
-    );
-
-    // =============================================================================
-    // 4. QUALITATIVE INSIGHTS
-    // =============================================================================
-    println!("\n💭 QUALITATIVE INSIGHTS");
-    println!("─────────────────────");
-
-    // Insights
-    println!("\n💡 Key Insights:");
-    for insight in &analysis.qualitative_output.insights {
-        println!(
-            "  [{}] {}: {}",
-            insight.category, insight.title, insight.description
-        );
-        println!("    Confidence: {:.1}%", insight.confidence * 100.0);
-    }
-
-    // Good patterns
-    if !analysis.qualitative_output.good_patterns.is_empty() {
-        println!("\n✅ Good Patterns:");
-        for pattern in &analysis.qualitative_output.good_patterns {
-            println!(
-                "  • {} ({} times): {}",
-                pattern.pattern_name, pattern.frequency, pattern.description
-            );
-            println!("    Impact: {}", pattern.impact);
-        }
-    }
-
-    // Improvement areas
-    if !analysis.qualitative_output.improvement_areas.is_empty() {
-        println!("\n🔧 Improvement Areas:");
-        for area in &analysis.qualitative_output.improvement_areas {
-            println!("  • {} [{}]", area.area_name, area.priority);
-            println!("    Current: {}", area.current_state);
-            println!("    Suggestion: {}", area.suggested_improvement);
-            println!("    Expected Impact: {}", area.expected_impact);
-        }
-    }
-
-    // Recommendations
-    if !analysis.qualitative_output.recommendations.is_empty() {
-        println!("\n🎯 Recommendations:");
-        for rec in &analysis.qualitative_output.recommendations {
-            println!("  • {}: {}", rec.title, rec.description);
-            println!("    Impact Score: {:.1}/10", rec.impact_score * 10.0);
-            println!("    Difficulty: {}", rec.implementation_difficulty);
-        }
-    }
-
-    // Learning observations
-    if !analysis.qualitative_output.learning_observations.is_empty() {
-        println!("\n📚 Learning Observations:");
-        for obs in &analysis.qualitative_output.learning_observations {
-            println!("  • {} ({})", obs.observation, obs.skill_area);
-            println!("    Progress: {}", obs.progress_indicator);
-            if !obs.next_steps.is_empty() {
-                println!("    Next Steps: {}", obs.next_steps.join(", "));
-            }
-        }
-    }
-
-    println!("\n{}", "=".repeat(50));
-    println!("Analysis complete! Use 'retrochat query sessions' to see other sessions.");
-    println!("{}", "=".repeat(50));
-
-    Ok(())
+async fn print_unified_analysis(
+    analysis: &crate::services::ComprehensiveAnalysis,
+    output_format: OutputFormat,
+) -> Result<()> {
+    let formatter = AnalyticsFormatter::new(output_format);
+    formatter.print_analysis(analysis)
 }

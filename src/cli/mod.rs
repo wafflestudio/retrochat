@@ -83,6 +83,14 @@ pub enum Commands {
     Analyze {
         /// Session ID to analyze (optional - will prompt if not provided)
         session_id: Option<String>,
+
+        /// Output format: enhanced (default), markdown, or plain
+        #[arg(long, short = 'f', default_value = "enhanced")]
+        format: String,
+
+        /// Use plain text format (alias for --format=plain)
+        #[arg(long)]
+        plain: bool,
     },
     /// Query sessions and search messages
     Query {
@@ -251,9 +259,11 @@ impl Cli {
                     verbose,
                     import,
                 } => watch::handle_watch_command(path, providers, verbose, import).await,
-                Commands::Analyze { session_id } => {
-                    analytics::handle_analyze_command(session_id).await
-                }
+                Commands::Analyze {
+                    session_id,
+                    format,
+                    plain,
+                } => analytics::handle_analyze_command(session_id, format, plain).await,
                 Commands::Query { command } => match command {
                     QueryCommands::Sessions {
                         page,

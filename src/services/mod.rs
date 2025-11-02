@@ -32,8 +32,5 @@ pub use query_service::{
     SessionDetailRequest, SessionDetailResponse, SessionFilters, SessionSummary,
     SessionsQueryRequest, SessionsQueryResponse,
 };
-pub use retrospection_service::{
-    AnalysisData, RetrospectionCleanupHandler, RetrospectionService,
-    SessionMetrics as RetrospectionSessionMetrics,
-};
+pub use retrospection_service::{RetrospectionCleanupHandler, RetrospectionService};
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};

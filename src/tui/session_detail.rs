@@ -528,7 +528,8 @@ impl SessionDetailWidget {
             let mut content_lines = Vec::new();
 
             // Add insights
-            content_lines.extend(retrospection.insights.lines().map(Line::from));
+            let insights_text = retrospection.get_insights_text();
+            content_lines.extend(insights_text.lines().map(Line::from));
             content_lines.push(Line::from(""));
 
             // Add reflection section
@@ -539,7 +540,8 @@ impl SessionDetailWidget {
                     .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(retrospection.reflection.lines().map(Line::from));
+            let reflection_text = retrospection.get_reflection_text();
+            content_lines.extend(reflection_text.lines().map(Line::from));
             content_lines.push(Line::from(""));
 
             // Add recommendations section
@@ -550,7 +552,8 @@ impl SessionDetailWidget {
                     .add_modifier(Modifier::BOLD),
             )]));
             content_lines.push(Line::from(""));
-            content_lines.extend(retrospection.recommendations.lines().map(Line::from));
+            let recommendations_text = retrospection.get_recommendations_text();
+            content_lines.extend(recommendations_text.lines().map(Line::from));
 
             let all_lines = [lines, content_lines].concat();
 
@@ -582,18 +585,13 @@ impl SessionDetailWidget {
                     height: 2,
                 };
 
-                let metadata_text = if let Some(tokens) = retrospection.token_usage {
-                    format!(
-                        "Tokens: {} | Created: {}",
-                        tokens,
-                        retrospection.created_at.format("%Y-%m-%d %H:%M")
-                    )
-                } else {
-                    format!(
-                        "Created: {}",
-                        retrospection.created_at.format("%Y-%m-%d %H:%M")
-                    )
-                };
+                let metadata_text = format!(
+                    "Overall: {:.1}/100 | Quality: {:.1} | Productivity: {:.1} | Generated: {}",
+                    retrospection.overall_score,
+                    retrospection.code_quality_score,
+                    retrospection.productivity_score,
+                    retrospection.generated_at.format("%Y-%m-%d %H:%M")
+                );
 
                 let metadata = Paragraph::new(metadata_text)
                     .style(Style::default().fg(Color::DarkGray))
