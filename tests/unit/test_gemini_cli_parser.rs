@@ -292,7 +292,7 @@ async fn test_gemini_parser_tool_operations() -> Result<()> {
     let result = parser.parse().await;
 
     if let Err(e) = &result {
-        eprintln!("Parse error: {:?}", e);
+        eprintln!("Parse error: {e:?}");
     }
     assert!(result.is_ok());
     let sessions = result.unwrap();
@@ -316,7 +316,7 @@ async fn test_gemini_parser_tool_operations() -> Result<()> {
     assert_eq!(msg2_tool_uses[0].name, "Edit"); // Normalized from "replace"
     assert_eq!(msg2_tool_uses[0].id, "replace-123");
     assert_eq!(msg2_tool_results[0].tool_use_id, "replace-123");
-    assert_eq!(msg2_tool_results[0].is_error, false);
+    assert!(!msg2_tool_results[0].is_error);
     assert!(msg2_tool_results[0]
         .content
         .contains("Successfully modified"));
@@ -415,11 +415,11 @@ async fn test_gemini_parser_tool_error_status() -> Result<()> {
     assert_eq!(tool_results.len(), 2);
 
     // First result should be marked as error
-    assert_eq!(tool_results[0].is_error, true);
+    assert!(tool_results[0].is_error);
     assert!(tool_results[0].content.contains("Error"));
 
     // Second result should be marked as success
-    assert_eq!(tool_results[1].is_error, false);
+    assert!(!tool_results[1].is_error);
     assert!(tool_results[1].content.contains("Success"));
 
     Ok(())

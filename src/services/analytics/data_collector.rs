@@ -65,7 +65,7 @@ fn extract_file_contexts(tool_operations: &[ToolOperation]) -> Vec<FileContext> 
                 let file_type = determine_file_type(file_path);
                 let modification_type = determine_modification_type(&op.tool_name);
                 let content_snippet = extract_content_snippet_from_metadata(metadata);
-                let complexity_indicators = analyze_complexity_indicators_from_metadata(metadata);
+                let complexity_indicators = analytics_complexity_indicators_from_metadata(metadata);
 
                 file_contexts.push(FileContext {
                     file_path: file_path.clone(),
@@ -122,7 +122,7 @@ fn extract_content_snippet_from_metadata(_metadata: &FileMetadata) -> String {
     "Content snippet not available".to_string()
 }
 
-fn analyze_complexity_indicators_from_metadata(metadata: &FileMetadata) -> Vec<String> {
+fn analytics_complexity_indicators_from_metadata(metadata: &FileMetadata) -> Vec<String> {
     let mut indicators = Vec::new();
 
     if let Some(lines_added) = metadata.lines_added {
@@ -145,7 +145,7 @@ fn analyze_complexity_indicators_from_metadata(metadata: &FileMetadata) -> Vec<S
 // =============================================================================
 
 fn extract_chat_context(messages: &[Message]) -> ChatContext {
-    let conversation_flow = analyze_conversation_flow(messages);
+    let conversation_flow = analytics_conversation_flow(messages);
     let problem_solving_patterns = identify_problem_solving_patterns(messages);
     let ai_interaction_quality = calculate_ai_interaction_quality(messages);
     let key_topics = extract_key_topics(messages);
@@ -158,7 +158,7 @@ fn extract_chat_context(messages: &[Message]) -> ChatContext {
     }
 }
 
-fn analyze_conversation_flow(messages: &[Message]) -> String {
+fn analytics_conversation_flow(messages: &[Message]) -> String {
     let user_messages = messages
         .iter()
         .filter(|m| matches!(m.role, MessageRole::User))

@@ -60,7 +60,7 @@ pub fn print_getting_started() {
     println!("     $ retrochat tui");
     println!();
     println!("  3. Generate insights:");
-    println!("     $ retrochat analyze insights");
+    println!("     $ retrochat analytics insights");
 }
 
 /// Print comprehensive import command usage (for command errors)
@@ -183,7 +183,7 @@ pub fn print_full_getting_started() {
     println!("   $ retrochat tui");
     println!();
     println!("4. Generate insights:");
-    println!("   $ retrochat analyze insights");
+    println!("   $ retrochat analytics insights");
     println!();
 }
 

@@ -201,7 +201,7 @@ impl GoogleAiClient {
     }
 
     fn build_analysis_prompt(&self) -> String {
-        r#"Analyze this chat session between a user and an AI coding assistant. Focus on the user's communication patterns, question quality, and interaction effectiveness.
+        r#"Analytics this chat session between a user and an AI coding assistant. Focus on the user's communication patterns, question quality, and interaction effectiveness.
 
 Evaluate the following aspects:
 1. Communication Clarity: How clearly does the user express their needs and problems?
@@ -216,7 +216,7 @@ Provide:
 - Actionable recommendations for better AI collaboration"#.to_string()
     }
 
-    pub async fn analyze_session(&self, session_data: &str) -> Result<String, GoogleAiError> {
+    pub async fn analytics_session(&self, session_data: &str) -> Result<String, GoogleAiError> {
         let request = self.build_analysis_request(session_data);
         let response = self.generate_content(request).await?;
 
@@ -227,7 +227,7 @@ Provide:
             })
     }
 
-    pub async fn analyze(
+    pub async fn analytics(
         &self,
         analysis_request: super::models::AnalysisRequest,
     ) -> Result<super::models::AnalysisResponse, GoogleAiError> {

@@ -21,7 +21,7 @@ pub async fn generate_quantitative_analysis_ai(
         temperature: Some(0.5),
     };
 
-    match ai_client.analyze(analysis_request).await {
+    match ai_client.analytics(analysis_request).await {
         Ok(response) => parse_quantitative_response(&response.text),
         Err(e) => {
             tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
@@ -42,7 +42,7 @@ pub async fn generate_qualitative_analysis_ai(
         temperature: Some(0.7),
     };
 
-    match ai_client.analyze(analysis_request).await {
+    match ai_client.analytics(analysis_request).await {
         Ok(response) => parse_qualitative_response(&response.text),
         Err(e) => {
             tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
@@ -57,7 +57,7 @@ pub async fn generate_qualitative_analysis_ai(
 
 fn build_quantitative_analysis_prompt(input: &QuantitativeInput) -> String {
     format!(
-        r#"Analyze the following development session metrics and provide quantitative scores.
+        r#"Analytics the following development session metrics and provide quantitative scores.
 
 ## Session Metrics
 
@@ -154,7 +154,7 @@ fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
     let tech_stack = input.project_context.technology_stack.join(", ");
 
     format!(
-        r#"Analyze the following development session and provide qualitative insights.
+        r#"Analytics the following development session and provide qualitative insights.
 
 ## Session Context
 

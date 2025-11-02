@@ -80,10 +80,10 @@ Single project structure (from plan.md):
 
 ### Contract Tests
 - [x] T005 [P] Contract test Google AI API request/response in tests/contract/test_google_ai_api.rs
-- [x] T006 [P] Contract test CLI retrospect execute command in tests/contract/test_cli_retrospect_execute.rs
-- [x] T007 [P] Contract test CLI retrospect show command in tests/contract/test_cli_retrospect_show.rs
-- [x] T008 [P] Contract test CLI retrospect status command in tests/contract/test_cli_retrospect_status.rs
-- [x] T009 [P] Contract test CLI retrospect cancel command in tests/contract/test_cli_retrospect_cancel.rs
+- [x] T006 [P] Contract test CLI analytics execute command in tests/contract/test_cli_analytics_execute.rs
+- [x] T007 [P] Contract test CLI analytics show command in tests/contract/test_cli_analytics_show.rs
+- [x] T008 [P] Contract test CLI analytics status command in tests/contract/test_cli_analytics_status.rs
+- [x] T009 [P] Contract test CLI analytics cancel command in tests/contract/test_cli_analytics_cancel.rs
 
 ### Integration Tests
 - [x] T010 [P] Integration test single session analysis workflow in tests/integration/test_single_session_analysis.rs
@@ -210,10 +210,10 @@ Task: "Configure clippy and formatting rules for retrospection module"
 ```bash
 # All contract tests can run in parallel
 Task: "Contract test Google AI API request/response in tests/contract/test_google_ai_api.rs"
-Task: "Contract test CLI retrospect execute command in tests/contract/test_cli_retrospect_execute.rs"
-Task: "Contract test CLI retrospect show command in tests/contract/test_cli_retrospect_show.rs"
-Task: "Contract test CLI retrospect status command in tests/contract/test_cli_retrospect_status.rs"
-Task: "Contract test CLI retrospect cancel command in tests/contract/test_cli_retrospect_cancel.rs"
+Task: "Contract test CLI analytics execute command in tests/contract/test_cli_analytics_execute.rs"
+Task: "Contract test CLI analytics show command in tests/contract/test_cli_analytics_show.rs"
+Task: "Contract test CLI analytics status command in tests/contract/test_cli_analytics_status.rs"
+Task: "Contract test CLI analytics cancel command in tests/contract/test_cli_analytics_cancel.rs"
 ```
 
 ### Phase 3.2 Integration Tests (All Parallel)

@@ -1,13 +1,10 @@
 use super::google_ai::GoogleAiClient;
 use crate::database::{
-    AnalyticsRepository, ChatSessionRepository, DatabaseManager, MessageRepository,
-    ToolOperationRepository,
+    ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
 };
 use crate::models::ChatSession;
-use crate::services::query_service::DateRange;
 use anyhow::Result;
-use chrono::Utc;
-use std::collections::HashMap;
+use std::sync::Arc;
 
 // Import from analytics module
 use super::analytics::{
@@ -15,17 +12,17 @@ use super::analytics::{
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
     generate_qualitative_analysis_ai, generate_qualitative_analysis_fallback,
     generate_quantitative_analysis_ai, generate_quantitative_analysis_fallback,
-    ComprehensiveAnalysis, DurationStats, MessageRoleDistribution, ProcessedQuantitativeOutput,
-    QuantitativeInput, UsageInsights,
+    ProcessedQuantitativeOutput, QuantitativeInput,
 };
+use crate::models::Analytics;
 
 pub struct AnalyticsService {
-    db_manager: DatabaseManager,
+    db_manager: Arc<DatabaseManager>,
     google_ai_client: Option<GoogleAiClient>,
 }
 
 impl AnalyticsService {
-    pub fn new(db_manager: DatabaseManager) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
             google_ai_client: None,
@@ -38,79 +35,15 @@ impl AnalyticsService {
     }
 
     // =============================================================================
-    // Basic Analytics (기존 기능 유지)
-    // =============================================================================
-
-    pub async fn generate_usage_insights(&self) -> Result<UsageInsights> {
-        tracing::info!("Generating usage insights...");
-
-        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
-
-        // Get basic stats using existing methods
-        let (sessions, messages, tokens) = analytics_repo.get_total_stats().await?;
-        let total_sessions = sessions as u64;
-        let total_messages = messages as u64;
-        let total_tokens = tokens;
-
-        // Create a simple date range (last 30 days)
-        let end_date = chrono::Utc::now();
-        let start_date = end_date - chrono::Duration::days(30);
-        let date_range = DateRange {
-            start_date: start_date.to_rfc3339(),
-            end_date: end_date.to_rfc3339(),
-        };
-        let span_days = 30;
-
-        // Create empty provider breakdown for now
-        let provider_breakdown = HashMap::new();
-
-        // Create empty daily activity for now
-        let daily_activity = Vec::new();
-
-        // Create empty message role distribution for now
-        let message_role_distribution = MessageRoleDistribution {
-            user_messages: 0,
-            assistant_messages: 0,
-            system_messages: 0,
-        };
-
-        // Create empty top projects for now
-        let top_projects = Vec::new();
-
-        // Create empty session duration stats for now
-        let session_duration_stats = DurationStats {
-            average_minutes: 0.0,
-            median_minutes: 0.0,
-            min_minutes: 0.0,
-            max_minutes: 0.0,
-        };
-
-        Ok(UsageInsights {
-            total_sessions,
-            total_messages,
-            total_tokens,
-            date_range,
-            span_days,
-            provider_breakdown,
-            daily_activity,
-            message_role_distribution,
-            top_projects,
-            session_duration_stats,
-        })
-    }
-
-    // =============================================================================
     // Advanced Analytics (새로운 기능)
     // =============================================================================
 
-    pub async fn analyze_session_comprehensive(
+    pub async fn analyze_session(
         &self,
         session_id: &str,
-    ) -> Result<ComprehensiveAnalysis> {
-        tracing::info!(
-            "Starting comprehensive analysis for session: {}",
-            session_id
-        );
+        analytics_request_id: Option<String>,
+    ) -> Result<Analytics> {
+        tracing::info!("Starting analysis for session: {}", session_id);
 
         // Get repositories
         let session_repo = ChatSessionRepository::new(&self.db_manager);
@@ -155,15 +88,18 @@ impl AnalyticsService {
             .process_quantitative_data(&quantitative_input, &session)
             .await?;
 
-        Ok(ComprehensiveAnalysis {
-            session_id: session_id.to_string(),
-            generated_at: Utc::now(),
+        // Create Analytics directly
+        Ok(Analytics::new(
+            analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
+            session_id.to_string(),
             quantitative_input,
             qualitative_input,
             quantitative_output,
             qualitative_output,
             processed_output,
-        })
+            None, // model_used - will be set later if available
+            None, // analysis_duration_ms - will be set later
+        ))
     }
 
     async fn process_quantitative_data(

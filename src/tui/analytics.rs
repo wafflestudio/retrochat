@@ -13,7 +13,6 @@ use ratatui::{
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::services::AnalyticsService;
 
 #[derive(Debug, Clone)]
 pub enum AnalyticsView {
@@ -108,14 +107,13 @@ pub struct AnalyticsWidget {
     current_view: AnalyticsView,
     usage_data: Option<TuiUsageData>,
     insights_data: Option<TuiInsightsData>,
-    analytics_service: AnalyticsService,
     list_state: ListState,
     loading: bool,
     last_refresh: std::time::Instant,
 }
 
 impl AnalyticsWidget {
-    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
+    pub fn new(_db_manager: Arc<DatabaseManager>) -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -123,7 +121,6 @@ impl AnalyticsWidget {
             current_view: AnalyticsView::Overview,
             usage_data: None,
             insights_data: None,
-            analytics_service: AnalyticsService::new((*db_manager).clone()),
             list_state,
             loading: false,
             last_refresh: std::time::Instant::now(),
@@ -133,57 +130,17 @@ impl AnalyticsWidget {
     pub async fn refresh(&mut self) -> Result<()> {
         self.loading = true;
 
-        // Load usage insights using the new API
-        match self.analytics_service.generate_usage_insights().await {
-            Ok(insights) => {
-                // Convert to the expected format for the TUI
-                self.usage_data = Some(TuiUsageData {
-                    total_sessions: insights.total_sessions as i32,
-                    total_messages: insights.total_messages as i32,
-                    total_tokens: insights.total_tokens as i32,
-                    average_session_length: if insights.total_sessions > 0 {
-                        insights.total_messages as f64 / insights.total_sessions as f64
-                    } else {
-                        0.0
-                    },
-                    daily_breakdown: insights
-                        .daily_activity
-                        .into_iter()
-                        .map(|da| TuiDailyUsage {
-                            date: da.date,
-                            sessions: da.sessions as i32,
-                            messages: da.messages as i32,
-                            tokens: da.tokens as i32,
-                        })
-                        .collect(),
-                    provider_breakdown: insights
-                        .provider_breakdown
-                        .into_iter()
-                        .map(|(provider, stats)| TuiProviderUsage {
-                            provider,
-                            sessions: stats.sessions as i32,
-                            messages: stats.messages as i32,
-                            tokens: stats.tokens as i32,
-                            percentage: stats.percentage_of_total,
-                        })
-                        .collect(),
-                    project_breakdown: insights
-                        .top_projects
-                        .into_iter()
-                        .map(|project| TuiProjectUsage {
-                            project: project.project_name,
-                            sessions: project.sessions as i32,
-                            messages: project.messages as i32,
-                            tokens: project.tokens as i32,
-                            percentage: 0.0, // Would need to calculate this
-                        })
-                        .collect(),
-                });
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to load usage analytics");
-            }
-        }
+        // TODO: Replace with proper analytics data fetching
+        // For now, use empty data since generate_usage_insights was removed
+        self.usage_data = Some(TuiUsageData {
+            total_sessions: 0,
+            total_messages: 0,
+            total_tokens: 0,
+            average_session_length: 0.0,
+            daily_breakdown: Vec::new(),
+            provider_breakdown: Vec::new(),
+            project_breakdown: Vec::new(),
+        });
 
         // Set sample insights data for TUI display
         self.insights_data = Some(TuiInsightsData {

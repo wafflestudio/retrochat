@@ -1,7 +1,5 @@
 # retrochat Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-09-21
-
 ## Active Technologies
 - Rust 1.75+ with Ratatui, SQLite, Serde, Clap, Tokio (001-i-want-to)
 - Rust 1.75+ (from existing project) + Ratatui (TUI), SQLite/SQLx (storage), Serde (serialization), Clap (CLI), Tokio (async), reqwest (HTTP client for Google AI) (002-add-retrospection-process)
@@ -74,21 +72,15 @@ cargo run -- analyze insights                         # Generate usage insights
 cargo run -- analyze export json                      # Export to JSON
 cargo run -- analyze export csv                       # Export to CSV
 
-# Retrospection commands (requires GOOGLE_AI_API_KEY env var)
-cargo run -- retrospect execute [SESSION_ID] --analysis-type [TYPE]  # Analyze sessions
-cargo run -- retrospect show [SESSION_ID] --format [text|json|markdown]  # View results
-cargo run -- retrospect status [--all|--history]      # Check analysis status
-cargo run -- retrospect cancel [REQUEST_ID] [--all]   # Cancel operations
+# Analytics commands (requires GOOGLE_AI_API_KEY env var)
+cargo run -- analytics execute [SESSION_ID] [--all] [--custom-prompt PROMPT]  # Analyze sessions
+cargo run -- analytics show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
+cargo run -- analytics status [--all|--history|--watch]      # Check analysis status
+cargo run -- analytics cancel [REQUEST_ID] [--all]   # Cancel operations
 ```
 
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
-
-## Recent Changes
-- 002-add-retrospection-process: COMPLETED - Added retrospection analysis with Google AI integration, CLI interface (execute/show/status/cancel), simplified approach without complex background operations
-- 001-i-want-to: Added Rust TUI app for LLM chat history analysis with SQLite persistence
-
-<!-- MANUAL ADDITIONS START -->
 
 ## Development Rules
 
@@ -118,7 +110,7 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 
 ### Environment Variable Management
 - **Centralized Constants**: All environment variable names are defined in `src/env.rs`
-- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, retrospection)
+- **Organized by Category**: Environment variables are grouped into modules (logging, providers, apis, system, analytics)
 - **Adding New Variables**: When adding or modifying environment variables, always:
   1. Add the constant to the appropriate module in `src/env.rs`
   2. Use the constant throughout the codebase instead of hardcoded strings

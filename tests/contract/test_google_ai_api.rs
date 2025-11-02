@@ -22,7 +22,7 @@ async fn test_google_ai_api_request_response_structure() {
     let request = GenerateContentRequest {
         contents: vec![Content {
             parts: vec![Part::Text {
-                text: "Analyze this chat session for user interaction patterns: User: Hello. Assistant: Hi there!".to_string()
+                text: "Analytics this chat session for user interaction patterns: User: Hello. Assistant: Hi there!".to_string()
             }],
             role: Some("user".to_string()),
         }],

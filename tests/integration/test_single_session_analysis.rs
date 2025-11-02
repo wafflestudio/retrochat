@@ -1,14 +1,14 @@
 use retrochat::database::DatabaseManager;
 
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use retrochat::services::RetrospectionService;
+use retrochat::services::AnalyticsRequestService;
 use std::sync::Arc;
 use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_single_session_analysis_workflow() {
     // Integration test for complete single session analysis workflow
-    // This test MUST FAIL until the retrospection service is implemented
+    // This test MUST FAIL until the analytics service is implemented
 
     let _temp_dir = TempDir::new().expect("Failed to create temp directory");
     let db_manager = Arc::new(DatabaseManager::new(":memory:").await.unwrap());
@@ -19,7 +19,7 @@ async fn test_single_session_analysis_workflow() {
     // Create service with mock Google AI client
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Step 1: Create analysis request
     let request = service
@@ -41,9 +41,9 @@ async fn test_single_session_analysis_workflow() {
         Ok(_) => {
             // If successful, try to get the analysis result
             match service.get_analysis_result(request.id.clone()).await {
-                Ok(Some(retrospection)) => {
+                Ok(Some(analytics)) => {
                     // Verify analysis result was stored
-                    assert!(!retrospection.insights.is_empty());
+                    assert!(!analytics.qualitative_output.insights.is_empty());
                     println!("Analysis completed successfully");
                 }
                 Ok(None) => {
@@ -79,7 +79,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Create analysis request with custom prompt
     let result = service
@@ -110,7 +110,7 @@ async fn test_single_session_analysis_error_handling() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Try to create analysis request for nonexistent session
     let result = service
@@ -163,7 +163,7 @@ async fn test_single_session_analysis_cancellation() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Create analysis request
     let result = service
