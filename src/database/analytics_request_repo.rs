@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::models::{OperationStatus, AnalyticsRequest};
+use crate::models::{AnalyticsRequest, OperationStatus};
 
 #[derive(Clone)]
 pub struct AnalyticsRequestRepository {

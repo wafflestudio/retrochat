@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 // Re-export types from services that will be stored as JSON
 use crate::services::analytics::{
-    QuantitativeInput, QualitativeInput, QualitativeOutput, 
-    ProcessedQuantitativeOutput, QuantitativeOutput,
+    ProcessedQuantitativeOutput, QualitativeInput, QualitativeOutput, QuantitativeInput,
+    QuantitativeOutput,
 };
 
 // =============================================================================
@@ -55,6 +55,7 @@ pub struct Analytics {
 }
 
 impl Analytics {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         analytics_request_id: String,
         session_id: String,
@@ -85,7 +86,9 @@ impl Analytics {
                 lines_added: quantitative_input.file_changes.lines_added,
                 lines_removed: quantitative_input.file_changes.lines_removed,
                 total_tokens_used: quantitative_input.token_metrics.total_tokens_used,
-                session_duration_minutes: quantitative_input.time_metrics.total_session_time_minutes,
+                session_duration_minutes: quantitative_input
+                    .time_metrics
+                    .total_session_time_minutes,
             },
             quantitative_input,
             qualitative_input,
@@ -96,4 +99,3 @@ impl Analytics {
         }
     }
 }
-

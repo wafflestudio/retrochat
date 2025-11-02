@@ -149,30 +149,12 @@ impl AnalyticsFormatter {
     fn print_quantitative_scores_plain(&self, analysis: &Analytics) {
         println!("\n📊 QUANTITATIVE SCORES");
         println!("─────────────────────");
-        println!(
-            "  Overall Score: {:.1}/100",
-            analysis.scores.overall
-        );
-        println!(
-            "  Code Quality: {:.1}/100",
-            analysis.scores.code_quality
-        );
-        println!(
-            "  Productivity: {:.1}/100",
-            analysis.scores.productivity
-        );
-        println!(
-            "  Efficiency: {:.1}/100",
-            analysis.scores.efficiency
-        );
-        println!(
-            "  Collaboration: {:.1}/100",
-            analysis.scores.collaboration
-        );
-        println!(
-            "  Learning: {:.1}/100",
-            analysis.scores.learning
-        );
+        println!("  Overall Score: {:.1}/100", analysis.scores.overall);
+        println!("  Code Quality: {:.1}/100", analysis.scores.code_quality);
+        println!("  Productivity: {:.1}/100", analysis.scores.productivity);
+        println!("  Efficiency: {:.1}/100", analysis.scores.efficiency);
+        println!("  Collaboration: {:.1}/100", analysis.scores.collaboration);
+        println!("  Learning: {:.1}/100", analysis.scores.learning);
     }
 
     fn print_quantitative_scores_enhanced(&self, analysis: &Analytics) -> Result<()> {
@@ -190,19 +172,10 @@ impl AnalyticsFormatter {
 
         // Print scores with visual bars
         self.print_score_bar("Overall", analysis.scores.overall);
-        self.print_score_bar(
-            "Code Quality",
-            analysis.scores.code_quality,
-        );
-        self.print_score_bar(
-            "Productivity",
-            analysis.scores.productivity,
-        );
+        self.print_score_bar("Code Quality", analysis.scores.code_quality);
+        self.print_score_bar("Productivity", analysis.scores.productivity);
         self.print_score_bar("Efficiency", analysis.scores.efficiency);
-        self.print_score_bar(
-            "Collaboration",
-            analysis.scores.collaboration,
-        );
+        self.print_score_bar("Collaboration", analysis.scores.collaboration);
         self.print_score_bar("Learning", analysis.scores.learning);
 
         println!("{}", style(self.box_bottom(width)).blue());

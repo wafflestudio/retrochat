@@ -1,11 +1,11 @@
 pub mod analytics_repo;
+pub mod analytics_request_repo;
 pub mod chat_session_repo;
 pub mod config;
 pub mod connection;
 pub mod message_repo;
 pub mod migrations;
 pub mod project_repo;
-pub mod analytics_request_repo;
 pub mod schema;
 pub mod tool_operation_repo;
 
@@ -14,12 +14,12 @@ pub use analytics_repo::{
     AnalyticsRepository, DailyPoint, DailyUsageStats, HourlyActivity, ProviderTrend,
     SessionLengthDistribution,
 };
+pub use analytics_request_repo::AnalyticsRequestRepository;
 pub use chat_session_repo::ChatSessionRepository;
 pub use connection::DatabaseManager;
 pub use message_repo::MessageRepository;
 pub use migrations::{MigrationManager, MigrationStatus};
 pub use project_repo::ProjectRepository;
-pub use analytics_request_repo::AnalyticsRequestRepository;
 pub use schema::{create_schema, SCHEMA_VERSION};
 pub use tool_operation_repo::ToolOperationRepository;
 

@@ -56,7 +56,6 @@ impl SessionDetailWidget {
                     self.state
                         .update_session(response.session, response.messages);
                     self.update_scroll_state();
-
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to load session details");

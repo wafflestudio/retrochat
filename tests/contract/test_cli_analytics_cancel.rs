@@ -8,7 +8,7 @@ async fn test_analytics_cancel_command_structure() {
     // Test command execution with specific request ID
     let result = handle_cancel_command(
         Some("analytics-123".to_string()), // request_id
-        false,                         // all
+        false,                             // all
     )
     .await;
 
@@ -30,7 +30,7 @@ async fn test_analytics_cancel_specific_operations() {
     // Test cancelling specific operations
     let result = handle_cancel_command(
         Some("analytics-456".to_string()), // request_id
-        false,                         // all
+        false,                             // all
     )
     .await;
 

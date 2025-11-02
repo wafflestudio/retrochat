@@ -1,14 +1,12 @@
 use super::google_ai::GoogleAiClient;
 use crate::database::{
-    ChatSessionRepository, DatabaseManager, MessageRepository,
-    ToolOperationRepository,
+    ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
 };
 use crate::models::ChatSession;
 use anyhow::Result;
 use std::sync::Arc;
 
 // Import from analytics module
-use crate::models::Analytics;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
@@ -16,6 +14,7 @@ use super::analytics::{
     generate_quantitative_analysis_ai, generate_quantitative_analysis_fallback,
     ProcessedQuantitativeOutput, QuantitativeInput,
 };
+use crate::models::Analytics;
 
 pub struct AnalyticsService {
     db_manager: Arc<DatabaseManager>,
@@ -44,10 +43,7 @@ impl AnalyticsService {
         session_id: &str,
         analytics_request_id: Option<String>,
     ) -> Result<Analytics> {
-        tracing::info!(
-            "Starting analysis for session: {}",
-            session_id
-        );
+        tracing::info!("Starting analysis for session: {}", session_id);
 
         // Get repositories
         let session_repo = ChatSessionRepository::new(&self.db_manager);

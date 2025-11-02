@@ -349,7 +349,7 @@ impl QueryService {
                     .unwrap_or_else(|| session.start_time.to_rfc3339()),
                 message_count: session.message_count as i32,
                 total_tokens: session.token_count.map(|t| t as i32),
-                first_message_preview: first_message_preview,
+                first_message_preview,
                 has_analytics: false,           // TODO: 나중에고치기
                 analytics_status: Option::None, // TODO: 나중에고치기
             });

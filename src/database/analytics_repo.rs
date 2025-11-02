@@ -383,17 +383,14 @@ impl AnalyticsRepository {
         ))
     }
 
-    pub async fn save_analytics(
-        &self,
-        analytics: &Analytics,
-    ) -> AnyhowResult<String> {
+    pub async fn save_analytics(&self, analytics: &Analytics) -> AnyhowResult<String> {
         let generated_at = analytics.generated_at.to_rfc3339();
 
         // Serialize JSON fields
-        let scores_json = serde_json::to_string(&analytics.scores)
-            .context("Failed to serialize scores")?;
-        let metrics_json = serde_json::to_string(&analytics.metrics)
-            .context("Failed to serialize metrics")?;
+        let scores_json =
+            serde_json::to_string(&analytics.scores).context("Failed to serialize scores")?;
+        let metrics_json =
+            serde_json::to_string(&analytics.metrics).context("Failed to serialize metrics")?;
         let quantitative_input_json = serde_json::to_string(&analytics.quantitative_input)
             .context("Failed to serialize quantitative_input")?;
         let qualitative_input_json = serde_json::to_string(&analytics.qualitative_input)
@@ -433,10 +430,7 @@ impl AnalyticsRepository {
         Ok(analytics.id.clone())
     }
 
-    pub async fn get_analytics_by_id(
-        &self,
-        id: &str,
-    ) -> AnyhowResult<Option<Analytics>> {
+    pub async fn get_analytics_by_id(&self, id: &str) -> AnyhowResult<Option<Analytics>> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -455,14 +449,13 @@ impl AnalyticsRepository {
         .context("Failed to fetch analytics")?;
 
         if let Some(row) = row {
-            let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?
-                .with_timezone(&Utc);
+            let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let scores: crate::models::Scores = serde_json::from_str(&row.scores_json)
-                .context("Failed to deserialize scores")?;
-            let metrics: crate::models::Metrics = serde_json::from_str(&row.metrics_json)
-                .context("Failed to deserialize metrics")?;
+            let scores: crate::models::Scores =
+                serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
+            let metrics: crate::models::Metrics =
+                serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let quantitative_input: crate::services::analytics::QuantitativeInput =
                 serde_json::from_str(&row.quantitative_input_json)
                     .context("Failed to deserialize quantitative_input")?;
@@ -532,14 +525,13 @@ impl AnalyticsRepository {
         .context("Failed to fetch analytics by request_id")?;
 
         if let Some(row) = row {
-            let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?
-                .with_timezone(&Utc);
+            let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let scores: crate::models::Scores = serde_json::from_str(&row.scores_json)
-                .context("Failed to deserialize scores")?;
-            let metrics: crate::models::Metrics = serde_json::from_str(&row.metrics_json)
-                .context("Failed to deserialize metrics")?;
+            let scores: crate::models::Scores =
+                serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
+            let metrics: crate::models::Metrics =
+                serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let quantitative_input: crate::services::analytics::QuantitativeInput =
                 serde_json::from_str(&row.quantitative_input_json)
                     .context("Failed to deserialize quantitative_input")?;

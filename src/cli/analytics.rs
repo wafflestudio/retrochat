@@ -207,10 +207,7 @@ pub async fn handle_show_command(
     }
 }
 
-async fn show_session_results(
-    service: &AnalyticsRequestService,
-    session_id: &str,
-) -> Result<()> {
+async fn show_session_results(service: &AnalyticsRequestService, session_id: &str) -> Result<()> {
     // Find analysis requests for this session
     let requests = service
         .list_analyses(Some(session_id.to_string()), None)

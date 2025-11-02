@@ -150,7 +150,7 @@ impl AnalyticsRequestService {
         if let Some(analytics) = analytics_repo
             .get_analytics_by_request_id(&request_id)
             .await
-            .map_err(|e| format!("Failed to load analytics from database: {}", e))?
+            .map_err(|e| format!("Failed to load analytics from database: {e}"))?
         {
             return Ok(Some(analytics));
         }
@@ -169,7 +169,7 @@ impl AnalyticsRequestService {
                 analytics_repo
                     .save_analytics(&analytics)
                     .await
-                    .map_err(|e| format!("Failed to save regenerated analytics: {}", e))?;
+                    .map_err(|e| format!("Failed to save regenerated analytics: {e}"))?;
                 Ok(Some(analytics))
             }
             Err(e) => {
@@ -246,7 +246,7 @@ impl AnalyticsRequestService {
         analytics_repo
             .save_analytics(&analytics)
             .await
-            .map_err(|e| format!("Failed to save analytics: {}", e))?;
+            .map_err(|e| format!("Failed to save analytics: {e}"))?;
 
         Ok(analytics)
     }
