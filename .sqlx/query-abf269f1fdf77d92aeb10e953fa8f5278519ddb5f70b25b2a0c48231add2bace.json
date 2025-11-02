@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM retrospect_requests WHERE status = ? ORDER BY started_at DESC",
+  "query": "SELECT * FROM analytics_requests ORDER BY started_at DESC LIMIT ?",
   "describe": {
     "columns": [
       {
@@ -58,5 +58,5 @@
       true
     ]
   },
-  "hash": "71b02b1d39d878c6f02feef1c4f4a3a41613a6f310f1ded1254f52dde69d5659"
+  "hash": "abf269f1fdf77d92aeb10e953fa8f5278519ddb5f70b25b2a0c48231add2bace"
 }

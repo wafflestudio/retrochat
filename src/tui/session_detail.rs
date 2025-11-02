@@ -107,7 +107,7 @@ impl SessionDetailWidget {
                 self.state.toggle_tool_details();
             }
             KeyCode::Char('a') => {
-                // A: Start retrospection analysis for current session
+                // A: Start analysis for current session
                 // This would require returning a signal to the app
                 // For now, just show a message that this functionality is available via CLI
                 // TODO: Implement analysis start from session detail

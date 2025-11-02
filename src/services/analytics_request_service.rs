@@ -1,23 +1,26 @@
 use std::sync::Arc;
 
-use crate::database::{DatabaseManager, RetrospectRequestRepository};
-use crate::models::{OperationStatus, RetrospectRequest, Retrospection};
+use crate::database::{AnalyticsRepository, AnalyticsRequestRepository, DatabaseManager};
+use crate::models::{Analytics, AnalyticsRequest, OperationStatus};
 use crate::services::analytics_service::AnalyticsService;
 use crate::services::google_ai::GoogleAiClient;
 
-pub struct RetrospectionService {
+pub struct AnalyticsRequestService {
     analytics_service: AnalyticsService,
-    request_repo: RetrospectRequestRepository,
+    request_repo: AnalyticsRequestRepository,
+    db_manager: Arc<DatabaseManager>,
 }
 
-impl RetrospectionService {
+impl AnalyticsRequestService {
     pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
-        let request_repo = RetrospectRequestRepository::new(db_manager.clone());
-        let analytics_service = AnalyticsService::new(db_manager).with_google_ai(google_ai_client);
+        let request_repo = AnalyticsRequestRepository::new(db_manager.clone());
+        let analytics_service =
+            AnalyticsService::new(db_manager.clone()).with_google_ai(google_ai_client);
 
         Self {
             analytics_service,
             request_repo,
+            db_manager,
         }
     }
 
@@ -26,7 +29,7 @@ impl RetrospectionService {
         session_id: String,
         created_by: Option<String>,
         custom_prompt: Option<String>,
-    ) -> Result<RetrospectRequest, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<AnalyticsRequest, Box<dyn std::error::Error + Send + Sync>> {
         // Check if there's already an active request for this session
         let existing_requests = self.request_repo.find_by_session_id(&session_id).await?;
         for existing_request in existing_requests {
@@ -41,7 +44,7 @@ impl RetrospectionService {
             }
         }
 
-        let request = RetrospectRequest::new(session_id, created_by, custom_prompt);
+        let request = AnalyticsRequest::new(session_id, created_by, custom_prompt);
 
         self.request_repo.create(&request).await?;
 
@@ -76,13 +79,13 @@ impl RetrospectionService {
 
         // Perform the analysis synchronously (blocking for CLI, but TUI will handle async)
         match self.perform_analysis(&request).await {
-            Ok(retrospection) => {
+            Ok(analysis) => {
                 // Mark request as completed
-                // Note: retrospection results are now stored via analytics_service
+                // Note: analysis results are now stored via analytics_service
                 request.mark_completed();
                 self.request_repo.update(&request).await?;
 
-                Ok(retrospection.id)
+                Ok(analysis.session_id)
             }
             Err(e) => {
                 // Mark request as failed with error message
@@ -119,7 +122,7 @@ impl RetrospectionService {
     pub async fn get_analysis_status(
         &self,
         request_id: String,
-    ) -> Result<RetrospectRequest, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<AnalyticsRequest, Box<dyn std::error::Error + Send + Sync>> {
         self.request_repo
             .find_by_id(&request_id)
             .await?
@@ -129,9 +132,12 @@ impl RetrospectionService {
     pub async fn get_analysis_result(
         &self,
         request_id: String,
-    ) -> Result<Option<Retrospection>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<Analytics>, Box<dyn std::error::Error + Send + Sync>> {
         // Get the request to check its status
-        let request = self.request_repo.find_by_id(&request_id).await?
+        let request = self
+            .request_repo
+            .find_by_id(&request_id)
+            .await?
             .ok_or("Request not found")?;
 
         // Only return result if the request is completed
@@ -139,18 +145,32 @@ impl RetrospectionService {
             return Ok(None);
         }
 
-        // Note: Retrospection data is now managed by analytics service
-        // For now, if analysis was completed, we can regenerate it on-demand
-        // This could be optimized later by storing results in analytics_repo
-        match self.analytics_service.analyze_session_comprehensive(&request.session_id).await {
-            Ok(analysis) => {
-                let retrospection = Retrospection::from_comprehensive_analysis(
-                    request_id,
-                    analysis,
-                    Some("gemini-pro".to_string()),
-                    None,
-                );
-                Ok(Some(retrospection))
+        // Try to load from database first
+        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
+        if let Some(analytics) = analytics_repo
+            .get_analytics_by_request_id(&request_id)
+            .await
+            .map_err(|e| format!("Failed to load analytics from database: {}", e))?
+        {
+            return Ok(Some(analytics));
+        }
+
+        // If not found in database, regenerate it on-demand
+        tracing::info!("Analysis not found in database, regenerating...");
+        match self
+            .analytics_service
+            .analyze_session(&request.session_id, Some(request_id.clone()))
+            .await
+        {
+            Ok(mut analytics) => {
+                // Save the regenerated analytics
+                analytics.analytics_request_id = request_id.clone();
+                // Keep analysis_duration_ms as None since we don't track regeneration time
+                analytics_repo
+                    .save_analytics(&analytics)
+                    .await
+                    .map_err(|e| format!("Failed to save regenerated analytics: {}", e))?;
+                Ok(Some(analytics))
             }
             Err(e) => {
                 tracing::warn!(error = %e, "Failed to regenerate analysis result");
@@ -163,7 +183,7 @@ impl RetrospectionService {
         &self,
         session_id: Option<String>,
         limit: Option<usize>,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         match session_id {
             Some(session_id) => self.request_repo.find_by_session_id(&session_id).await,
             None => self.request_repo.find_recent(limit).await,
@@ -172,7 +192,7 @@ impl RetrospectionService {
 
     pub async fn get_active_analyses(
         &self,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         self.request_repo.find_active_requests().await
     }
 
@@ -197,8 +217,6 @@ impl RetrospectionService {
     ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let cutoff_date = chrono::Utc::now() - chrono::Duration::days(days_old as i64);
 
-        // Clean up old completed requests
-        // Note: retrospection data is now managed by analytics_service
         let requests_deleted = self
             .request_repo
             .delete_completed_before(cutoff_date)
@@ -209,58 +227,64 @@ impl RetrospectionService {
 
     async fn perform_analysis(
         &self,
-        request: &RetrospectRequest,
-    ) -> Result<Retrospection, Box<dyn std::error::Error + Send + Sync>> {
-        // Use analytics service to generate comprehensive analysis
+        request: &AnalyticsRequest,
+    ) -> Result<Analytics, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = std::time::Instant::now();
-        let analysis = self
+
+        // Use analytics service to generate analysis
+        let mut analytics = self
             .analytics_service
-            .analyze_session_comprehensive(&request.session_id)
+            .analyze_session(&request.session_id, Some(request.id.clone()))
             .await?;
+
+        // Save analysis to database with timing info
         let analysis_duration_ms = start_time.elapsed().as_millis() as i64;
+        analytics.analytics_request_id = request.id.clone();
+        analytics.analysis_duration_ms = Some(analysis_duration_ms);
 
-        // Convert to retrospection
-        let retrospection = Retrospection::from_comprehensive_analysis(
-            request.id.clone(),
-            analysis,
-            Some("gemini-pro".to_string()),
-            Some(analysis_duration_ms),
-        );
+        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
+        analytics_repo
+            .save_analytics(&analytics)
+            .await
+            .map_err(|e| format!("Failed to save analytics: {}", e))?;
 
-        Ok(retrospection)
+        Ok(analytics)
     }
 }
 
-/// A cleanup handler that automatically cancels running retrospection requests when dropped.
+/// A cleanup handler that automatically cancels running analyze requests when dropped.
 /// This is useful for ensuring cleanup when the CLI exits or crashes.
-pub struct RetrospectionCleanupHandler {
-    service: Arc<RetrospectionService>,
+pub struct AnalyticsRequestCleanupHandler {
+    service: Arc<AnalyticsRequestService>,
     runtime: Arc<tokio::runtime::Runtime>,
 }
 
-impl RetrospectionCleanupHandler {
-    pub fn new(service: Arc<RetrospectionService>, runtime: Arc<tokio::runtime::Runtime>) -> Self {
+impl AnalyticsRequestCleanupHandler {
+    pub fn new(
+        service: Arc<AnalyticsRequestService>,
+        runtime: Arc<tokio::runtime::Runtime>,
+    ) -> Self {
         Self { service, runtime }
     }
 }
 
-impl Drop for RetrospectionCleanupHandler {
+impl Drop for AnalyticsRequestCleanupHandler {
     fn drop(&mut self) {
-        // Cancel all active retrospection requests when the handler is dropped
+        // Cancel all active analyze requests when the handler is dropped
         let service = self.service.clone();
         self.runtime.block_on(async move {
             match service.cancel_all_active_analyses().await {
                 Ok(count) if count > 0 => {
                     tracing::info!(
                         count = count,
-                        "Cancelled running retrospection requests due to CLI exit"
+                        "Cancelled running analyze requests due to CLI exit"
                     );
                 }
                 Ok(_) => {
                     // No active requests to cancel
                 }
                 Err(e) => {
-                    tracing::warn!(error = %e, "Failed to cancel active retrospection requests");
+                    tracing::warn!(error = %e, "Failed to cancel active analyze requests");
                 }
             }
         });
@@ -294,7 +318,7 @@ mod tests {
         .with_project("test_project".to_string());
         session_repo.create(&test_session).await.unwrap();
 
-        let service = RetrospectionService::new(
+        let service = AnalyticsRequestService::new(
             Arc::new(database.manager),
             GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
         );
@@ -330,7 +354,7 @@ mod tests {
         .with_project("test_project2".to_string());
         session_repo.create(&test_session).await.unwrap();
 
-        let service = RetrospectionService::new(
+        let service = AnalyticsRequestService::new(
             Arc::new(database.manager),
             GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
         );

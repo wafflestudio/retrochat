@@ -29,7 +29,7 @@ pub mod providers {
 
 /// External API configuration
 pub mod apis {
-    /// Google AI API key for retrospection analysis
+    /// Google AI API key for analysis
     pub const GOOGLE_AI_API_KEY: &str = "GOOGLE_AI_API_KEY";
 }
 
@@ -43,13 +43,4 @@ pub mod system {
 pub mod database {
     /// Database file path (overrides default ~/.retrochat/retrochat.db)
     pub const RETROCHAT_DB: &str = "RETROCHAT_DB";
-}
-
-/// Retrospection operation configuration (from specs)
-pub mod retrospection {
-    /// Default timeout for operations (seconds)
-    pub const TIMEOUT: &str = "RETROCHAT_TIMEOUT";
-
-    /// Maximum concurrent analysis operations
-    pub const CONCURRENT: &str = "RETROCHAT_CONCURRENT";
 }

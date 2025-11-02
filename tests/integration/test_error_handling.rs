@@ -1,7 +1,7 @@
 use retrochat::database::DatabaseManager;
 
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use retrochat::services::RetrospectionService;
+use retrochat::services::AnalyticsRequestService;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ async fn test_google_ai_api_error_recovery() {
         max_retries: 0,
     };
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Test creating analysis request
     let result = service
@@ -68,7 +68,7 @@ async fn test_service_creation_with_invalid_config() {
 
     // This should succeed (client creation doesn't validate the key immediately)
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Try to create an analysis request
     let result = service
@@ -106,7 +106,7 @@ async fn test_analysis_execution_error_handling() {
     };
 
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Create analysis request
     let result = service
@@ -148,7 +148,7 @@ async fn test_nonexistent_session_handling() {
 
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Try to create analysis request for nonexistent session
     let result = service
@@ -201,7 +201,7 @@ async fn test_database_error_handling() {
 
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Try various operations that might trigger database errors
     let operations = vec![

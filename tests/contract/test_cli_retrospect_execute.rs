@@ -74,7 +74,7 @@ async fn test_retrospect_execute_all_sessions() {
 #[tokio::test]
 async fn test_retrospect_execute_custom_analysis() {
     // Test custom analysis type with prompt
-    let custom_prompt = "Analyze the coding patterns and provide specific feedback".to_string();
+    let custom_prompt = "Analytics the coding patterns and provide specific feedback".to_string();
 
     let result = handle_execute_command(
         Some("session-456".to_string()), // session_id

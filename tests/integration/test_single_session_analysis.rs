@@ -1,7 +1,7 @@
 use retrochat::database::DatabaseManager;
 
 use retrochat::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use retrochat::services::RetrospectionService;
+use retrochat::services::AnalyticsRequestService;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -19,7 +19,7 @@ async fn test_single_session_analysis_workflow() {
     // Create service with mock Google AI client
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Step 1: Create analysis request
     let request = service
@@ -79,7 +79,7 @@ async fn test_single_session_analysis_with_custom_prompt() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Create analysis request with custom prompt
     let result = service
@@ -110,7 +110,7 @@ async fn test_single_session_analysis_error_handling() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Try to create analysis request for nonexistent session
     let result = service
@@ -163,7 +163,7 @@ async fn test_single_session_analysis_cancellation() {
     // Create service
     let config = GoogleAiConfig::new("test-api-key".to_string());
     let google_ai_client = GoogleAiClient::new(config).unwrap();
-    let service = RetrospectionService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
 
     // Create analysis request
     let result = service

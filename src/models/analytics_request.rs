@@ -39,7 +39,7 @@ impl std::str::FromStr for OperationStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetrospectRequest {
+pub struct AnalyticsRequest {
     pub id: String,
     pub session_id: String,
     pub status: OperationStatus,
@@ -50,7 +50,7 @@ pub struct RetrospectRequest {
     pub custom_prompt: Option<String>,
 }
 
-impl RetrospectRequest {
+impl AnalyticsRequest {
     pub fn new(
         session_id: String,
         created_by: Option<String>,
@@ -112,35 +112,5 @@ impl RetrospectRequest {
     pub fn duration(&self) -> Option<chrono::Duration> {
         self.completed_at
             .map(|completed| completed - self.started_at)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RetrospectionRequest {
-    pub session_id: String,
-    pub custom_prompt: Option<String>,
-    pub user_id: Option<String>,
-}
-
-impl RetrospectionRequest {
-    pub fn new(session_id: String, user_id: Option<String>) -> Self {
-        Self {
-            session_id,
-            custom_prompt: None,
-            user_id,
-        }
-    }
-
-    pub fn with_custom_prompt(mut self, prompt: String) -> Self {
-        self.custom_prompt = Some(prompt);
-        self
-    }
-
-    pub fn validate(&self) -> Result<(), String> {
-        if self.session_id.is_empty() {
-            return Err("Session ID cannot be empty".to_string());
-        }
-
-        Ok(())
     }
 }

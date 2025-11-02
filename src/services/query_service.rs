@@ -146,8 +146,8 @@ pub struct SessionSummary {
     pub message_count: i32,
     pub total_tokens: Option<i32>,
     pub first_message_preview: String,
-    pub has_retrospection: bool,
-    pub retrospection_status: Option<OperationStatus>,
+    pub has_analytics: bool,
+    pub analytics_status: Option<OperationStatus>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -350,8 +350,8 @@ impl QueryService {
                 message_count: session.message_count as i32,
                 total_tokens: session.token_count.map(|t| t as i32),
                 first_message_preview: first_message_preview,
-                has_retrospection: false,           // TODO: 나중에고치기
-                retrospection_status: Option::None, // TODO: 나중에고치기
+                has_analytics: false,           // TODO: 나중에고치기
+                analytics_status: Option::None, // TODO: 나중에고치기
             });
         }
 

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT COUNT(*) as count FROM retrospections WHERE retrospect_request_id = ?",
+  "query": "SELECT COUNT(*) as count FROM analytics_requests WHERE status IN ('pending', 'running')",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,11 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
-      false
+      null
     ]
   },
-  "hash": "885e877b239ec90490d07ba563bd3e48e4e9b6a778a15b42f66f3abb448b11f4"
+  "hash": "85e79f8bee1545849066899470728dac9d6f71b720b2488ab112584e0ee19a03"
 }

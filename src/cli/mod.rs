@@ -78,8 +78,8 @@ pub enum Commands {
         #[arg(short, long)]
         import: bool,
     },
-    /// Analyze sessions with request tracking
-    Analyze {
+    /// Analytics sessions with request tracking
+    Analytics {
         #[command(subcommand)]
         command: AnalyticsCommands,
     },
@@ -123,7 +123,7 @@ pub enum Commands {
         #[arg(long)]
         until: Option<String>,
     },
-    /// [Alias for 'analyze execute'] Review and analyze a chat session
+    /// [Alias for 'analytics execute'] Review and analytics a chat session
     Review {
         /// Session ID to review (optional, will prompt if not provided)
         session_id: Option<String>,
@@ -206,9 +206,9 @@ impl Cli {
         let rt = Runtime::new()?;
         let rt_arc = Arc::new(rt);
 
-        // Create cleanup handler for analyze commands
-        let _cleanup_guard = if matches!(self.command, Some(Commands::Analyze { .. })) {
-            Some(self.create_retrospection_cleanup_handler(rt_arc.clone())?)
+        // Create cleanup handler for analytics commands
+        let _cleanup_guard = if matches!(self.command, Some(Commands::Analytics { .. })) {
+            Some(self.create_analytics_request_cleanup_handler(rt_arc.clone())?)
         } else {
             None
         };
@@ -243,7 +243,7 @@ impl Cli {
                     verbose,
                     import,
                 } => watch::handle_watch_command(path, providers, verbose, import).await,
-                Commands::Analyze { command } => match command {
+                Commands::Analytics { command } => match command {
                     AnalyticsCommands::Execute {
                         session_id,
                         custom_prompt,
@@ -340,7 +340,7 @@ impl Cli {
                     until,
                 } => query::handle_search_command(query, limit, since, until).await,
                 Commands::Review { session_id } => {
-                    // Delegate to analyze execute
+                    // Delegate to analytics execute
                     // TODO: Could make this more interactive
                     if let Some(sid) = session_id {
                         analytics::handle_execute_command(
@@ -362,14 +362,14 @@ impl Cli {
         })
     }
 
-    fn create_retrospection_cleanup_handler(
+    fn create_analytics_request_cleanup_handler(
         &self,
         rt: Arc<Runtime>,
-    ) -> anyhow::Result<crate::services::RetrospectionCleanupHandler> {
+    ) -> anyhow::Result<crate::services::AnalyticsRequestCleanupHandler> {
         use crate::database::DatabaseManager;
         use crate::services::{
             google_ai::{GoogleAiClient, GoogleAiConfig},
-            RetrospectionCleanupHandler, RetrospectionService,
+            AnalyticsRequestCleanupHandler, AnalyticsRequestService,
         };
 
         // Create the necessary components synchronously
@@ -384,11 +384,11 @@ impl Cli {
             GoogleAiConfig::new(api_key)
         };
         let google_ai_client = GoogleAiClient::new(google_ai_config)?;
-        let service = Arc::new(RetrospectionService::new(
+        let service = Arc::new(AnalyticsRequestService::new(
             Arc::new(db_manager),
             google_ai_client,
         ));
 
-        Ok(RetrospectionCleanupHandler::new(service, rt))
+        Ok(AnalyticsRequestCleanupHandler::new(service, rt))
     }
 }

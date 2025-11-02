@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM analytics_requests WHERE completed_at IS NOT NULL AND completed_at < ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f64b389d270e02d0d2111c50691ebb2209038b90dafd66a4e5d59b5b7c3b4746"
+}

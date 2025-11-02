@@ -68,8 +68,8 @@ impl Default for ToolUsageStats {
     }
 }
 
-/// Analyze tool usage from messages
-pub fn analyze_tool_usage(messages: &[Message]) -> ToolUsageStats {
+/// Analytics tool usage from messages
+pub fn analytics_tool_usage(messages: &[Message]) -> ToolUsageStats {
     let mut stats = ToolUsageStats::new();
 
     for message in messages {
@@ -182,14 +182,14 @@ mod tests {
     }
 
     #[test]
-    fn test_analyze_tool_usage() {
+    fn test_analytics_tool_usage() {
         let tools = vec![
             create_tool_use("Bash", "tool_use"),
             create_tool_use("Read", "tool_use"),
         ];
         let messages = vec![create_test_message_with_tools(tools)];
 
-        let stats = analyze_tool_usage(&messages);
+        let stats = analytics_tool_usage(&messages);
 
         assert_eq!(stats.total_tools, 2);
         assert!(stats.by_type.contains_key("Bash"));

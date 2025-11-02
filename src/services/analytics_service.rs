@@ -5,17 +5,16 @@ use crate::database::{
 };
 use crate::models::ChatSession;
 use anyhow::Result;
-use chrono::Utc;
 use std::sync::Arc;
 
 // Import from analytics module
+use crate::models::Analytics;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
     generate_qualitative_analysis_ai, generate_qualitative_analysis_fallback,
     generate_quantitative_analysis_ai, generate_quantitative_analysis_fallback,
-    ComprehensiveAnalysis, ProcessedQuantitativeOutput,
-    QuantitativeInput,
+    ProcessedQuantitativeOutput, QuantitativeInput,
 };
 
 pub struct AnalyticsService {
@@ -40,12 +39,13 @@ impl AnalyticsService {
     // Advanced Analytics (새로운 기능)
     // =============================================================================
 
-    pub async fn analyze_session_comprehensive(
+    pub async fn analyze_session(
         &self,
         session_id: &str,
-    ) -> Result<ComprehensiveAnalysis> {
+        analytics_request_id: Option<String>,
+    ) -> Result<Analytics> {
         tracing::info!(
-            "Starting comprehensive analysis for session: {}",
+            "Starting analysis for session: {}",
             session_id
         );
 
@@ -92,15 +92,18 @@ impl AnalyticsService {
             .process_quantitative_data(&quantitative_input, &session)
             .await?;
 
-        Ok(ComprehensiveAnalysis {
-            session_id: session_id.to_string(),
-            generated_at: Utc::now(),
+        // Create Analytics directly
+        Ok(Analytics::new(
+            analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
+            session_id.to_string(),
             quantitative_input,
             qualitative_input,
             quantitative_output,
             qualitative_output,
             processed_output,
-        })
+            None, // model_used - will be set later if available
+            None, // analysis_duration_ms - will be set later
+        ))
     }
 
     async fn process_quantitative_data(

@@ -13,7 +13,6 @@ use ratatui::{
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::services::AnalyticsService;
 
 #[derive(Debug, Clone)]
 pub enum AnalyticsView {
@@ -114,7 +113,7 @@ pub struct AnalyticsWidget {
 }
 
 impl AnalyticsWidget {
-    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
+    pub fn new(_db_manager: Arc<DatabaseManager>) -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
@@ -122,7 +121,6 @@ impl AnalyticsWidget {
             current_view: AnalyticsView::Overview,
             usage_data: None,
             insights_data: None,
-            analytics_service: AnalyticsService::new(db_manager.clone()),
             list_state,
             loading: false,
             last_refresh: std::time::Instant::now(),

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT COUNT(*) as count FROM retrospections",
+  "query": "SELECT COUNT(*) as count FROM analytics_requests WHERE status = ?",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,11 @@
       }
     ],
     "parameters": {
-      "Right": 0
+      "Right": 1
     },
     "nullable": [
       false
     ]
   },
-  "hash": "768d23967761f1f58b9e396d5685db88365796d566e1e7c470f748c9b51cc48d"
+  "hash": "70b55d0a9faf7bea3ba229c92f5e6f81107d887d43ca950bd85c7a7081cd96fa"
 }

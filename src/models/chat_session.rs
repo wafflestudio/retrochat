@@ -8,7 +8,7 @@ use super::provider::Provider;
 pub enum SessionState {
     Created,
     Imported,
-    Analyzed,
+    Analyticsd,
 }
 
 impl std::fmt::Display for SessionState {
@@ -16,7 +16,7 @@ impl std::fmt::Display for SessionState {
         match self {
             SessionState::Created => write!(f, "created"),
             SessionState::Imported => write!(f, "imported"),
-            SessionState::Analyzed => write!(f, "analyzed"),
+            SessionState::Analyticsd => write!(f, "analyticsd"),
         }
     }
 }
@@ -28,7 +28,7 @@ impl std::str::FromStr for SessionState {
         match s {
             "created" => Ok(SessionState::Created),
             "imported" => Ok(SessionState::Imported),
-            "analyzed" => Ok(SessionState::Analyzed),
+            "analyticsd" => Ok(SessionState::Analyticsd),
             _ => Err(format!("Unknown session state: {s}")),
         }
     }

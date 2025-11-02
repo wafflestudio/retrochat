@@ -2,21 +2,21 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::database::DatabaseManager;
-use crate::models::{OperationStatus, RetrospectRequest};
+use crate::models::{OperationStatus, AnalyticsRequest};
 
 #[derive(Clone)]
-pub struct RetrospectRequestRepository {
+pub struct AnalyticsRequestRepository {
     db_manager: Arc<DatabaseManager>,
 }
 
-impl RetrospectRequestRepository {
+impl AnalyticsRequestRepository {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self { db_manager }
     }
 
     pub async fn create(
         &self,
-        request: &RetrospectRequest,
+        request: &AnalyticsRequest,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
@@ -26,7 +26,7 @@ impl RetrospectRequestRepository {
 
         sqlx::query!(
             r#"
-            INSERT INTO retrospect_requests (
+            INSERT INTO analytics_requests (
                 id, session_id, status, started_at, completed_at,
                 created_by, error_message, custom_prompt
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -48,13 +48,13 @@ impl RetrospectRequestRepository {
 
     pub async fn update(
         &self,
-        request: &RetrospectRequest,
+        request: &AnalyticsRequest,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         sqlx::query(
             r#"
-            UPDATE retrospect_requests
+            UPDATE analytics_requests
             SET status = ?, started_at = ?, completed_at = ?,
                 created_by = ?, error_message = ?, custom_prompt = ?
             WHERE id = ?
@@ -76,10 +76,10 @@ impl RetrospectRequestRepository {
     pub async fn find_by_id(
         &self,
         id: &str,
-    ) -> Result<Option<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let row = sqlx::query!("SELECT * FROM retrospect_requests WHERE id = ?", id)
+        let row = sqlx::query!("SELECT * FROM analytics_requests WHERE id = ?", id)
             .fetch_optional(pool)
             .await?;
 
@@ -101,7 +101,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            Ok(Some(RetrospectRequest {
+            Ok(Some(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -119,11 +119,11 @@ impl RetrospectRequestRepository {
     pub async fn find_by_session_id(
         &self,
         session_id: &str,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE session_id = ? ORDER BY started_at DESC",
+            "SELECT * FROM analytics_requests WHERE session_id = ? ORDER BY started_at DESC",
             session_id
         )
         .fetch_all(pool)
@@ -148,7 +148,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -165,11 +165,11 @@ impl RetrospectRequestRepository {
 
     pub async fn find_active_requests(
         &self,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE status IN ('pending', 'running') ORDER BY started_at ASC"
+            "SELECT * FROM analytics_requests WHERE status IN ('pending', 'running') ORDER BY started_at ASC"
         )
         .fetch_all(pool)
         .await?;
@@ -193,7 +193,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -211,12 +211,12 @@ impl RetrospectRequestRepository {
     pub async fn find_by_status(
         &self,
         status: OperationStatus,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let status_str = status.to_string();
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE status = ? ORDER BY started_at DESC",
+            "SELECT * FROM analytics_requests WHERE status = ? ORDER BY started_at DESC",
             status_str
         )
         .fetch_all(pool)
@@ -241,7 +241,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -259,11 +259,11 @@ impl RetrospectRequestRepository {
     pub async fn find_by_created_by(
         &self,
         created_by: &str,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE created_by = ? ORDER BY started_at DESC",
+            "SELECT * FROM analytics_requests WHERE created_by = ? ORDER BY started_at DESC",
             created_by
         )
         .fetch_all(pool)
@@ -288,7 +288,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -306,13 +306,13 @@ impl RetrospectRequestRepository {
     pub async fn find_recent(
         &self,
         limit: Option<usize>,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let limit = limit.unwrap_or(10) as i64;
 
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests ORDER BY started_at DESC LIMIT ?",
+            "SELECT * FROM analytics_requests ORDER BY started_at DESC LIMIT ?",
             limit
         )
         .fetch_all(pool)
@@ -337,7 +337,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -355,12 +355,12 @@ impl RetrospectRequestRepository {
     pub async fn find_since(
         &self,
         since: DateTime<Utc>,
-    ) -> Result<Vec<RetrospectRequest>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<AnalyticsRequest>, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
         let since_str = since.to_rfc3339();
         let rows = sqlx::query!(
-            "SELECT * FROM retrospect_requests WHERE started_at >= ? ORDER BY started_at DESC",
+            "SELECT * FROM analytics_requests WHERE started_at >= ? ORDER BY started_at DESC",
             since_str
         )
         .fetch_all(pool)
@@ -385,7 +385,7 @@ impl RetrospectRequestRepository {
                 None
             };
 
-            requests.push(RetrospectRequest {
+            requests.push(AnalyticsRequest {
                 id: row.id.unwrap_or_else(|| "unknown".to_string()),
                 session_id: row.session_id,
                 status,
@@ -406,7 +406,7 @@ impl RetrospectRequestRepository {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.db_manager.pool();
 
-        let result = sqlx::query!("DELETE FROM retrospect_requests WHERE id = ?", id)
+        let result = sqlx::query!("DELETE FROM analytics_requests WHERE id = ?", id)
             .execute(pool)
             .await?;
 
@@ -421,7 +421,7 @@ impl RetrospectRequestRepository {
 
         let before_str = before.to_rfc3339();
         let result = sqlx::query!(
-            "DELETE FROM retrospect_requests WHERE completed_at IS NOT NULL AND completed_at < ?",
+            "DELETE FROM analytics_requests WHERE completed_at IS NOT NULL AND completed_at < ?",
             before_str
         )
         .execute(pool)
@@ -438,7 +438,7 @@ impl RetrospectRequestRepository {
 
         let status_str = status.to_string();
         let row = sqlx::query!(
-            "SELECT COUNT(*) as count FROM retrospect_requests WHERE status = ?",
+            "SELECT COUNT(*) as count FROM analytics_requests WHERE status = ?",
             status_str
         )
         .fetch_one(pool)
@@ -451,7 +451,7 @@ impl RetrospectRequestRepository {
         let pool = self.db_manager.pool();
 
         let row = sqlx::query!(
-            "SELECT COUNT(*) as count FROM retrospect_requests WHERE status IN ('pending', 'running')"
+            "SELECT COUNT(*) as count FROM analytics_requests WHERE status IN ('pending', 'running')"
         )
         .fetch_one(pool)
         .await?;
@@ -481,10 +481,10 @@ mod tests {
         );
         session_repo.create(&session).await.unwrap();
 
-        let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
+        let repo = AnalyticsRequestRepository::new(Arc::new(database.manager));
 
         let request =
-            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
+            AnalyticsRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
 
         repo.create(&request).await.unwrap();
 
@@ -511,10 +511,10 @@ mod tests {
         );
         session_repo.create(&session).await.unwrap();
 
-        let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
+        let repo = AnalyticsRequestRepository::new(Arc::new(database.manager));
 
         let mut request =
-            RetrospectRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
+            AnalyticsRequest::new(session.id.to_string(), Some("test_user".to_string()), None);
 
         repo.create(&request).await.unwrap();
 
@@ -541,15 +541,15 @@ mod tests {
         );
         session_repo.create(&session).await.unwrap();
 
-        let repo = RetrospectRequestRepository::new(Arc::new(database.manager));
+        let repo = AnalyticsRequestRepository::new(Arc::new(database.manager));
 
         let session_id = session.id.to_string();
 
         let request1 =
-            RetrospectRequest::new(session_id.clone(), Some("test_user".to_string()), None);
+            AnalyticsRequest::new(session_id.clone(), Some("test_user".to_string()), None);
 
         let request2 =
-            RetrospectRequest::new(session_id.clone(), Some("test_user".to_string()), None);
+            AnalyticsRequest::new(session_id.clone(), Some("test_user".to_string()), None);
 
         repo.create(&request1).await.unwrap();
         repo.create(&request2).await.unwrap();

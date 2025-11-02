@@ -150,7 +150,7 @@ pub async fn handle_tui_command() -> Result<()> {
             println!("Alternative options:");
             println!("  • Use '$ retrochat query sessions' to list sessions");
             println!("  • Use '$ retrochat query search <query>' to search messages");
-            println!("  • Use '$ retrochat analyze insights' to generate analytics");
+            println!("  • Use '$ retrochat analytics insights' to generate analytics");
             println!();
             println!(
                 "If you believe this is a bug, please check your terminal setup and try again."

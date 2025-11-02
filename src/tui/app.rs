@@ -16,7 +16,7 @@ use tokio::time::timeout;
 use crate::database::DatabaseManager;
 use crate::env::apis as env_vars;
 use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use crate::services::{AnalyticsService, QueryService, RetrospectionService};
+use crate::services::{AnalyticsRequestService, AnalyticsService, QueryService};
 
 use super::{
     analytics::AnalyticsWidget,
@@ -41,10 +41,10 @@ pub struct AppState {
     pub should_quit: bool,
     pub show_help: bool,
     pub last_updated: Instant,
-    pub retrospection_active: bool,
-    pub active_analysis_requests: Vec<String>, // Track active request IDs
-    pub error_dialog: Option<String>,          // Error message to display in dialog
-    pub processing_status: Option<String>,     // Status message for background processing
+    pub analytics_active: bool,
+    pub active_analytics_requests: Vec<String>, // Track active request IDs
+    pub error_dialog: Option<String>,           // Error message to display in dialog
+    pub processing_status: Option<String>,      // Status message for background processing
 }
 
 impl AppState {
@@ -55,8 +55,8 @@ impl AppState {
             should_quit: false,
             show_help: false,
             last_updated: Instant::now(),
-            retrospection_active: false,
-            active_analysis_requests: Vec::new(),
+            analytics_active: false,
+            active_analytics_requests: Vec::new(),
             error_dialog: None,
             processing_status: None,
         }
@@ -85,21 +85,21 @@ impl AppState {
         self.set_mode(AppMode::SessionList);
     }
 
-    pub fn start_retrospection(&mut self, request_id: String) {
-        self.retrospection_active = true;
-        self.active_analysis_requests.push(request_id);
+    pub fn start_analytics(&mut self, request_id: String) {
+        self.analytics_active = true;
+        self.active_analytics_requests.push(request_id);
     }
 
-    pub fn complete_retrospection(&mut self, request_id: &str) {
-        self.active_analysis_requests.retain(|id| id != request_id);
-        if self.active_analysis_requests.is_empty() {
-            self.retrospection_active = false;
+    pub fn complete_analytics(&mut self, request_id: &str) {
+        self.active_analytics_requests.retain(|id| id != request_id);
+        if self.active_analytics_requests.is_empty() {
+            self.analytics_active = false;
         }
     }
 
-    pub fn cancel_all_retrospections(&mut self) {
-        self.active_analysis_requests.clear();
-        self.retrospection_active = false;
+    pub fn cancel_all_analytics(&mut self) {
+        self.active_analytics_requests.clear();
+        self.analytics_active = false;
     }
 
     pub fn show_error(&mut self, message: String) {
@@ -119,10 +119,10 @@ impl AppState {
     }
 
     pub fn update_processing_status(&mut self) {
-        if self.active_analysis_requests.is_empty() {
+        if self.active_analytics_requests.is_empty() {
             self.processing_status = None;
         } else {
-            let count = self.active_analysis_requests.len();
+            let count = self.active_analytics_requests.len();
             self.processing_status = Some(format!(
                 "{} request{} processing...",
                 count,
@@ -145,7 +145,7 @@ pub struct App {
     pub analytics: AnalyticsWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
-    pub retrospection_service: Option<Arc<RetrospectionService>>,
+    pub analytics_request_service: Option<Arc<AnalyticsRequestService>>,
     pub event_handler: EventHandler,
 }
 
@@ -154,11 +154,11 @@ impl App {
         let query_service = QueryService::with_database(db_manager.clone());
         let analytics_service = AnalyticsService::new(db_manager.clone());
 
-        // Try to create retrospection service if Google AI API key is available
-        let retrospection_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
+        // Try to create analytics request service if Google AI API key is available
+        let analytics_request_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
             let config = GoogleAiConfig::default();
             match GoogleAiClient::new(config) {
-                Ok(client) => Some(Arc::new(RetrospectionService::new(
+                Ok(client) => Some(Arc::new(AnalyticsRequestService::new(
                     db_manager.clone(),
                     client,
                 ))),
@@ -175,7 +175,7 @@ impl App {
             analytics: AnalyticsWidget::new(db_manager.clone()),
             query_service,
             analytics_service,
-            retrospection_service,
+            analytics_request_service,
             event_handler: EventHandler::new(),
         })
     }
@@ -395,14 +395,14 @@ impl App {
     }
 
     async fn handle_start_analysis(&mut self, session_id: String) -> Result<()> {
-        if let Some(ref service) = self.retrospection_service {
+        if let Some(ref service) = self.analytics_request_service {
             // Start actual analysis
             match service
                 .create_analysis_request(session_id.clone(), None, None)
                 .await
             {
                 Ok(request) => {
-                    self.state.start_retrospection(request.id.clone());
+                    self.state.start_analytics(request.id.clone());
 
                     // Immediately refresh UI to show user acknowledgment
                     if let Err(e) = self.session_list.refresh().await {
@@ -539,10 +539,10 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View | a: Analyze | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
+                "↑/↓: Navigate | Enter: View | a: Analytics | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::SessionDetail => {
-                "↑/↓: Scroll | t: Toggle Retrospection | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
+                "↑/↓: Scroll | t: Toggle Analytics | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
@@ -575,14 +575,14 @@ impl App {
             Line::from("Session List:"),
             Line::from("  ↑/↓            - Navigate sessions"),
             Line::from("  Enter          - View session details"),
-            Line::from("  a              - Start retrospection analysis"),
+            Line::from("  a              - Start analytics analysis"),
             Line::from("  (Auto-refreshes every 5 seconds)"),
             Line::from(""),
             Line::from("Session Detail:"),
             Line::from("  ↑/↓            - Scroll messages"),
             Line::from("  Page Up/Down   - Fast scroll"),
             Line::from("  Home/End       - Jump to start/end"),
-            Line::from("  t              - Toggle retrospection panel"),
+            Line::from("  t              - Toggle analytics panel"),
             Line::from("  w              - Toggle word wrap"),
             Line::from("  (Auto-refreshes every 5 seconds)"),
             Line::from(""),
@@ -590,7 +590,7 @@ impl App {
             Line::from("  ↑/↓            - Navigate insights"),
             Line::from("  r              - Refresh analytics"),
             Line::from(""),
-            Line::from("Retrospection:"),
+            Line::from("Analytics Requests:"),
             Line::from("  ↑/↓            - Navigate requests"),
             Line::from("  Enter/d        - Toggle details view"),
             Line::from("  c              - Cancel selected request"),

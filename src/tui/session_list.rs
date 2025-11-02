@@ -103,7 +103,7 @@ impl SessionListWidget {
                 self.refresh().await?;
             }
             KeyCode::Char('a') => {
-                // Start retrospection analysis for selected session
+                // Start analytics for selected session
                 if let Some(session) = self.state.selected_session() {
                     // Return a special signal that we want to start analysis
                     // This will be handled by the main app
@@ -210,8 +210,8 @@ impl SessionListWidget {
             _ => Style::default().fg(Color::White),
         };
 
-        // Use different colors based on retrospection status
-        let project_style = if session.has_retrospection {
+        // Use different colors based on analytics status
+        let project_style = if session.has_analytics {
             Style::default()
                 .fg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD)
@@ -219,7 +219,7 @@ impl SessionListWidget {
             Style::default().fg(Color::Yellow)
         };
 
-        let preview_style = if session.has_retrospection {
+        let preview_style = if session.has_analytics {
             Style::default().fg(Color::LightBlue)
         } else {
             Style::default().fg(Color::Gray)
@@ -233,8 +233,8 @@ impl SessionListWidget {
             session.start_time.clone()
         };
 
-        // Add retrospection status indicator
-        let retrospection_indicator = match &session.retrospection_status {
+        // Add analytics status indicator
+        let analytics_indicator = match &session.analytics_status {
             Some(OperationStatus::Completed) => Span::styled(
                 "✓ ",
                 Style::default()
@@ -266,7 +266,7 @@ impl SessionListWidget {
                     .add_modifier(Modifier::BOLD),
             ),
             None => {
-                if session.has_retrospection {
+                if session.has_analytics {
                     Span::styled(
                         "✓ ",
                         Style::default()
@@ -280,7 +280,7 @@ impl SessionListWidget {
         };
 
         Line::from(vec![
-            retrospection_indicator,
+            analytics_indicator,
             Span::styled(
                 format!("{:11}", session.provider),
                 provider_style.add_modifier(Modifier::BOLD),

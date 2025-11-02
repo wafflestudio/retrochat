@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM retrospect_requests WHERE session_id = ? ORDER BY started_at DESC",
+  "query": "SELECT * FROM analytics_requests WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -58,5 +58,5 @@
       true
     ]
   },
-  "hash": "c3b345a2c7a59e2a777556cfbac107b6c0d545e944e27f47a3ae384ef0422383"
+  "hash": "b090411c4cb1bd288c5f024dbb7cb87bd624a286ee2e4efdd2932937ea3ce63f"
 }

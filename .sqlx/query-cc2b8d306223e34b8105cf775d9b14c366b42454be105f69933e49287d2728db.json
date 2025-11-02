@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM retrospect_requests WHERE id = ?",
+  "query": "SELECT * FROM analytics_requests WHERE status IN ('pending', 'running') ORDER BY started_at ASC",
   "describe": {
     "columns": [
       {
@@ -45,7 +45,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
       true,
@@ -58,5 +58,5 @@
       true
     ]
   },
-  "hash": "0d377849772662bb865abce4c40ba6fb3f50528bafe1653117c51a5ff27b7e9e"
+  "hash": "cc2b8d306223e34b8105cf775d9b14c366b42454be105f69933e49287d2728db"
 }

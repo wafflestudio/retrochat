@@ -1,4 +1,4 @@
-use crate::services::ComprehensiveAnalysis;
+use crate::models::Analytics;
 use anyhow::Result;
 use console::style;
 use std::str::FromStr;
@@ -50,7 +50,7 @@ impl AnalyticsFormatter {
     }
 
     /// Print the complete analysis report
-    pub fn print_analysis(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    pub fn print_analysis(&self, analysis: &Analytics) -> Result<()> {
         match self.format {
             OutputFormat::Plain => self.print_plain(analysis),
             OutputFormat::Enhanced => self.print_enhanced(analysis),
@@ -58,7 +58,7 @@ impl AnalyticsFormatter {
     }
 
     /// Print plain text format (preserves existing behavior)
-    fn print_plain(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_plain(&self, analysis: &Analytics) -> Result<()> {
         // This maintains backward compatibility with the existing output
         println!("\n🔍 Session Analysis Report");
         println!("==========================");
@@ -81,7 +81,7 @@ impl AnalyticsFormatter {
     }
 
     /// Print enhanced format with markdown and panels
-    fn print_enhanced(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_enhanced(&self, analysis: &Analytics) -> Result<()> {
         self.print_header(analysis)?;
         self.print_quantitative_scores_enhanced(analysis)?;
         self.print_quantitative_metrics_enhanced(analysis)?;
@@ -96,7 +96,7 @@ impl AnalyticsFormatter {
     // Header and Footer
     // =============================================================================
 
-    fn print_header(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_header(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
 
         println!();
@@ -146,36 +146,36 @@ impl AnalyticsFormatter {
     // Quantitative Scores
     // =============================================================================
 
-    fn print_quantitative_scores_plain(&self, analysis: &ComprehensiveAnalysis) {
+    fn print_quantitative_scores_plain(&self, analysis: &Analytics) {
         println!("\n📊 QUANTITATIVE SCORES");
         println!("─────────────────────");
         println!(
             "  Overall Score: {:.1}/100",
-            analysis.quantitative_output.overall_score
+            analysis.scores.overall
         );
         println!(
             "  Code Quality: {:.1}/100",
-            analysis.quantitative_output.code_quality_score
+            analysis.scores.code_quality
         );
         println!(
             "  Productivity: {:.1}/100",
-            analysis.quantitative_output.productivity_score
+            analysis.scores.productivity
         );
         println!(
             "  Efficiency: {:.1}/100",
-            analysis.quantitative_output.efficiency_score
+            analysis.scores.efficiency
         );
         println!(
             "  Collaboration: {:.1}/100",
-            analysis.quantitative_output.collaboration_score
+            analysis.scores.collaboration
         );
         println!(
             "  Learning: {:.1}/100",
-            analysis.quantitative_output.learning_score
+            analysis.scores.learning
         );
     }
 
-    fn print_quantitative_scores_enhanced(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_quantitative_scores_enhanced(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
 
         println!();
@@ -189,21 +189,21 @@ impl AnalyticsFormatter {
         println!("{}", style(self.box_separator(width)).blue());
 
         // Print scores with visual bars
-        self.print_score_bar("Overall", analysis.quantitative_output.overall_score);
+        self.print_score_bar("Overall", analysis.scores.overall);
         self.print_score_bar(
             "Code Quality",
-            analysis.quantitative_output.code_quality_score,
+            analysis.scores.code_quality,
         );
         self.print_score_bar(
             "Productivity",
-            analysis.quantitative_output.productivity_score,
+            analysis.scores.productivity,
         );
-        self.print_score_bar("Efficiency", analysis.quantitative_output.efficiency_score);
+        self.print_score_bar("Efficiency", analysis.scores.efficiency);
         self.print_score_bar(
             "Collaboration",
-            analysis.quantitative_output.collaboration_score,
+            analysis.scores.collaboration,
         );
-        self.print_score_bar("Learning", analysis.quantitative_output.learning_score);
+        self.print_score_bar("Learning", analysis.scores.learning);
 
         println!("{}", style(self.box_bottom(width)).blue());
 
@@ -238,7 +238,7 @@ impl AnalyticsFormatter {
     // Quantitative Metrics
     // =============================================================================
 
-    fn print_quantitative_metrics_plain(&self, analysis: &ComprehensiveAnalysis) {
+    fn print_quantitative_metrics_plain(&self, analysis: &Analytics) {
         println!("\n📈 QUANTITATIVE METRICS");
         println!("─────────────────────");
 
@@ -332,7 +332,7 @@ impl AnalyticsFormatter {
         }
     }
 
-    fn print_quantitative_metrics_enhanced(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_quantitative_metrics_enhanced(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
 
         println!();
@@ -539,7 +539,7 @@ impl AnalyticsFormatter {
     // Processed Statistics
     // =============================================================================
 
-    fn print_processed_statistics_plain(&self, analysis: &ComprehensiveAnalysis) {
+    fn print_processed_statistics_plain(&self, analysis: &Analytics) {
         println!("\n⚙️ PROCESSED STATISTICS");
         println!("─────────────────────");
 
@@ -657,7 +657,7 @@ impl AnalyticsFormatter {
         );
     }
 
-    fn print_processed_statistics_enhanced(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_processed_statistics_enhanced(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
 
         println!();
@@ -878,7 +878,7 @@ impl AnalyticsFormatter {
     // Qualitative Insights
     // =============================================================================
 
-    fn print_qualitative_insights_plain(&self, analysis: &ComprehensiveAnalysis) {
+    fn print_qualitative_insights_plain(&self, analysis: &Analytics) {
         println!("\n💭 QUALITATIVE INSIGHTS");
         println!("─────────────────────");
 
@@ -933,7 +933,7 @@ impl AnalyticsFormatter {
         }
     }
 
-    fn print_qualitative_insights_enhanced(&self, analysis: &ComprehensiveAnalysis) -> Result<()> {
+    fn print_qualitative_insights_enhanced(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
 
         println!();
