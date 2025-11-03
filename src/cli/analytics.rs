@@ -114,14 +114,66 @@ async fn execute_analysis_for_session(
     println!("Starting analysis for session: {session_id}");
 
     // Create analysis request
-    let request = service
+    let request = match service
         .create_analysis_request(
             session_id.clone(),
             None, // created_by
-            custom_prompt,
+            custom_prompt.clone(),
         )
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create analysis request: {e}"))?;
+    {
+        Ok(request) => request,
+        Err(e) => {
+            let error_msg = e.to_string();
+            // Check if this is a dirty check error (session unchanged)
+            if error_msg.contains("has not been modified since last analysis") {
+                println!("ℹ Session has not changed since last analysis");
+                println!("Retrieving cached results...\n");
+
+                // Find the latest completed request
+                let requests = service
+                    .list_analyses(Some(session_id.clone()), None)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to list analyses: {e}"))?;
+
+                if let Some(latest_request) = requests
+                    .iter()
+                    .filter(|r| matches!(r.status, OperationStatus::Completed))
+                    .max_by_key(|r| r.completed_at.as_ref())
+                {
+                    // Determine output format
+                    let output_format = if plain {
+                        OutputFormat::Plain
+                    } else {
+                        OutputFormat::parse(&format)
+                    };
+
+                    // Get and display cached results
+                    if let Some(analysis) = service
+                        .get_analysis_result(latest_request.id.clone())
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to get cached analysis: {e}"))?
+                    {
+                        print_unified_analysis(&analysis, output_format).await?;
+                        println!(
+                            "\n✓ Showing cached results from: {}",
+                            latest_request
+                                .completed_at
+                                .map(|dt| dt.to_rfc3339())
+                                .unwrap_or_else(|| "unknown".to_string())
+                        );
+                        println!("  To force new analysis, use: --custom-prompt \"your prompt\"");
+                        return Ok(());
+                    }
+                }
+
+                return Err(anyhow::anyhow!("No cached results found"));
+            }
+
+            // Other errors, propagate them
+            return Err(anyhow::anyhow!("Failed to create analysis request: {e}"));
+        }
+    };
 
     if background {
         println!("Analysis request created: {}", request.id);

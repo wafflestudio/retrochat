@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::database::{AnalyticsRepository, AnalyticsRequestRepository, DatabaseManager};
+use crate::database::{
+    AnalyticsRepository, AnalyticsRequestRepository, ChatSessionRepository, DatabaseManager,
+};
 use crate::models::{Analytics, AnalyticsRequest, OperationStatus};
 use crate::services::analytics_service::AnalyticsService;
 use crate::services::google_ai::GoogleAiClient;
@@ -32,7 +34,7 @@ impl AnalyticsRequestService {
     ) -> Result<AnalyticsRequest, Box<dyn std::error::Error + Send + Sync>> {
         // Check if there's already an active request for this session
         let existing_requests = self.request_repo.find_by_session_id(&session_id).await?;
-        for existing_request in existing_requests {
+        for existing_request in &existing_requests {
             match existing_request.status {
                 OperationStatus::Pending | OperationStatus::Running => {
                     return Err(format!(
@@ -41,6 +43,42 @@ impl AnalyticsRequestService {
                     ).into());
                 }
                 _ => {} // Allow creating new requests if existing ones are completed/failed/cancelled
+            }
+        }
+
+        // Dirty check: Check if session has been updated since last completed analysis
+        if custom_prompt.is_none() {
+            // Only perform dirty check if there's no custom prompt
+            // (custom prompts should always create new requests)
+            if let Some(latest_completed) = existing_requests
+                .iter()
+                .filter(|r| matches!(r.status, OperationStatus::Completed))
+                .max_by_key(|r| r.completed_at.as_ref())
+            {
+                // Get the session to check its updated_at timestamp
+                let session_repo = ChatSessionRepository::new(&self.db_manager);
+                if let Ok(Some(session)) = session_repo
+                    .get_by_id(
+                        &uuid::Uuid::parse_str(&session_id)
+                            .map_err(|e| format!("Invalid session ID: {e}"))?,
+                    )
+                    .await
+                {
+                    if let Some(completed_at) = latest_completed.completed_at {
+                        // If session hasn't been updated since the last analysis, return existing request
+                        if session.updated_at <= completed_at {
+                            tracing::info!(
+                                session_id = %session_id,
+                                last_analysis = %completed_at,
+                                session_updated = %session.updated_at,
+                                "Session unchanged since last analysis - using cached results"
+                            );
+                            return Err(format!(
+                                "Session {session_id} has not been modified since last analysis (completed at {completed_at}). Use 'retrochat analytics show {session_id}' to view cached results, or provide --custom-prompt to force new analysis."
+                            ).into());
+                        }
+                    }
+                }
             }
         }
 
@@ -371,5 +409,116 @@ mod tests {
             .unwrap();
         assert_eq!(status.id, request.id);
         assert_eq!(status.status, OperationStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_dirty_check_prevents_duplicate_analysis() {
+        let database = Database::new_in_memory().await.unwrap();
+        database.initialize().await.unwrap();
+
+        // Create a test project
+        let project_repo = crate::database::ProjectRepository::new(&database.manager);
+        let test_project = crate::models::Project::new("test_project3".to_string());
+        project_repo.create(&test_project).await.unwrap();
+
+        // Create a test session
+        let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
+        let test_session = crate::models::ChatSession::new(
+            crate::models::Provider::ClaudeCode,
+            "/test/chat3.jsonl".to_string(),
+            "test_hash3".to_string(),
+            chrono::Utc::now(),
+        )
+        .with_project("test_project3".to_string());
+        session_repo.create(&test_session).await.unwrap();
+
+        let service = AnalyticsRequestService::new(
+            Arc::new(database.manager.clone()),
+            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
+        );
+
+        let session_id = test_session.id.to_string();
+
+        // Create first request
+        let first_request = service
+            .create_analysis_request(session_id.clone(), None, None)
+            .await
+            .unwrap();
+
+        // Mark it as completed
+        let mut completed_request = first_request.clone();
+        completed_request.mark_completed();
+        let request_repo = AnalyticsRequestRepository::new(Arc::new(database.manager.clone()));
+        request_repo.update(&completed_request).await.unwrap();
+
+        // Wait a bit to ensure timestamp difference
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Try to create second request without updating the session
+        // This should fail with dirty check error
+        let result = service
+            .create_analysis_request(session_id.clone(), None, None)
+            .await;
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("has not been modified since last analysis"));
+    }
+
+    #[tokio::test]
+    async fn test_dirty_check_bypassed_with_custom_prompt() {
+        let database = Database::new_in_memory().await.unwrap();
+        database.initialize().await.unwrap();
+
+        // Create a test project
+        let project_repo = crate::database::ProjectRepository::new(&database.manager);
+        let test_project = crate::models::Project::new("test_project4".to_string());
+        project_repo.create(&test_project).await.unwrap();
+
+        // Create a test session
+        let session_repo = crate::database::ChatSessionRepository::new(&database.manager);
+        let test_session = crate::models::ChatSession::new(
+            crate::models::Provider::ClaudeCode,
+            "/test/chat4.jsonl".to_string(),
+            "test_hash4".to_string(),
+            chrono::Utc::now(),
+        )
+        .with_project("test_project4".to_string());
+        session_repo.create(&test_session).await.unwrap();
+
+        let service = AnalyticsRequestService::new(
+            Arc::new(database.manager.clone()),
+            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
+        );
+
+        let session_id = test_session.id.to_string();
+
+        // Create first request
+        let first_request = service
+            .create_analysis_request(session_id.clone(), None, None)
+            .await
+            .unwrap();
+
+        // Mark it as completed
+        let mut completed_request = first_request.clone();
+        completed_request.mark_completed();
+        let request_repo = AnalyticsRequestRepository::new(Arc::new(database.manager.clone()));
+        request_repo.update(&completed_request).await.unwrap();
+
+        // Create second request with custom prompt (should bypass dirty check)
+        let result = service
+            .create_analysis_request(
+                session_id.clone(),
+                None,
+                Some("Custom analysis prompt".to_string()),
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let second_request = result.unwrap();
+        assert_eq!(
+            second_request.custom_prompt,
+            Some("Custom analysis prompt".to_string())
+        );
     }
 }
