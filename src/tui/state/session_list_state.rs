@@ -1,6 +1,6 @@
 use ratatui::widgets::ListState;
 
-use crate::services::{DateRange, SessionSummary};
+use crate::services::SessionSummary;
 
 /// Sorting options for the session list
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,15 +58,6 @@ impl SortOrder {
     }
 }
 
-/// Filter options for sessions
-#[derive(Debug, Clone, Default)]
-pub struct FilterOptions {
-    pub provider: Option<String>,
-    pub project: Option<String>,
-    pub date_range: Option<DateRange>,
-    pub min_messages: Option<i32>,
-}
-
 /// State for the session list view
 #[derive(Debug)]
 pub struct SessionListState {
@@ -78,13 +69,11 @@ pub struct SessionListState {
     pub sort_by: SortBy,
     /// Current sort order
     pub sort_order: SortOrder,
-    /// Active filters
-    pub filters: FilterOptions,
     /// Current page number (1-indexed)
     pub page: i32,
     /// Items per page
     pub page_size: i32,
-    /// Total number of sessions matching filters
+    /// Total number of sessions
     pub total_count: i32,
     /// Loading indicator
     pub loading: bool,
@@ -101,7 +90,6 @@ impl SessionListState {
             list_state,
             sort_by: SortBy::StartTime,
             sort_order: SortOrder::Descending,
-            filters: FilterOptions::default(),
             page: 1,
             page_size: 50,
             total_count: 0,

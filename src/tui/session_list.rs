@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::database::DatabaseManager;
 use crate::models::OperationStatus;
-use crate::services::{QueryService, SessionFilters, SessionSummary, SessionsQueryRequest};
+use crate::services::{QueryService, SessionSummary, SessionsQueryRequest};
 
 use super::{
     state::{SessionListState, SortOrder},
@@ -19,7 +19,7 @@ use super::{
 };
 
 // Re-export types for backward compatibility
-pub use super::state::{FilterOptions, SortBy, SortOrder as SessionListSortOrder};
+pub use super::state::{SortBy, SortOrder as SessionListSortOrder};
 
 pub struct SessionListWidget {
     pub state: SessionListState,
@@ -42,13 +42,7 @@ impl SessionListWidget {
             page_size: Some(self.state.page_size),
             sort_by: Some(self.state.sort_by.as_str().to_string()),
             sort_order: Some(self.state.sort_order.as_str().to_string()),
-            filters: Some(SessionFilters {
-                provider: self.state.filters.provider.clone(),
-                project: self.state.filters.project.clone(),
-                date_range: self.state.filters.date_range.clone(),
-                min_messages: self.state.filters.min_messages,
-                max_messages: None,
-            }),
+            filters: None,
         };
 
         match self.query_service.query_sessions(request).await {
@@ -110,9 +104,6 @@ impl SessionListWidget {
                     return Ok(Some(format!("ANALYZE:{}", session.session_id)));
                 }
             }
-            KeyCode::Char('f') => {
-                // TODO: Implement filter dialog
-            }
             _ => {}
         }
         Ok(None)
@@ -141,7 +132,7 @@ impl SessionListWidget {
             "Loading sessions...".to_string()
         } else {
             format!(
-                "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order, 'f' for filters",
+                "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order",
                 self.state.total_count,
                 self.state.page,
                 total_pages.max(1),
@@ -225,13 +216,13 @@ impl SessionListWidget {
             Style::default().fg(Color::Gray)
         };
 
+        // Apply truncate_text with ellipsis to all columns
         let project_text = session.project.as_deref().unwrap_or("No Project");
-        let start_time = if session.start_time.chars().count() >= 16 {
-            let truncated: String = session.start_time.chars().take(16).collect();
-            truncated
-        } else {
-            session.start_time.clone()
-        };
+        let provider_text = Self::truncate_and_pad(&session.provider, 11);
+        let project_text = Self::truncate_and_pad(project_text, 20);
+        let start_time_text = Self::truncate_and_pad(&session.start_time, 16);
+        let msg_count_text = format!("{:4} msgs", session.message_count);
+        let preview_text = Self::truncate_and_pad(&session.first_message_preview, 40);
 
         // Add analytics status indicator
         let analytics_indicator = match &session.analytics_status {
@@ -281,24 +272,21 @@ impl SessionListWidget {
 
         Line::from(vec![
             analytics_indicator,
-            Span::styled(
-                format!("{:11}", session.provider),
-                provider_style.add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(provider_text, provider_style.add_modifier(Modifier::BOLD)),
             Span::raw(" │ "),
-            Span::styled(format!("{project_text:20}"), project_style),
+            Span::styled(project_text, project_style),
             Span::raw(" │ "),
-            Span::styled(format!("{start_time:16}"), Style::default().fg(Color::Cyan)),
+            Span::styled(start_time_text, Style::default().fg(Color::Cyan)),
             Span::raw(" │ "),
-            Span::styled(
-                format!("{:4} msgs", session.message_count),
-                Style::default().fg(Color::Magenta),
-            ),
+            Span::styled(msg_count_text, Style::default().fg(Color::Magenta)),
             Span::raw(" │ "),
-            Span::styled(
-                truncate_text(&session.first_message_preview, 40),
-                preview_style,
-            ),
+            Span::styled(preview_text, preview_style),
         ])
+    }
+
+    /// Truncates text with ellipsis and pads to fixed width
+    fn truncate_and_pad(text: &str, width: usize) -> String {
+        let truncated = truncate_text(text, width);
+        format!("{truncated:width$}")
     }
 }

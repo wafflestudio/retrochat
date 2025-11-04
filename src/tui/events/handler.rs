@@ -117,7 +117,6 @@ impl EventHandler {
             KeyCode::PageDown => vec![UserAction::SessionDetailPageDown],
             KeyCode::Home => vec![UserAction::SessionDetailHome],
             KeyCode::End => vec![UserAction::SessionDetailEnd],
-            KeyCode::Char('w') => vec![UserAction::SessionDetailToggleWrap],
             _ => vec![],
         }
     }

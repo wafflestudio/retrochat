@@ -17,8 +17,6 @@ pub struct SessionDetailState {
     pub current_scroll: usize,
     /// Loading indicator
     pub loading: bool,
-    /// Whether to wrap message text
-    pub message_wrap: bool,
     /// Whether to show detailed tool output (expanded view)
     pub show_tool_details: bool,
 }
@@ -33,7 +31,6 @@ impl SessionDetailState {
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
             loading: false,
-            message_wrap: true,
             show_tool_details: false,
         }
     }
@@ -101,11 +98,6 @@ impl SessionDetailState {
         self.current_scroll = max_scroll;
     }
 
-    /// Toggle word wrap
-    pub fn toggle_wrap(&mut self) {
-        self.message_wrap = !self.message_wrap;
-    }
-
     /// Toggle tool details visibility
     pub fn toggle_tool_details(&mut self) {
         self.show_tool_details = !self.show_tool_details;
@@ -134,7 +126,6 @@ mod tests {
         assert!(state.session.is_none());
         assert!(state.messages.is_empty());
         assert_eq!(state.current_scroll, 0);
-        assert!(state.message_wrap);
         assert!(!state.show_tool_details);
         assert!(!state.loading);
     }
@@ -194,18 +185,6 @@ mod tests {
 
         state.scroll_page_up(page_size);
         assert_eq!(state.current_scroll, 10);
-    }
-
-    #[test]
-    fn test_toggle_wrap() {
-        let mut state = SessionDetailState::new();
-        assert!(state.message_wrap);
-
-        state.toggle_wrap();
-        assert!(!state.message_wrap);
-
-        state.toggle_wrap();
-        assert!(state.message_wrap);
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub enum MessageRole {
 pub enum MessageType {
     ToolRequest,
     ToolResult,
+    Thinking,
     #[default]
     SimpleMessage,
 }
@@ -46,6 +47,7 @@ impl std::fmt::Display for MessageType {
         match self {
             MessageType::ToolRequest => write!(f, "tool_request"),
             MessageType::ToolResult => write!(f, "tool_result"),
+            MessageType::Thinking => write!(f, "thinking"),
             MessageType::SimpleMessage => write!(f, "simple_message"),
         }
     }
@@ -58,6 +60,7 @@ impl std::str::FromStr for MessageType {
         match s {
             "tool_request" => Ok(MessageType::ToolRequest),
             "tool_result" => Ok(MessageType::ToolResult),
+            "thinking" => Ok(MessageType::Thinking),
             "simple_message" => Ok(MessageType::SimpleMessage),
             _ => Err(format!("Unknown message type: {s}")),
         }
@@ -209,6 +212,11 @@ impl Message {
     /// Check if this message is a tool result
     pub fn is_tool_result(&self) -> bool {
         matches!(self.message_type, MessageType::ToolResult)
+    }
+
+    /// Check if this message is thinking
+    pub fn is_thinking(&self) -> bool {
+        matches!(self.message_type, MessageType::Thinking)
     }
 
     /// Check if this message has an associated tool operation

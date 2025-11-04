@@ -98,9 +98,6 @@ impl SessionDetailWidget {
                 self.state.scroll_to_bottom(max_scroll);
                 self.update_scroll_state();
             }
-            KeyCode::Char('w') => {
-                self.state.toggle_wrap();
-            }
             KeyCode::Char('d') => {
                 // D: Toggle tool details (expand/collapse)
                 self.state.toggle_tool_details();
@@ -145,7 +142,7 @@ impl SessionDetailWidget {
             };
 
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Keys: 'w'=wrap, 'd'=tool-details",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Keys: 'd'=tool-details",
                 session.provider,
                 project_str,
                 session.message_count,
@@ -197,11 +194,7 @@ impl SessionDetailWidget {
 
         let messages_block = Paragraph::new(visible_lines)
             .block(Block::default().borders(Borders::ALL).title("Messages"))
-            .wrap(if self.state.message_wrap {
-                Wrap { trim: true }
-            } else {
-                Wrap { trim: false }
-            })
+            .wrap(Wrap { trim: true })
             .scroll((0, 0));
 
         f.render_widget(messages_block, area);
@@ -262,38 +255,57 @@ impl SessionDetailWidget {
 
     /// Renders a single message block
     fn render_message_block(&self, message: &Message, width: usize, lines: &mut Vec<Line<'_>>) {
+        // Check if this is a thinking message
+        let is_thinking = message.is_thinking();
+
         // Message header
-        let role_style = match message.role {
-            MessageRole::User => Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-            MessageRole::Assistant => Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
-            MessageRole::System => Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+        let role_style = if is_thinking {
+            // Thinking messages have distinct styling
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+        } else {
+            match message.role {
+                MessageRole::User => Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+                MessageRole::Assistant => Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+                MessageRole::System => Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            }
         };
 
         let timestamp = &message.timestamp.format("%H:%M:%S").to_string(); // Just show time
-        let header = format!("[{}] {:?}", timestamp, message.role);
+        let header = if is_thinking {
+            format!("[{timestamp}] Thinking")
+        } else {
+            format!("[{timestamp}] {:?}", message.role)
+        };
 
         lines.push(Line::from(vec![
             Span::styled(header, role_style),
             Span::raw(format!(" ({})", message.sequence_number)),
         ]));
 
-        // Message content - wrap if needed
-        let content_lines = if self.state.message_wrap {
-            wrap_text(&message.content, width.saturating_sub(2))
+        // Message content - wrap text and preserve newlines
+        let content_lines = wrap_text(&message.content, width.saturating_sub(2));
+
+        // Use different styling for thinking content
+        let content_style = if is_thinking {
+            Style::default()
+                .fg(Color::Rgb(180, 140, 200)) // Light purple for thinking
+                .add_modifier(Modifier::ITALIC)
         } else {
-            vec![message.content.clone()]
+            Style::default().fg(Color::White)
         };
 
         for content_line in content_lines {
             lines.push(Line::from(vec![Span::styled(
                 format!("  {content_line}"),
-                Style::default().fg(Color::White),
+                content_style,
             )]));
         }
 
@@ -360,12 +372,8 @@ impl SessionDetailWidget {
             )),
         ]));
 
-        // Show tool use message content
-        let content_lines = if self.state.message_wrap {
-            wrap_text(&tool_use_msg.content, width.saturating_sub(2))
-        } else {
-            vec![tool_use_msg.content.clone()]
-        };
+        // Show tool use message content - wrap text and preserve newlines
+        let content_lines = wrap_text(&tool_use_msg.content, width.saturating_sub(2));
 
         for content_line in content_lines {
             lines.push(Line::from(vec![Span::styled(

@@ -33,7 +33,7 @@ pub fn truncate_text(text: &str, max_len: usize) -> String {
     }
 }
 
-/// Wraps text to fit within a specified width
+/// Wraps text to fit within a specified width, preserving newlines
 ///
 /// # Arguments
 /// * `text` - The text to wrap
@@ -50,6 +50,27 @@ pub fn truncate_text(text: &str, max_len: usize) -> String {
 /// assert!(!lines.is_empty());
 /// ```
 pub fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return text.lines().map(|l| l.to_string()).collect();
+    }
+
+    let mut result_lines = Vec::new();
+
+    // First split by newlines to preserve them
+    for line in text.lines() {
+        let mut wrapped = wrap_single_line(line, width);
+        result_lines.append(&mut wrapped);
+    }
+
+    if result_lines.is_empty() {
+        result_lines.push(String::new());
+    }
+
+    result_lines
+}
+
+/// Wraps a single line of text (no newlines) to fit within a specified width
+fn wrap_single_line(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return vec![text.to_string()];
     }
@@ -177,5 +198,27 @@ mod tests {
         // Just test that it returns a valid character
         let spinner = get_spinner_char();
         assert!("⠋⠙⠹⠸⠼⠴⠦⠧".contains(spinner));
+    }
+
+    #[test]
+    fn test_wrap_text_preserves_newlines() {
+        let text = "Line 1\nLine 2\nLine 3";
+        let lines = wrap_text(text, 100);
+        assert_eq!(lines, vec!["Line 1", "Line 2", "Line 3"]);
+    }
+
+    #[test]
+    fn test_wrap_text_with_newlines_and_wrapping() {
+        let text = "Short\nThis is a very long line that needs wrapping";
+        let lines = wrap_text(text, 15);
+        assert_eq!(lines[0], "Short");
+        assert!(lines.len() > 2); // Should wrap the long line into multiple lines
+    }
+
+    #[test]
+    fn test_wrap_text_empty_lines() {
+        let text = "Line 1\n\nLine 3";
+        let lines = wrap_text(text, 100);
+        assert_eq!(lines, vec!["Line 1", "", "Line 3"]);
     }
 }

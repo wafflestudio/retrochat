@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::message::{ToolResult, ToolUse};
+use crate::models::message::{MessageType, ToolResult, ToolUse};
 use crate::models::{ChatSession, Message, MessageRole};
 use crate::models::{Provider, SessionState};
 
@@ -225,8 +225,37 @@ impl ClaudeCodeParser {
                         _ => continue, // Skip unknown roles
                     };
 
-                    let (content, tool_uses, mut tool_results) =
+                    let timestamp = entry
+                        .timestamp
+                        .as_ref()
+                        .and_then(|ts| self.parse_timestamp(ts).ok())
+                        .unwrap_or(start_time);
+
+                    let (content, tool_uses, mut tool_results, thinking_content) =
                         self.extract_tools_and_content(&conv_message.content);
+
+                    // If there's thinking content, create a separate message for it first
+                    if let Some(thinking_text) = thinking_content {
+                        let thinking_message = Message::new(
+                            session_id,
+                            MessageRole::Assistant,
+                            thinking_text.clone(),
+                            timestamp,
+                            sequence,
+                        )
+                        .with_message_type(MessageType::Thinking);
+
+                        let thinking_tokens = (thinking_text.len() / 4) as u32;
+                        let thinking_message = if thinking_tokens > 0 {
+                            total_tokens += thinking_tokens;
+                            thinking_message.with_token_count(thinking_tokens)
+                        } else {
+                            thinking_message
+                        };
+
+                        messages.push(thinking_message);
+                        sequence += 1;
+                    }
 
                     // Enrich tool_results with toolUseResult metadata if available
                     if let Some(tool_use_result_data) = &entry.tool_use_result {
@@ -235,12 +264,6 @@ impl ClaudeCodeParser {
                             tool_result.details = Some(tool_use_result_data.clone());
                         }
                     }
-
-                    let timestamp = entry
-                        .timestamp
-                        .as_ref()
-                        .and_then(|ts| self.parse_timestamp(ts).ok())
-                        .unwrap_or(start_time);
 
                     let mut message = Message::new(session_id, role, content, timestamp, sequence);
 
@@ -278,10 +301,14 @@ impl ClaudeCodeParser {
     }
 
     /// Extract tools and content from a Claude Code message value
-    /// Returns (content_string, tool_uses, tool_results)
-    fn extract_tools_and_content(&self, value: &Value) -> (String, Vec<ToolUse>, Vec<ToolResult>) {
+    /// Returns (content_string, tool_uses, tool_results, thinking_content)
+    fn extract_tools_and_content(
+        &self,
+        value: &Value,
+    ) -> (String, Vec<ToolUse>, Vec<ToolResult>, Option<String>) {
         let mut tool_uses = Vec::new();
         let mut tool_results = Vec::new();
+        let mut thinking_content: Option<String> = None;
 
         let content = match value {
             Value::String(s) => s.clone(),
@@ -296,7 +323,8 @@ impl ClaudeCodeParser {
                             if let Some(thinking_text) =
                                 obj.get("thinking").and_then(|v| v.as_str())
                             {
-                                content_parts.push(thinking_text.to_string());
+                                // Store thinking separately instead of adding to content
+                                thinking_content = Some(thinking_text.to_string());
                             }
                             continue;
                         }
@@ -391,7 +419,7 @@ impl ClaudeCodeParser {
             content
         };
 
-        (final_content, tool_uses, tool_results)
+        (final_content, tool_uses, tool_results, thinking_content)
     }
 
     fn convert_session(
@@ -474,8 +502,9 @@ impl ClaudeCodeParser {
             _ => return Err(anyhow!("Unknown message role: {}", claude_message.role)),
         };
 
-        let (content, tool_uses, tool_results) =
+        let (content, tool_uses, tool_results, _thinking_content) =
             self.extract_tools_and_content(&claude_message.content);
+        // Note: thinking_content is ignored for legacy format
 
         let timestamp = self.parse_timestamp(&claude_message.created_at)?;
 
