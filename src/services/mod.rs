@@ -28,7 +28,7 @@ pub use import_service::{
 pub use parser_service::ParserService;
 pub use query_service::{
     DateRange, MessageGroup, QueryService, SearchRequest, SearchResponse, SearchResult,
-    SessionDetailRequest, SessionDetailResponse, SessionFilters, SessionSummary,
+    SessionAnalytics, SessionDetailRequest, SessionDetailResponse, SessionFilters, SessionSummary,
     SessionsQueryRequest, SessionsQueryResponse,
 };
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};

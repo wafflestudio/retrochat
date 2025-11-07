@@ -62,6 +62,17 @@ impl SessionDetailWidget {
                 }
             }
 
+            // Load analytics data for this session
+            match self.query_service.get_session_analytics(session_id).await {
+                Ok(analytics) => {
+                    self.state.update_analytics(analytics);
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "No analytics available for session");
+                    self.state.update_analytics(None);
+                }
+            }
+
             self.state.loading = false;
         }
         Ok(())
@@ -103,10 +114,8 @@ impl SessionDetailWidget {
                 self.state.toggle_tool_details();
             }
             KeyCode::Char('a') => {
-                // A: Start analysis for current session
-                // This would require returning a signal to the app
-                // For now, just show a message that this functionality is available via CLI
-                // TODO: Implement analysis start from session detail
+                // A: Toggle analytics panel
+                self.state.toggle_analytics();
             }
             _ => {}
         }
@@ -114,19 +123,47 @@ impl SessionDetailWidget {
     }
 
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4), // Session header
-                Constraint::Min(0),    // Main content
-            ])
-            .split(area);
+        if self.state.show_analytics && self.state.analytics.is_some() {
+            // Split view: messages on left, analytics on right
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(4), // Session header
+                    Constraint::Min(0),    // Main content
+                ])
+                .split(area);
 
-        // Render session header
-        self.render_session_header(f, chunks[0]);
+            // Render session header
+            self.render_session_header(f, chunks[0]);
 
-        // Render main content area
-        self.render_messages(f, chunks[1]);
+            // Split content area horizontally
+            let content_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(50), // Messages
+                    Constraint::Percentage(50), // Analytics
+                ])
+                .split(chunks[1]);
+
+            // Render messages and analytics side by side
+            self.render_messages(f, content_chunks[0]);
+            self.render_analytics(f, content_chunks[1]);
+        } else {
+            // Normal view: just messages
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(4), // Session header
+                    Constraint::Min(0),    // Main content
+                ])
+                .split(area);
+
+            // Render session header
+            self.render_session_header(f, chunks[0]);
+
+            // Render main content area
+            self.render_messages(f, chunks[1]);
+        }
     }
 
     fn render_session_header(&self, f: &mut Frame, area: Rect) {
@@ -141,14 +178,22 @@ impl SessionDetailWidget {
                 "Ongoing"
             };
 
+            // Check if analytics is available
+            let analytics_str = if self.state.analytics.is_some() {
+                " | Analytics: Available"
+            } else {
+                ""
+            };
+
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Keys: 'd'=tool-details",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {}{} | Keys: 'd'=tool-details 'a'=analytics",
                 session.provider,
                 project_str,
                 session.message_count,
                 session.token_count.unwrap_or(0),
                 &session.start_time.format("%Y-%m-%d %H:%M").to_string(),
                 session.state,
+                analytics_str,
             )
         } else {
             "No session selected".to_string()
@@ -447,5 +492,213 @@ impl SessionDetailWidget {
     fn update_scroll_state(&mut self) {
         let total_lines = self.get_total_lines();
         self.state.update_scroll_state(total_lines);
+    }
+
+    fn render_analytics(&self, f: &mut Frame, area: Rect) {
+        let analytics_data = match &self.state.analytics {
+            Some(session_analytics) => session_analytics,
+            None => {
+                let paragraph = Paragraph::new("No analytics available")
+                    .block(Block::default().borders(Borders::ALL).title("Analytics"))
+                    .style(Style::default().fg(Color::Gray));
+                f.render_widget(paragraph, area);
+                return;
+            }
+        };
+
+        let mut lines = Vec::new();
+
+        // Show status of latest request
+        if let Some(request) = &analytics_data.latest_request {
+            lines.push(Line::from(vec![
+                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("{:?}", request.status),
+                    Style::default().fg(match request.status {
+                        crate::models::OperationStatus::Completed => Color::Green,
+                        crate::models::OperationStatus::Running => Color::Yellow,
+                        crate::models::OperationStatus::Pending => Color::Blue,
+                        crate::models::OperationStatus::Failed => Color::Red,
+                        crate::models::OperationStatus::Cancelled => Color::Gray,
+                    }),
+                ),
+            ]));
+            lines.push(Line::from(""));
+        }
+
+        // Show active request if any
+        if let Some(active) = &analytics_data.active_request {
+            lines.push(Line::from(vec![Span::styled(
+                format!("⏳ Analysis in progress: {:?}", active.status),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+            lines.push(Line::from(""));
+        }
+
+        // Show analytics results if available
+        if let Some(analytics) = &analytics_data.latest_analytics {
+            // Scores section
+            lines.push(Line::from(vec![Span::styled(
+                "📊 Scores",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )]));
+            lines.push(Line::from(""));
+
+            let scores = &analytics.scores;
+            lines.push(Line::from(vec![
+                Span::raw("  Overall:        "),
+                Span::styled(
+                    format!("{:.1}/10", scores.overall),
+                    Style::default()
+                        .fg(Self::score_color(scores.overall))
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Code Quality:   "),
+                Span::styled(
+                    format!("{:.1}/10", scores.code_quality),
+                    Style::default().fg(Self::score_color(scores.code_quality)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Productivity:   "),
+                Span::styled(
+                    format!("{:.1}/10", scores.productivity),
+                    Style::default().fg(Self::score_color(scores.productivity)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Efficiency:     "),
+                Span::styled(
+                    format!("{:.1}/10", scores.efficiency),
+                    Style::default().fg(Self::score_color(scores.efficiency)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Collaboration:  "),
+                Span::styled(
+                    format!("{:.1}/10", scores.collaboration),
+                    Style::default().fg(Self::score_color(scores.collaboration)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Learning:       "),
+                Span::styled(
+                    format!("{:.1}/10", scores.learning),
+                    Style::default().fg(Self::score_color(scores.learning)),
+                ),
+            ]));
+            lines.push(Line::from(""));
+
+            // Metrics section
+            lines.push(Line::from(vec![Span::styled(
+                "📈 Metrics",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )]));
+            lines.push(Line::from(""));
+
+            let metrics = &analytics.metrics;
+            lines.push(Line::from(format!(
+                "  Files Modified:     {}",
+                metrics.total_files_modified
+            )));
+            lines.push(Line::from(format!(
+                "  Files Read:         {}",
+                metrics.total_files_read
+            )));
+            lines.push(Line::from(format!(
+                "  Lines Added:        {}",
+                metrics.lines_added
+            )));
+            lines.push(Line::from(format!(
+                "  Lines Removed:      {}",
+                metrics.lines_removed
+            )));
+            lines.push(Line::from(format!(
+                "  Tokens Used:        {}",
+                metrics.total_tokens_used
+            )));
+            lines.push(Line::from(format!(
+                "  Duration:           {:.1} min",
+                metrics.session_duration_minutes
+            )));
+            lines.push(Line::from(""));
+
+            // Key insights from qualitative output
+            if !analytics.qualitative_output.insights.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    "💡 Key Insights",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                )]));
+                lines.push(Line::from(""));
+
+                // Show first few insights
+                for (idx, insight) in analytics
+                    .qualitative_output
+                    .insights
+                    .iter()
+                    .take(3)
+                    .enumerate()
+                {
+                    lines.push(Line::from(vec![Span::styled(
+                        format!("  {}. {}", idx + 1, insight.title),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    )]));
+
+                    // Wrap the insight description
+                    let wrapped_desc =
+                        wrap_text(&insight.description, area.width.saturating_sub(6) as usize);
+                    for line in wrapped_desc {
+                        lines.push(Line::from(format!("     {}", line)));
+                    }
+                    lines.push(Line::from(""));
+                }
+            }
+
+            // Show model used
+            if let Some(model) = &analytics.model_used {
+                lines.push(Line::from(vec![
+                    Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(model, Style::default().fg(Color::Gray)),
+                ]));
+            }
+        } else if analytics_data.active_request.is_none() {
+            lines.push(Line::from(vec![Span::styled(
+                "No completed analysis available",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+        }
+
+        let paragraph = Paragraph::new(lines)
+            .block(Block::default().borders(Borders::ALL).title("Analytics"))
+            .wrap(Wrap { trim: true })
+            .scroll((0, 0));
+
+        f.render_widget(paragraph, area);
+    }
+
+    fn score_color(score: f64) -> Color {
+        if score >= 8.0 {
+            Color::Green
+        } else if score >= 6.0 {
+            Color::Yellow
+        } else if score >= 4.0 {
+            Color::Rgb(255, 165, 0) // Orange
+        } else {
+            Color::Red
+        }
     }
 }

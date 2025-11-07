@@ -1,6 +1,7 @@
 use ratatui::widgets::ScrollbarState;
 
 use crate::models::{ChatSession, Message};
+use crate::services::SessionAnalytics;
 
 /// State for the session detail view
 #[derive(Debug)]
@@ -11,6 +12,8 @@ pub struct SessionDetailState {
     pub messages: Vec<Message>,
     /// Currently selected session ID
     pub session_id: Option<String>,
+    /// Analytics data for this session
+    pub analytics: Option<SessionAnalytics>,
     /// Scrollbar state for messages
     pub scroll_state: ScrollbarState,
     /// Current scroll position (line number)
@@ -19,6 +22,8 @@ pub struct SessionDetailState {
     pub loading: bool,
     /// Whether to show detailed tool output (expanded view)
     pub show_tool_details: bool,
+    /// Whether to show analytics panel
+    pub show_analytics: bool,
 }
 
 impl SessionDetailState {
@@ -28,10 +33,12 @@ impl SessionDetailState {
             session: None,
             messages: Vec::new(),
             session_id: None,
+            analytics: None,
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
             loading: false,
             show_tool_details: false,
+            show_analytics: false,
         }
     }
 
@@ -101,6 +108,16 @@ impl SessionDetailState {
     /// Toggle tool details visibility
     pub fn toggle_tool_details(&mut self) {
         self.show_tool_details = !self.show_tool_details;
+    }
+
+    /// Toggle analytics panel visibility
+    pub fn toggle_analytics(&mut self) {
+        self.show_analytics = !self.show_analytics;
+    }
+
+    /// Update analytics data
+    pub fn update_analytics(&mut self, analytics: Option<SessionAnalytics>) {
+        self.analytics = analytics;
     }
 
     /// Update the scrollbar state
