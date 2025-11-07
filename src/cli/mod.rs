@@ -217,14 +217,17 @@ impl Cli {
             // Handle no subcommand - default behavior
             let command = match self.command {
                 None => {
-                    // Check if first-time user
+                    // Check if first-time user (no database exists)
                     if setup::is_first_time_user() {
-                        // Run setup wizard
-                        return setup::run_setup_wizard().await;
-                    } else {
-                        // Launch TUI by default
-                        return tui::handle_tui_command().await;
+                        // Run setup wizard (interactive import)
+                        if let Err(e) = setup::run_setup_wizard().await {
+                            eprintln!("Setup failed: {}", e);
+                            return Err(e);
+                        }
                     }
+
+                    // After setup (or if DB already exists), launch TUI
+                    return tui::handle_tui_command().await;
                 }
                 Some(cmd) => cmd,
             };
