@@ -243,7 +243,7 @@ impl SessionListWidget {
                     .add_modifier(Modifier::BOLD),
             ),
             Some(OperationStatus::Pending) => Span::styled(
-                "⋯ ",
+                format!("{spinner_char} "),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
