@@ -153,6 +153,16 @@ impl SessionDetailWidget {
                 // A: Toggle analytics panel
                 self.state.toggle_analytics();
             }
+            KeyCode::Char('t') => {
+                // T: Toggle thinking messages visibility
+                self.state.toggle_thinking();
+                // Clamp scroll position if it's now out of bounds
+                let max_scroll = self.get_max_scroll();
+                if self.state.current_scroll > max_scroll {
+                    self.state.current_scroll = max_scroll;
+                }
+                self.update_scroll_state();
+            }
             _ => {}
         }
         Ok(())
@@ -283,8 +293,20 @@ impl SessionDetailWidget {
     fn calculate_message_lines(&self, width: usize) -> Vec<Line<'_>> {
         let mut lines = Vec::new();
 
+        // Filter out thinking messages if hidden
+        let messages = if self.state.show_thinking {
+            self.state.messages.clone()
+        } else {
+            self.state
+                .messages
+                .iter()
+                .filter(|msg| !msg.is_thinking())
+                .cloned()
+                .collect()
+        };
+
         // Pair tool_use and tool_result messages
-        let message_groups = MessageGroup::pair_tool_messages(self.state.messages.clone());
+        let message_groups = MessageGroup::pair_tool_messages(messages);
 
         for (group_idx, group) in message_groups.iter().enumerate() {
             // Add separator between groups (except for first)
