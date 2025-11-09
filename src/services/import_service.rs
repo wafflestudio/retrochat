@@ -847,7 +847,7 @@ impl ImportService {
             error_str.clone()
         };
 
-        format!("[{}] {}", file_name, error_summary)
+        format!("[{file_name}] {error_summary}")
     }
 }
 
