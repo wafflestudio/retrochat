@@ -23,13 +23,37 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Interactive setup wizard
-    Setup,
-
     /// Synchronize chat history from providers
+    ///
+    /// Available providers: all, claude, gemini, codex
+    ///
+    /// Examples:
+    ///   retrochat sync claude gemini          # Import from multiple providers
+    ///   retrochat sync all                    # Import from all providers
+    ///   retrochat sync claude -w --verbose    # Watch mode with detailed output
+    ///   retrochat sync --path ~/.claude/projects
     Sync {
-        #[command(subcommand)]
-        command: SyncCommands,
+        /// One or more providers to sync
+        ///
+        /// Available: all, claude, gemini, codex
+        #[arg(value_enum)]
+        providers: Vec<Provider>,
+
+        /// A specific file or directory path to sync from
+        #[arg(short, long)]
+        path: Option<String>,
+
+        /// Overwrite existing sessions if they already exist
+        #[arg(short, long)]
+        overwrite: bool,
+
+        /// Watch for file changes and auto-import
+        #[arg(short, long)]
+        watch: bool,
+
+        /// Show detailed diff of changes (applies to watch mode)
+        #[arg(short = 'v', long)]
+        verbose: bool,
     },
 
     /// List sessions with optional filters
@@ -110,57 +134,6 @@ pub enum Commands {
         /// Output file path (optional, prints to stdout if not specified)
         #[arg(short, long)]
         output: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum SyncCommands {
-    /// Import chat files from providers or path
-    ///
-    /// Available providers: all, claude, gemini, codex
-    ///
-    /// Examples:
-    ///   retrochat sync import claude gemini   # Import from multiple providers
-    ///   retrochat sync import all             # Import from all providers
-    ///   retrochat sync import --path ~/.claude/projects
-    Import {
-        /// A specific file or directory path to import from
-        #[arg(short, long)]
-        path: Option<String>,
-
-        /// One or more providers to import from
-        ///
-        /// Available: all, claude, gemini, codex
-        #[arg(value_enum)]
-        providers: Vec<Provider>,
-
-        /// Overwrite existing sessions if they already exist
-        #[arg(short, long)]
-        overwrite: bool,
-    },
-
-    /// Watch for file changes and show diffs
-    ///
-    /// Available providers: all, claude, gemini, codex
-    ///
-    /// Examples:
-    ///   retrochat sync watch all --verbose    # Watch all providers with detailed output
-    ///   retrochat sync watch claude gemini    # Watch specific providers
-    ///   retrochat sync watch --path ~/.claude/projects --verbose
-    Watch {
-        /// A specific file or directory path to watch
-        #[arg(short, long)]
-        path: Option<String>,
-
-        /// One or more providers to watch
-        ///
-        /// Available: all, claude, gemini, codex
-        #[arg(value_enum)]
-        providers: Vec<Provider>,
-
-        /// Show detailed diff of changes
-        #[arg(short = 'v', long)]
-        verbose: bool,
     },
 }
 
@@ -255,26 +228,21 @@ impl Cli {
 
             match command {
                 // ═══════════════════════════════════════════════════
-                // Setup
-                // ═══════════════════════════════════════════════════
-                Commands::Setup => setup::run_setup_wizard().await,
-
-                // ═══════════════════════════════════════════════════
                 // Data Synchronization
                 // ═══════════════════════════════════════════════════
-                Commands::Sync { command } => match command {
-                    SyncCommands::Import {
-                        path,
-                        providers,
-                        overwrite,
-                    } => import::handle_import_command(path, providers, overwrite).await,
-
-                    SyncCommands::Watch {
-                        path,
-                        providers,
-                        verbose,
-                    } => watch::handle_watch_command(path, providers, verbose, false).await,
-                },
+                Commands::Sync {
+                    providers,
+                    path,
+                    overwrite,
+                    watch,
+                    verbose,
+                } => {
+                    if watch {
+                        watch::handle_watch_command(path, providers, verbose, false).await
+                    } else {
+                        import::handle_import_command(path, providers, overwrite).await
+                    }
+                }
 
                 // ═══════════════════════════════════════════════════
                 // Session Management

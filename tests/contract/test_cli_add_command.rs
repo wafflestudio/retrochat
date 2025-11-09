@@ -1,97 +1,126 @@
-use retrochat::cli::{Cli, Commands, SyncCommands};
+use retrochat::cli::{Cli, Commands};
 use retrochat::models::Provider;
 
 #[test]
-fn test_sync_import_command_structure() {
-    // Test that the Sync Import command has the correct structure
+fn test_sync_command_structure() {
+    // Test that the Sync command has the correct structure
     let sync_cmd = Commands::Sync {
-        command: SyncCommands::Import {
-            path: None,
-            providers: vec![],
-            overwrite: false,
-        },
+        providers: vec![],
+        path: None,
+        overwrite: false,
+        watch: false,
+        verbose: false,
     };
 
     match sync_cmd {
         Commands::Sync {
-            command:
-                SyncCommands::Import {
-                    path,
-                    providers,
-                    overwrite,
-                },
+            providers,
+            path,
+            overwrite,
+            watch,
+            verbose,
         } => {
-            assert!(path.is_none());
             assert_eq!(providers.len(), 0);
+            assert!(path.is_none());
             assert!(!overwrite);
+            assert!(!watch);
+            assert!(!verbose);
         }
-        _ => panic!("Expected Sync Import command"),
+        _ => panic!("Expected Sync command"),
     }
 }
 
 #[test]
-fn test_sync_import_command_with_path() {
+fn test_sync_command_with_path() {
     let sync_cmd = Commands::Sync {
-        command: SyncCommands::Import {
-            path: Some("/test/path".to_string()),
-            providers: vec![],
-            overwrite: false,
-        },
+        providers: vec![],
+        path: Some("/test/path".to_string()),
+        overwrite: false,
+        watch: false,
+        verbose: false,
     };
 
     match sync_cmd {
-        Commands::Sync {
-            command: SyncCommands::Import { path, .. },
-        } => {
+        Commands::Sync { path, .. } => {
             assert_eq!(path, Some("/test/path".to_string()));
         }
-        _ => panic!("Expected Sync Import command"),
+        _ => panic!("Expected Sync command"),
     }
 }
 
 #[test]
-fn test_sync_import_command_with_providers() {
+fn test_sync_command_with_providers() {
     let sync_cmd = Commands::Sync {
-        command: SyncCommands::Import {
-            path: None,
-            providers: vec![Provider::ClaudeCode, Provider::GeminiCLI],
-            overwrite: false,
-        },
+        providers: vec![Provider::ClaudeCode, Provider::GeminiCLI],
+        path: None,
+        overwrite: false,
+        watch: false,
+        verbose: false,
     };
 
     match sync_cmd {
-        Commands::Sync {
-            command: SyncCommands::Import { providers, .. },
-        } => {
+        Commands::Sync { providers, .. } => {
             assert_eq!(providers.len(), 2);
             assert_eq!(providers[0], Provider::ClaudeCode);
             assert_eq!(providers[1], Provider::GeminiCLI);
         }
-        _ => panic!("Expected Sync Import command"),
+        _ => panic!("Expected Sync command"),
     }
 }
 
 #[test]
-fn test_sync_import_command_with_overwrite() {
+fn test_sync_command_with_overwrite() {
     let sync_cmd = Commands::Sync {
-        command: SyncCommands::Import {
-            path: None,
-            providers: vec![],
-            overwrite: true,
-        },
+        providers: vec![],
+        path: None,
+        overwrite: true,
+        watch: false,
+        verbose: false,
     };
 
     match sync_cmd {
-        Commands::Sync {
-            command: SyncCommands::Import { overwrite, .. },
-        } => {
+        Commands::Sync { overwrite, .. } => {
             assert!(overwrite);
         }
-        _ => panic!("Expected Sync Import command"),
+        _ => panic!("Expected Sync command"),
     }
 }
 
-// Stats command was removed - test removed
+#[test]
+fn test_sync_command_watch_mode() {
+    let sync_cmd = Commands::Sync {
+        providers: vec![Provider::ClaudeCode],
+        path: None,
+        overwrite: false,
+        watch: true,
+        verbose: false,
+    };
+
+    match sync_cmd {
+        Commands::Sync { watch, .. } => {
+            assert!(watch);
+        }
+        _ => panic!("Expected Sync command"),
+    }
+}
+
+#[test]
+fn test_sync_command_verbose() {
+    let sync_cmd = Commands::Sync {
+        providers: vec![],
+        path: None,
+        overwrite: false,
+        watch: true,
+        verbose: true,
+    };
+
+    match sync_cmd {
+        Commands::Sync { verbose, .. } => {
+            assert!(verbose);
+        }
+        _ => panic!("Expected Sync command"),
+    }
+}
 
 #[test]
 fn test_search_command_structure() {
@@ -194,18 +223,6 @@ fn test_analysis_run_command_structure() {
 }
 
 #[test]
-fn test_setup_command() {
-    let setup_cmd = Commands::Setup;
-
-    match setup_cmd {
-        Commands::Setup => {
-            // Setup command has no fields - match is sufficient
-        }
-        _ => panic!("Expected Setup command"),
-    }
-}
-
-#[test]
 fn test_cli_optional_command() {
     // Test that Cli can have None command
     let cli = Cli { command: None };
@@ -214,14 +231,20 @@ fn test_cli_optional_command() {
 }
 
 #[test]
-fn test_cli_with_command() {
+fn test_cli_with_sync_command() {
     let cli = Cli {
-        command: Some(Commands::Setup),
+        command: Some(Commands::Sync {
+            providers: vec![],
+            path: None,
+            overwrite: false,
+            watch: false,
+            verbose: false,
+        }),
     };
 
     assert!(cli.command.is_some(), "Command should be present");
     match cli.command {
-        Some(Commands::Setup) => {}
-        _ => panic!("Expected Setup command"),
+        Some(Commands::Sync { .. }) => {}
+        _ => panic!("Expected Sync command"),
     }
 }
