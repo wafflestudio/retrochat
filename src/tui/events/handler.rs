@@ -58,13 +58,8 @@ impl EventHandler {
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 if show_help {
                     return vec![UserAction::ToggleHelp];
-                } else {
-                    match mode {
-                        AppMode::SessionDetail | AppMode::Analytics => {
-                            return vec![UserAction::NavigateBack]
-                        }
-                        _ => {}
-                    }
+                } else if mode == &AppMode::SessionDetail {
+                    return vec![UserAction::NavigateBack];
                 }
             }
 
@@ -88,7 +83,6 @@ impl EventHandler {
         match mode {
             AppMode::SessionList => self.handle_session_list_keys(key),
             AppMode::SessionDetail => self.handle_session_detail_keys(key),
-            AppMode::Analytics => self.handle_analytics_keys(key),
             AppMode::Help => vec![],
         }
     }
@@ -117,15 +111,6 @@ impl EventHandler {
             KeyCode::PageDown => vec![UserAction::SessionDetailPageDown],
             KeyCode::Home => vec![UserAction::SessionDetailHome],
             KeyCode::End => vec![UserAction::SessionDetailEnd],
-            _ => vec![],
-        }
-    }
-
-    fn handle_analytics_keys(&self, key: KeyEvent) -> Vec<UserAction> {
-        match key.code {
-            KeyCode::Up => vec![UserAction::AnalyticsNavigate(NavigationDirection::Up)],
-            KeyCode::Down => vec![UserAction::AnalyticsNavigate(NavigationDirection::Down)],
-            KeyCode::Char('r') => vec![UserAction::AnalyticsRefresh],
             _ => vec![],
         }
     }

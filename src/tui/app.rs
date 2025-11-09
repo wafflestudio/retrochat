@@ -19,7 +19,6 @@ use crate::services::google_ai::{GoogleAiClient, GoogleAiConfig};
 use crate::services::{AnalyticsRequestService, AnalyticsService, QueryService};
 
 use super::{
-    analytics::AnalyticsWidget,
     components::dialog::{Dialog, DialogType},
     events::{AppEvent, EventHandler, UserAction},
     session_detail::SessionDetailWidget,
@@ -30,7 +29,6 @@ use super::{
 pub enum AppMode {
     SessionList,
     SessionDetail,
-    Analytics,
     Help,
 }
 
@@ -142,7 +140,6 @@ pub struct App {
     pub state: AppState,
     pub session_list: SessionListWidget,
     pub session_detail: SessionDetailWidget,
-    pub analytics: AnalyticsWidget,
     pub query_service: QueryService,
     pub analytics_service: AnalyticsService,
     pub analytics_request_service: Option<Arc<AnalyticsRequestService>>,
@@ -172,7 +169,6 @@ impl App {
             state: AppState::new(),
             session_list: SessionListWidget::new(db_manager.clone()),
             session_detail: SessionDetailWidget::new(db_manager.clone()),
-            analytics: AnalyticsWidget::new(db_manager.clone()),
             query_service,
             analytics_service,
             analytics_request_service,
@@ -374,14 +370,6 @@ impl App {
                 self.session_detail.state.scroll_to_bottom(max_scroll);
             }
 
-            // Analytics actions
-            AnalyticsNavigate(_direction) => {
-                // TODO: Implement analytics navigation
-            }
-            AnalyticsRefresh => {
-                self.analytics.refresh().await?;
-            }
-
             // Data refresh actions
             RefreshCurrentView => {
                 self.refresh_current_view().await?;
@@ -432,22 +420,22 @@ impl App {
     }
 
     async fn next_tab(&mut self) -> Result<()> {
+        // With only one tab (Sessions), tab navigation returns to session list
         self.state.mode = match self.state.mode {
-            AppMode::SessionList => AppMode::Analytics,
-            AppMode::Analytics => AppMode::SessionList,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
+            _ => self.state.mode.clone(),
         };
 
         Ok(())
     }
 
     async fn previous_tab(&mut self) -> Result<()> {
+        // With only one tab (Sessions), tab navigation returns to session list
         self.state.mode = match self.state.mode {
-            AppMode::SessionList => AppMode::Analytics,
-            AppMode::Analytics => AppMode::SessionList,
             AppMode::SessionDetail => AppMode::SessionList,
             AppMode::Help => AppMode::SessionList,
+            _ => self.state.mode.clone(),
         };
 
         Ok(())
@@ -460,9 +448,6 @@ impl App {
             }
             AppMode::SessionDetail => {
                 self.session_detail.refresh().await?;
-            }
-            AppMode::Analytics => {
-                self.analytics.refresh().await?;
             }
             AppMode::Help => {}
         }
@@ -494,9 +479,6 @@ impl App {
                 AppMode::SessionDetail => {
                     self.session_detail.render(f, main_layout[1]);
                 }
-                AppMode::Analytics => {
-                    self.analytics.render(f, main_layout[1]);
-                }
                 AppMode::Help => {
                     self.render_help(f, main_layout[1]);
                 }
@@ -513,10 +495,9 @@ impl App {
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let tab_titles = vec!["Sessions", "Analytics"];
+        let tab_titles = vec!["Sessions"];
         let selected_tab = match self.state.mode {
             AppMode::SessionList | AppMode::SessionDetail => 0,
-            AppMode::Analytics => 1,
             AppMode::Help => 0,
         };
 
@@ -536,12 +517,11 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View | a: Analytics | Tab: Switch | ?: Help | q: Quit | Auto-refreshes every 5s"
+                "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
             AppMode::SessionDetail => {
-                "↑/↓: Scroll | t: Toggle Analytics | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
+                "↑/↓: Scroll | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
             }
-            AppMode::Analytics => "↑/↓: Navigate | Tab: Switch Views | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
         }.to_string();
 
@@ -579,19 +559,8 @@ impl App {
             Line::from("  ↑/↓            - Scroll messages"),
             Line::from("  Page Up/Down   - Fast scroll"),
             Line::from("  Home/End       - Jump to start/end"),
-            Line::from("  t              - Toggle analytics panel"),
             Line::from("  w              - Toggle word wrap"),
             Line::from("  (Auto-refreshes every 5 seconds)"),
-            Line::from(""),
-            Line::from("Analytics:"),
-            Line::from("  ↑/↓            - Navigate insights"),
-            Line::from("  r              - Refresh analytics"),
-            Line::from(""),
-            Line::from("Analytics Requests:"),
-            Line::from("  ↑/↓            - Navigate requests"),
-            Line::from("  Enter/d        - Toggle details view"),
-            Line::from("  c              - Cancel selected request"),
-            Line::from("  (Auto-refreshes every 2 seconds)"),
         ];
 
         let dialog = Dialog::new(DialogType::Help, content).size(80, 70);
