@@ -405,10 +405,11 @@ impl ImportService {
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_imports));
 
         // Create tasks for concurrent processing
-        let mut tasks: Vec<JoinHandle<Result<ImportFileResponse>>> = Vec::new();
+        let mut tasks: Vec<JoinHandle<(String, Result<ImportFileResponse>)>> = Vec::new();
 
         for file in scan_response.files_found {
             let semaphore_clone = semaphore.clone();
+            let file_path = file.file_path.clone();
             let import_request = ImportFileRequest {
                 file_path: file.file_path.clone(),
                 provider: Some(file.provider),
@@ -419,7 +420,8 @@ impl ImportService {
             let service_clone = self.clone();
             let task = tokio::spawn(async move {
                 let _permit = semaphore_clone.acquire().await.unwrap();
-                service_clone.import_file(import_request).await
+                let result = service_clone.import_file(import_request).await;
+                (file_path, result)
             });
 
             tasks.push(task);
@@ -436,14 +438,15 @@ impl ImportService {
 
         for result in results {
             match result {
-                Ok(Ok(import_response)) => {
+                Ok((_file_path, Ok(import_response))) => {
                     successful_imports += 1;
                     total_sessions_imported += import_response.sessions_imported;
                     total_messages_imported += import_response.messages_imported;
                 }
-                Ok(Err(e)) => {
+                Ok((file_path, Err(e))) => {
                     failed_imports += 1;
-                    errors.push(e.to_string());
+                    let error_msg = Self::format_import_error(&file_path, &e);
+                    errors.push(error_msg);
                 }
                 Err(e) => {
                     failed_imports += 1;
@@ -743,11 +746,12 @@ impl ImportService {
 
         // Create semaphore to limit concurrent imports
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_imports));
-        let mut tasks: Vec<JoinHandle<Result<ImportFileResponse>>> = Vec::new();
+        let mut tasks: Vec<JoinHandle<(String, Result<ImportFileResponse>)>> = Vec::new();
 
         for file in scan_response.files_found {
             let semaphore_clone = semaphore.clone();
             let tx_clone = tx.clone();
+            let file_path = file.file_path.clone();
             let import_request = ImportFileRequest {
                 file_path: file.file_path.clone(),
                 provider: Some(file.provider),
@@ -760,7 +764,7 @@ impl ImportService {
                 let _permit = semaphore_clone.acquire().await.unwrap();
                 let result = service_clone.import_file(import_request).await;
                 let _ = tx_clone.send(()).await; // Report progress
-                result
+                (file_path, result)
             });
 
             tasks.push(task);
@@ -783,14 +787,15 @@ impl ImportService {
 
         for result in results {
             match result {
-                Ok(Ok(import_response)) => {
+                Ok((_file_path, Ok(import_response))) => {
                     successful_imports += 1;
                     total_sessions_imported += import_response.sessions_imported;
                     total_messages_imported += import_response.messages_imported;
                 }
-                Ok(Err(e)) => {
+                Ok((file_path, Err(e))) => {
                     failed_imports += 1;
-                    errors.push(e.to_string());
+                    let error_msg = Self::format_import_error(&file_path, &e);
+                    errors.push(error_msg);
                 }
                 Err(e) => {
                     failed_imports += 1;
@@ -810,6 +815,39 @@ impl ImportService {
             batch_duration_ms,
             errors,
         })
+    }
+
+    /// Format import error with file path and truncate long messages
+    fn format_import_error(file_path: &str, error: &anyhow::Error) -> String {
+        let error_str = error.to_string();
+
+        // Extract just the filename for cleaner display
+        let file_name = std::path::Path::new(file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(file_path);
+
+        // Truncate error message if it contains long JSON content
+        let max_error_length = 200;
+        let error_summary = if error_str.len() > max_error_length {
+            // Try to find a meaningful error message before JSON content
+            if let Some(json_start) = error_str.find('{').or_else(|| error_str.find('[')) {
+                if json_start < max_error_length {
+                    format!(
+                        "{}... (truncated JSON)",
+                        &error_str[..json_start.min(max_error_length)]
+                    )
+                } else {
+                    format!("{}...", &error_str[..max_error_length])
+                }
+            } else {
+                format!("{}...", &error_str[..max_error_length])
+            }
+        } else {
+            error_str.clone()
+        };
+
+        format!("[{file_name}] {error_summary}")
     }
 }
 

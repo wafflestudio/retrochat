@@ -13,7 +13,6 @@ use tokio::runtime::Runtime;
 
 use crate::env::apis as env_vars;
 use crate::models::Provider;
-use analytics::AnalyticsCommands;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -24,134 +23,61 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize application database
-    Init,
-    /// Launch TUI interface
-    Tui,
-    /// Import chat files from a path or from one or more providers
+    /// Synchronize chat history from providers
     ///
-    /// Available providers: all, claude, gemini, codex, cursor
+    /// Available providers: all, claude, gemini, codex
     ///
     /// Examples:
-    ///   retrochat import claude cursor        # Import from multiple providers
-    ///   retrochat import all                  # Import from all providers
-    ///   retrochat import --path ~/.claude/projects
-    Import {
-        /// A specific file or directory path to import from
-        #[arg(short, long)]
-        path: Option<String>,
-
-        /// One or more providers to import from
+    ///   retrochat sync claude gemini          # Import from multiple providers
+    ///   retrochat sync all                    # Import from all providers
+    ///   retrochat sync claude -w --verbose    # Watch mode with detailed output
+    ///   retrochat sync --path ~/.claude/projects
+    Sync {
+        /// One or more providers to sync
         ///
-        /// Available: all, claude, gemini, codex, cursor
+        /// Available: all, claude, gemini, codex
         #[arg(value_enum)]
         providers: Vec<Provider>,
+
+        /// A specific file or directory path to sync from
+        #[arg(short, long)]
+        path: Option<String>,
 
         /// Overwrite existing sessions if they already exist
         #[arg(short, long)]
         overwrite: bool,
-    },
-    /// Watch files for changes and show diffs
-    ///
-    /// Available providers: all, claude, gemini, codex, cursor
-    ///
-    /// Examples:
-    ///   retrochat watch all --verbose         # Watch all providers with detailed output
-    ///   retrochat watch claude cursor         # Watch specific providers
-    ///   retrochat watch --path ~/.claude/projects --verbose
-    Watch {
-        /// A specific file or directory path to watch
+
+        /// Watch for file changes and auto-import
         #[arg(short, long)]
-        path: Option<String>,
+        watch: bool,
 
-        /// One or more providers to watch
-        ///
-        /// Available: all, claude, gemini, codex, cursor
-        #[arg(value_enum)]
-        providers: Vec<Provider>,
-
-        /// Show detailed diff of changes
+        /// Show detailed diff of changes (applies to watch mode)
         #[arg(short = 'v', long)]
         verbose: bool,
+    },
 
-        /// Automatically import changes when detected (future feature)
-        #[arg(short, long)]
-        import: bool,
-    },
-    /// Analytics sessions with request tracking
-    Analytics {
-        #[command(subcommand)]
-        command: AnalyticsCommands,
-    },
-    /// Query sessions and search messages
-    Query {
-        #[command(subcommand)]
-        command: QueryCommands,
-    },
-    /// Interactive setup wizard for first-time users
-    Setup,
-    /// [Alias for 'import'] Add chat files interactively or from providers
-    ///
-    /// This is a more intuitive alias for the import command.
-    /// Examples:
-    ///   retrochat add                 # Interactive mode
-    ///   retrochat add --path /path    # Import from path
-    Add {
-        /// A specific file or directory path to import from
-        #[arg(short, long)]
-        path: Option<String>,
-
-        /// One or more providers to import from
-        #[arg(value_enum)]
-        providers: Vec<Provider>,
-
-        /// Overwrite existing sessions if they already exist
-        #[arg(short, long)]
-        overwrite: bool,
-    },
-    /// [Alias for 'query search'] Search messages by content
-    Search {
-        /// Search query
-        query: String,
-        /// Maximum number of results (default: 20)
-        #[arg(short, long)]
-        limit: Option<i32>,
-        /// Messages since this time (e.g., "7 days ago", "2024-10-01", "yesterday")
-        #[arg(long)]
-        since: Option<String>,
-        /// Messages until this time (e.g., "now", "2024-10-31", "today")
-        #[arg(long)]
-        until: Option<String>,
-    },
-    /// [Alias for 'analytics execute'] Review and analytics a chat session
-    Review {
-        /// Session ID to review (optional, will prompt if not provided)
-        session_id: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum QueryCommands {
     /// List sessions with optional filters
-    Sessions {
-        /// Page number (default: 1)
-        #[arg(short, long)]
-        page: Option<i32>,
-        /// Page size (default: 20)
-        #[arg(short = 's', long)]
-        page_size: Option<i32>,
+    List {
         /// Filter by provider
         #[arg(long)]
         provider: Option<String>,
         /// Filter by project
         #[arg(long)]
         project: Option<String>,
+        /// Page number (default: 1)
+        #[arg(short, long)]
+        page: Option<i32>,
+        /// Page size (default: 20)
+        #[arg(short = 's', long)]
+        page_size: Option<i32>,
     },
-    /// Show detailed information about a specific session
-    Session {
+
+    /// Show detailed information about a session
+    Show {
         /// Session ID to view
         session_id: String,
     },
+
     /// Search messages by content
     Search {
         /// Search query
@@ -166,8 +92,18 @@ pub enum QueryCommands {
         #[arg(long)]
         until: Option<String>,
     },
-    /// Query messages by time range
-    Timeline {
+
+    /// AI-powered session analysis
+    Analysis {
+        #[command(subcommand)]
+        command: AnalysisCommands,
+    },
+
+    /// Export chat history
+    Export {
+        /// Output format: compact (default) or jsonl
+        #[arg(long, short = 'f', default_value = "compact")]
+        format: String,
         /// Messages since this time (e.g., "7 days ago", "2024-10-01", "yesterday")
         #[arg(long)]
         since: Option<String>,
@@ -180,9 +116,6 @@ pub enum QueryCommands {
         /// Filter by role (User, Assistant, System)
         #[arg(long)]
         role: Option<String>,
-        /// Output format: compact (default) or jsonl
-        #[arg(long, short = 'F', default_value = "compact")]
-        format: String,
         /// Maximum number of messages
         #[arg(long, short = 'n')]
         limit: Option<i32>,
@@ -198,6 +131,67 @@ pub enum QueryCommands {
         /// Number of characters to show from the end (default: 200)
         #[arg(long, default_value = "200")]
         truncate_tail: usize,
+        /// Output file path (optional, prints to stdout if not specified)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AnalysisCommands {
+    /// Run AI analysis on a session
+    Run {
+        /// Session ID to analyze (if not provided, will prompt for selection)
+        session_id: Option<String>,
+        /// Custom prompt for analysis
+        #[arg(long)]
+        custom_prompt: Option<String>,
+        /// Analyze all sessions
+        #[arg(long)]
+        all: bool,
+        /// Process in background (simplified - just shows progress)
+        #[arg(long)]
+        background: bool,
+        /// Output format: enhanced (default), markdown, json, or plain
+        #[arg(long, short = 'f', default_value = "enhanced")]
+        format: String,
+        /// Use plain text format (alias for --format=plain)
+        #[arg(long)]
+        plain: bool,
+    },
+
+    /// Show analysis results
+    Show {
+        /// Session ID to show results for
+        session_id: Option<String>,
+        /// Show all results
+        #[arg(long)]
+        all: bool,
+        /// Output format
+        #[arg(short, long, default_value = "text")]
+        format: String,
+    },
+
+    /// Show analysis request status
+    Status {
+        /// Show all active operations
+        #[arg(long)]
+        all: bool,
+        /// Watch for status changes
+        #[arg(long)]
+        watch: bool,
+        /// Show history of completed operations
+        #[arg(long)]
+        history: bool,
+    },
+
+    /// Cancel analysis request
+    Cancel {
+        /// Request ID to cancel (if not provided, will list active requests)
+        request_id: Option<String>,
+        /// Cancel all active requests
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -206,8 +200,8 @@ impl Cli {
         let rt = Runtime::new()?;
         let rt_arc = Arc::new(rt);
 
-        // Create cleanup handler for analytics commands
-        let _cleanup_guard = if matches!(self.command, Some(Commands::Analytics { .. })) {
+        // Create cleanup handler for analysis commands
+        let _cleanup_guard = if matches!(self.command, Some(Commands::Analysis { .. })) {
             Some(self.create_analytics_request_cleanup_handler(rt_arc.clone())?)
         } else {
             None
@@ -233,21 +227,49 @@ impl Cli {
             };
 
             match command {
-                Commands::Init => init::handle_init_command().await,
-                Commands::Tui => tui::handle_tui_command().await,
-                Commands::Import {
-                    path,
+                // ═══════════════════════════════════════════════════
+                // Data Synchronization
+                // ═══════════════════════════════════════════════════
+                Commands::Sync {
                     providers,
+                    path,
                     overwrite,
-                } => import::handle_import_command(path, providers, overwrite).await,
-                Commands::Watch {
-                    path,
-                    providers,
+                    watch,
                     verbose,
-                    import,
-                } => watch::handle_watch_command(path, providers, verbose, import).await,
-                Commands::Analytics { command } => match command {
-                    AnalyticsCommands::Execute {
+                } => {
+                    if watch {
+                        watch::handle_watch_command(path, providers, verbose, false).await
+                    } else {
+                        import::handle_import_command(path, providers, overwrite).await
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════
+                // Session Management
+                // ═══════════════════════════════════════════════════
+                Commands::List {
+                    provider,
+                    project,
+                    page,
+                    page_size,
+                } => query::handle_sessions_command(page, page_size, provider, project).await,
+
+                Commands::Show { session_id } => {
+                    query::handle_session_detail_command(session_id).await
+                }
+
+                Commands::Search {
+                    query,
+                    limit,
+                    since,
+                    until,
+                } => query::handle_search_command(query, limit, since, until).await,
+
+                // ═══════════════════════════════════════════════════
+                // AI Analysis
+                // ═══════════════════════════════════════════════════
+                Commands::Analysis { command } => match command {
+                    AnalysisCommands::Run {
                         session_id,
                         custom_prompt,
                         all,
@@ -265,37 +287,48 @@ impl Cli {
                         )
                         .await
                     }
-                    AnalyticsCommands::Show {
+
+                    AnalysisCommands::Show {
                         session_id,
                         all,
                         format,
                     } => analytics::handle_show_command(session_id, all, format).await,
-                    AnalyticsCommands::Status {
+
+                    AnalysisCommands::Status {
                         all,
                         watch,
                         history,
                     } => analytics::handle_status_command(all, watch, history).await,
-                    AnalyticsCommands::Cancel { request_id, all } => {
+
+                    AnalysisCommands::Cancel { request_id, all } => {
                         analytics::handle_cancel_command(request_id, all).await
                     }
                 },
-                Commands::Query { command } => match command {
-                    QueryCommands::Sessions {
-                        page,
-                        page_size,
-                        provider,
-                        project,
-                    } => query::handle_sessions_command(page, page_size, provider, project).await,
-                    QueryCommands::Session { session_id } => {
-                        query::handle_session_detail_command(session_id).await
+
+                // ═══════════════════════════════════════════════════
+                // Export
+                // ═══════════════════════════════════════════════════
+                Commands::Export {
+                    format,
+                    since,
+                    until,
+                    provider,
+                    role,
+                    limit,
+                    reverse,
+                    no_truncate,
+                    truncate_head,
+                    truncate_tail,
+                    output,
+                } => {
+                    // TODO: Handle output file if specified
+                    if output.is_some() {
+                        eprintln!(
+                            "Warning: --output option is not yet implemented. Printing to stdout."
+                        );
                     }
-                    QueryCommands::Search {
-                        query,
-                        limit,
-                        since,
-                        until,
-                    } => query::handle_search_command(query, limit, since, until).await,
-                    QueryCommands::Timeline {
+
+                    query::handle_timeline_command(query::TimelineParams {
                         since,
                         until,
                         provider,
@@ -306,60 +339,8 @@ impl Cli {
                         no_truncate,
                         truncate_head,
                         truncate_tail,
-                    } => {
-                        query::handle_timeline_command(query::TimelineParams {
-                            since,
-                            until,
-                            provider,
-                            role,
-                            format,
-                            limit,
-                            reverse,
-                            no_truncate,
-                            truncate_head,
-                            truncate_tail,
-                        })
-                        .await
-                    }
-                },
-                // New commands
-                Commands::Setup => setup::run_setup_wizard().await,
-                Commands::Add {
-                    path,
-                    providers,
-                    overwrite,
-                } => {
-                    // If no arguments, run interactive setup
-                    if path.is_none() && providers.is_empty() {
-                        setup::run_setup_wizard().await
-                    } else {
-                        import::handle_import_command(path, providers, overwrite).await
-                    }
-                }
-                Commands::Search {
-                    query,
-                    limit,
-                    since,
-                    until,
-                } => query::handle_search_command(query, limit, since, until).await,
-                Commands::Review { session_id } => {
-                    // Delegate to analytics execute
-                    // TODO: Could make this more interactive
-                    if let Some(sid) = session_id {
-                        analytics::handle_execute_command(
-                            Some(sid),
-                            None,
-                            false,
-                            false,
-                            "enhanced".to_string(),
-                            false,
-                        )
-                        .await
-                    } else {
-                        Err(anyhow::anyhow!(
-                            "Session ID required. Use: retrochat review <SESSION_ID>"
-                        ))
-                    }
+                    })
+                    .await
                 }
             }
         })
@@ -379,7 +360,7 @@ impl Cli {
         let db_path = crate::database::config::get_default_db_path()?;
         let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
-        let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_else(|_| "".to_string()); // Use empty string if not set, as default() does
+        let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_else(|_| "".to_string());
 
         let google_ai_config = if api_key.is_empty() {
             GoogleAiConfig::default()

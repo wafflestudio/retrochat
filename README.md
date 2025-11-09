@@ -64,14 +64,14 @@ If you have mise installed, it will automatically use the correct Rust version s
 
 RetroChat provides several command-line interfaces and a TUI for different use cases.
 
-**Note**: Before using RetroChat, make sure to initialize the database with `retrochat init`.
+**Note**: On first run, RetroChat automatically initializes the database and runs a setup wizard.
 
 ### Terminal User Interface (TUI)
 
-Launch the interactive terminal interface:
+Launch the interactive terminal interface (default mode):
 
 ```bash
-retrochat tui
+retrochat
 ```
 
 This opens an interactive interface where you can:
@@ -80,69 +80,51 @@ This opens an interactive interface where you can:
 - Navigate through messages
 - View analytics and insights
 
-### Watch Commands
+### Sync Commands
 
-Watch files for changes and show diffs in real-time:
+RetroChat provides a unified sync command for importing and watching chat history files.
+
+#### Import Mode (Default)
+
+Import chat history from providers or specific paths:
+
+```bash
+# Import from provider default directories
+retrochat sync claude gemini
+
+# Import from all providers
+retrochat sync all
+
+# Import from a specific path
+retrochat sync --path ~/.claude/projects
+
+# Import a single file
+retrochat sync --path /path/to/chat/file.jsonl
+
+# Import with overwrite flag
+retrochat sync claude --overwrite
+```
+
+#### Watch Mode
+
+Watch for file changes and auto-import in real-time:
 
 ```bash
 # Watch all providers with verbose output
-retrochat watch all --verbose
+retrochat sync all -w --verbose
 
 # Watch specific providers
-retrochat watch claude gemini --verbose
+retrochat sync claude gemini --watch --verbose
 
 # Watch a specific path
-retrochat watch --path /path/to/chat/directory --verbose
-
-# Use with cargo alias
-cargo watch
+retrochat sync --path /path/to/chat/directory -w --verbose
 ```
 
-The watch command monitors file changes and displays:
+The watch mode monitors file changes and displays:
 - File system events (create, modify, delete)
 - Provider detection for each file
 - Detailed diffs for JSON/JSONL files (with --verbose)
 - Parsed session information (with --verbose)
-
-### Import Commands
-
-RetroChat provides a unified import command that can import from a specific path or from provider-specific default directories.
-
-#### Import from Specific Path
-
-Import a file or directory:
-
-```bash
-# Import a single file
-retrochat import --path /path/to/chat/file.jsonl
-
-# Import all files from a directory
-retrochat import --path /path/to/chat/directory
-
-# Import with overwrite flag
-retrochat import --path ~/.claude/projects --overwrite
-```
-
-#### Import from Provider Directories
-
-Import from configured default directories for each provider:
-
-```bash
-# Import from Claude Code default directories
-retrochat import claude
-
-# Import from Gemini default directories
-retrochat import gemini
-
-# Import from Codex default directories
-retrochat import codex
-
-# Import from all providers
-retrochat import all
-
-# Import from multiple providers at once
-retrochat import claude gemini --overwrite
-```
 
 #### Environment Configuration
 
@@ -161,54 +143,78 @@ export RETROCHAT_CODEX_DIRS="/path/to/codex/chats"
 
 **Note**: Use colon (`:`) to separate multiple directories, e.g., `"/path1:/path2"`
 
-### Analytics Commands
+### Query Commands
 
-#### Session Analytics with AI Analysis
+Search and browse your chat history:
+
+```bash
+# List all sessions
+retrochat list
+
+# List sessions with filters
+retrochat list --provider claude --project myproject
+
+# Show session details
+retrochat show SESSION_ID
+
+# Search messages
+retrochat search "search query"
+
+# Search with time range
+retrochat search "query" --since "7 days ago" --until now
+```
+
+### Analysis Commands
+
+#### AI-Powered Session Analysis
 
 Analyze chat sessions using Google AI to generate comprehensive insights:
 
 ```bash
-# Execute analysis for a specific session
-retrochat analytics execute [SESSION_ID]
+# Run analysis for a specific session
+retrochat analysis run [SESSION_ID]
 
-# Execute analysis for all sessions
-retrochat analytics execute --all
+# Run analysis for all sessions
+retrochat analysis run --all
+
+# Run with custom prompt
+retrochat analysis run SESSION_ID --custom-prompt "Analyze coding patterns"
 
 # View analysis results
-retrochat analytics show [SESSION_ID]
+retrochat analysis show [SESSION_ID]
 
 # View all analysis results
-retrochat analytics show --all
+retrochat analysis show --all
 
 # Check analysis status
-retrochat analytics status
+retrochat analysis status
 
 # Check analysis history
-retrochat analytics status --history
+retrochat analysis status --history
 
 # Cancel an analysis request
-retrochat analytics cancel [REQUEST_ID]
+retrochat analysis cancel [REQUEST_ID]
 
 # Cancel all active requests
-retrochat analytics cancel --all
+retrochat analysis cancel --all
 ```
 
-**Note**: Analytics commands require `GOOGLE_AI_API_KEY` environment variable to be set.
+**Note**: Analysis commands require `GOOGLE_AI_API_KEY` environment variable to be set.
 
-#### Generate Usage Insights
+### Export Commands
 
-Generate comprehensive usage statistics:
+Export chat history in various formats:
 
 ```bash
-retrochat analyze insights
-```
+# Export to JSON
+retrochat export --format json
 
-This provides:
-- Total sessions, messages, and token counts
-- Provider breakdown with percentages
-- Date range analysis
-- Session duration statistics
-- Top projects by usage
+# Export to JSONL
+retrochat export --format jsonl
+
+# Export with filters
+retrochat export --format json --provider claude --since "30 days ago"
+```
 
 ## Supported Chat Providers
 
@@ -233,18 +239,13 @@ RetroChat currently supports importing from:
 
 RetroChat uses SQLite for data persistence. The database file (`retrochat.db`) is created in `~/.retrochat/` directory on first use.
 
-### Initialization
+### Automatic Initialization
 
-Before using RetroChat, you need to initialize the database:
-
-```bash
-retrochat init
-```
-
-This command will:
+The database is automatically initialized on first run. The setup wizard will:
 - Create the `~/.retrochat` configuration directory
 - Initialize the SQLite database with the proper schema
 - Run database migrations
+- Guide you through importing your first chat history
 
 ### Data Structure
 
@@ -274,9 +275,7 @@ cargo fmt-fix        # Apply formatting (fmt --all)
 cargo clippy-strict  # Run clippy with -D warnings
 
 # Application shortcuts
-cargo tui            # Launch TUI interface
-cargo watch          # Watch all providers with verbose output
-cargo init           # Initialize retrochat
+cargo tui            # Launch TUI interface (same as: cargo run)
 ```
 
 #### Shell Scripts
@@ -340,42 +339,57 @@ tests/
 
 ### Quick Start Workflow
 
-1. **Initialize the database:**
+1. **First run (automatic setup):**
    ```bash
-   retrochat init
+   retrochat
    ```
+   This will automatically initialize the database and run the setup wizard.
 
 2. **Import your chat history:**
    ```bash
    # Import from provider default directories
-   retrochat import claude gemini
+   retrochat sync claude gemini
 
    # Import from all providers
-   retrochat import all
+   retrochat sync all
 
    # Or import from a specific path
-   retrochat import --path ~/.claude/projects
-   retrochat import --path /path/to/chat/files
+   retrochat sync --path ~/.claude/projects
+   retrochat sync --path /path/to/chat/files
    ```
 
 3. **Launch the TUI to explore:**
    ```bash
-   retrochat tui
+   retrochat
    ```
 
-4. **Generate analytics:**
+4. **Search and query:**
    ```bash
-   # AI-powered session analysis (requires GOOGLE_AI_API_KEY)
-   retrochat analytics execute --all
-   retrochat analytics show --all
-   
-   # Or generate usage insights
-   retrochat analyze insights
+   # List all sessions
+   retrochat list
+
+   # Search for specific content
+   retrochat search "debugging issue"
+
+   # Show session details
+   retrochat show SESSION_ID
    ```
 
-5. **Export detailed report:**
+5. **Run AI analysis (requires GOOGLE_AI_API_KEY):**
    ```bash
-   retrochat analyze export json --output my_chat_analysis.json
+   # Analyze specific session
+   retrochat analysis run SESSION_ID
+
+   # Analyze all sessions
+   retrochat analysis run --all
+
+   # View results
+   retrochat analysis show --all
+   ```
+
+6. **Export data:**
+   ```bash
+   retrochat export --format json --provider claude
    ```
 
 ### Typical Use Cases
