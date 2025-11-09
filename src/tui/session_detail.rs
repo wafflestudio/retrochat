@@ -200,7 +200,7 @@ impl SessionDetailWidget {
             };
 
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {}{} | Keys: 'd'=tool-details 'a'=analytics",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {}{}",
                 session.provider,
                 project_str,
                 session.message_count,
