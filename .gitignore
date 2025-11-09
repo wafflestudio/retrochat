@@ -79,3 +79,6 @@ temp/
 
 # Local example files (generated from local provider directories)
 examples/local_*
+
+# Claude Code context directories
+.context/
