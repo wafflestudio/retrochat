@@ -44,10 +44,6 @@ pub enum UserAction {
     SessionDetailToggleToolDetails,
     SessionDetailToggleAnalytics,
 
-    // Analytics actions
-    AnalyticsNavigate(NavigationDirection),
-    AnalyticsRefresh,
-
     // Data refresh actions
     RefreshCurrentView,
 }

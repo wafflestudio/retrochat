@@ -89,6 +89,12 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 - **Run `cargo fmt --check` during development**: Verify formatting before pushing
 - **Format first, then commit**: Make it a habit - fmt → test → commit → push
 
+### Code Quality Checks (CRITICAL)
+- **Clippy with strict warnings**: All code must pass `cargo clippy -- -D warnings`
+- **Zero warnings policy**: Clippy warnings are treated as errors with the `-D warnings` flag
+- **CI enforcement**: The clippy check runs in CI with `-D warnings` to enforce code quality
+- **Fix before committing**: Address all clippy suggestions before pushing code
+
 ### Test-Driven Development (TDD)
 - **Sequential TDD**: Write one test at a time, then implement the corresponding functionality
 - **No bulk testing**: Do not write all tests upfront - follow the red-green-refactor cycle strictly
