@@ -38,9 +38,7 @@ cargo fmt-fix        # Apply formatting (fmt --all)
 cargo clippy-strict  # Run clippy with -D warnings
 
 # Application shortcuts
-cargo tui            # Launch TUI interface (run -- tui)
-cargo watch          # Watch all providers with verbose output (run -- watch all --verbose)
-cargo init           # Initialize retrochat (run -- init)
+cargo tui            # Launch TUI interface (run -- same as cargo run)
 ```
 
 #### Shell Scripts (in ./scripts)
@@ -54,29 +52,31 @@ cargo init           # Initialize retrochat (run -- init)
 ```bash
 # Build and test commands
 cargo check && cargo test && cargo clippy
-cargo run -- tui                                      # Launch TUI interface
+cargo run                                             # Launch TUI interface (default)
 
-# Import commands
-cargo run -- import claude gemini                     # Import from provider directories
-cargo run -- import codex                             # Import from other providers
-cargo run -- import --path /path/to/files             # Import from specific path
-cargo run -- import --path /path/to/file.jsonl        # Import a single file
+# Sync commands
+cargo run -- sync claude gemini                       # Import from provider directories
+cargo run -- sync all                                 # Import from all providers
+cargo run -- sync --path /path/to/files               # Import from specific path
+cargo run -- sync --path /path/to/file.jsonl          # Import a single file
+cargo run -- sync claude -w --verbose                 # Watch mode with detailed output
+cargo run -- sync all --watch --verbose               # Watch all providers
 
-# Watch commands
-cargo run -- watch all --verbose                      # Watch all providers with detailed output
-cargo run -- watch claude gemini --verbose            # Watch specific providers
-cargo run -- watch --path /path/to/files --verbose    # Watch specific path
+# Query commands
+cargo run -- list                                     # List all sessions
+cargo run -- list --provider claude                   # List sessions by provider
+cargo run -- show SESSION_ID                          # Show session details
+cargo run -- search "query"                           # Search messages
 
-# Analytics commands
-cargo run -- analyze insights                         # Generate usage insights
-cargo run -- analyze export json                      # Export to JSON
-cargo run -- analyze export csv                       # Export to CSV
+# Analysis commands (requires GOOGLE_AI_API_KEY env var)
+cargo run -- analysis run [SESSION_ID] [--all] [--custom-prompt PROMPT]  # Analyze sessions
+cargo run -- analysis show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
+cargo run -- analysis status [--all|--history|--watch]      # Check analysis status
+cargo run -- analysis cancel [REQUEST_ID] [--all]    # Cancel operations
 
-# Analytics commands (requires GOOGLE_AI_API_KEY env var)
-cargo run -- analytics execute [SESSION_ID] [--all] [--custom-prompt PROMPT]  # Analyze sessions
-cargo run -- analytics show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
-cargo run -- analytics status [--all|--history|--watch]      # Check analysis status
-cargo run -- analytics cancel [REQUEST_ID] [--all]   # Cancel operations
+# Export commands
+cargo run -- export --format json                     # Export to JSON
+cargo run -- export --format jsonl                    # Export to JSONL
 ```
 
 ## Code Style
