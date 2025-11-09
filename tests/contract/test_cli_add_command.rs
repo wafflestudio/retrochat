@@ -1,76 +1,92 @@
-use retrochat::cli::{Cli, Commands};
+use retrochat::cli::{Cli, Commands, SyncCommands};
 use retrochat::models::Provider;
 
 #[test]
-fn test_add_command_structure() {
-    // Test that the Add command has the correct structure
-    let add_cmd = Commands::Add {
-        path: None,
-        providers: vec![],
-        overwrite: false,
+fn test_sync_import_command_structure() {
+    // Test that the Sync Import command has the correct structure
+    let sync_cmd = Commands::Sync {
+        command: SyncCommands::Import {
+            path: None,
+            providers: vec![],
+            overwrite: false,
+        },
     };
 
-    match add_cmd {
-        Commands::Add {
-            path,
-            providers,
-            overwrite,
+    match sync_cmd {
+        Commands::Sync {
+            command: SyncCommands::Import {
+                path,
+                providers,
+                overwrite,
+            },
         } => {
             assert!(path.is_none());
             assert_eq!(providers.len(), 0);
             assert!(!overwrite);
         }
-        _ => panic!("Expected Add command"),
+        _ => panic!("Expected Sync Import command"),
     }
 }
 
 #[test]
-fn test_add_command_with_path() {
-    let add_cmd = Commands::Add {
-        path: Some("/test/path".to_string()),
-        providers: vec![],
-        overwrite: false,
+fn test_sync_import_command_with_path() {
+    let sync_cmd = Commands::Sync {
+        command: SyncCommands::Import {
+            path: Some("/test/path".to_string()),
+            providers: vec![],
+            overwrite: false,
+        },
     };
 
-    match add_cmd {
-        Commands::Add { path, .. } => {
+    match sync_cmd {
+        Commands::Sync {
+            command: SyncCommands::Import { path, .. },
+        } => {
             assert_eq!(path, Some("/test/path".to_string()));
         }
-        _ => panic!("Expected Add command"),
+        _ => panic!("Expected Sync Import command"),
     }
 }
 
 #[test]
-fn test_add_command_with_providers() {
-    let add_cmd = Commands::Add {
-        path: None,
-        providers: vec![Provider::ClaudeCode, Provider::GeminiCLI],
-        overwrite: false,
+fn test_sync_import_command_with_providers() {
+    let sync_cmd = Commands::Sync {
+        command: SyncCommands::Import {
+            path: None,
+            providers: vec![Provider::ClaudeCode, Provider::GeminiCLI],
+            overwrite: false,
+        },
     };
 
-    match add_cmd {
-        Commands::Add { providers, .. } => {
+    match sync_cmd {
+        Commands::Sync {
+            command: SyncCommands::Import { providers, .. },
+        } => {
             assert_eq!(providers.len(), 2);
             assert_eq!(providers[0], Provider::ClaudeCode);
             assert_eq!(providers[1], Provider::GeminiCLI);
         }
-        _ => panic!("Expected Add command"),
+        _ => panic!("Expected Sync Import command"),
     }
 }
 
 #[test]
-fn test_add_command_with_overwrite() {
-    let add_cmd = Commands::Add {
-        path: None,
-        providers: vec![],
-        overwrite: true,
+fn test_sync_import_command_with_overwrite() {
+    let sync_cmd = Commands::Sync {
+        command: SyncCommands::Import {
+            path: None,
+            providers: vec![],
+            overwrite: true,
+        },
     };
 
-    match add_cmd {
-        Commands::Add { overwrite, .. } => {
+    match sync_cmd {
+        Commands::Sync {
+            command: SyncCommands::Import { overwrite, .. },
+        } => {
             assert!(overwrite);
         }
-        _ => panic!("Expected Add command"),
+        _ => panic!("Expected Sync Import command"),
     }
 }
 
@@ -152,16 +168,27 @@ fn test_search_command_with_time_range() {
 }
 
 #[test]
-fn test_review_command_structure() {
-    let review_cmd = Commands::Review {
-        session_id: Some("session-123".to_string()),
+fn test_analysis_run_command_structure() {
+    use retrochat::cli::AnalysisCommands;
+
+    let analysis_cmd = Commands::Analysis {
+        command: AnalysisCommands::Run {
+            session_id: Some("session-123".to_string()),
+            custom_prompt: None,
+            all: false,
+            background: false,
+            format: "enhanced".to_string(),
+            plain: false,
+        },
     };
 
-    match review_cmd {
-        Commands::Review { session_id } => {
+    match analysis_cmd {
+        Commands::Analysis {
+            command: AnalysisCommands::Run { session_id, .. },
+        } => {
             assert_eq!(session_id, Some("session-123".to_string()));
         }
-        _ => panic!("Expected Review command"),
+        _ => panic!("Expected Analysis Run command"),
     }
 }
 
