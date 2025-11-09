@@ -8,8 +8,8 @@ fn main() -> anyhow::Result<()> {
 
     // Configure logging based on command
     let logging_config = match &cli.command {
-        Some(Commands::Tui) | None => {
-            // For TUI: log to file only, no stdout
+        None => {
+            // For TUI (default): log to file only, no stdout
             // Use same directory as DB (~/.retrochat/logs)
             let config_dir = retrochat::database::config::get_config_dir()
                 .unwrap_or_else(|_| PathBuf::from("."));
@@ -25,8 +25,11 @@ fn main() -> anyhow::Result<()> {
                 .with_stdout(false) // Critical: disable stdout for TUI
                 .with_file(log_file)
         }
-        Some(Commands::Query { .. }) => {
-            // For Query commands: disable stdout to keep output clean
+        Some(Commands::List { .. })
+        | Some(Commands::Show { .. })
+        | Some(Commands::Search { .. })
+        | Some(Commands::Export { .. }) => {
+            // For query/output commands: disable stdout to keep output clean
             LoggingConfig::from_env().with_stdout(false)
         }
         _ => {

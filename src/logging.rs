@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 use tracing::Level;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{filter::LevelFilter, fmt, Registry};
+use tracing_subscriber::{fmt, Registry};
 
 use crate::env::logging as env_vars;
 
@@ -124,9 +124,15 @@ impl LoggingConfig {
 
 /// Initialize logging with the given configuration
 pub fn init_logging(config: LoggingConfig) -> Result<()> {
+    use tracing_subscriber::filter::Targets;
     use tracing_subscriber::prelude::*;
 
     let mut layers = Vec::new();
+
+    // Create filter that suppresses sqlx slow query warnings
+    let filter = Targets::new()
+        .with_default(config.level)
+        .with_target("sqlx::query", Level::ERROR); // Only show ERROR and above for sqlx::query
 
     // Add stdout layer only if enabled
     if config.stdout {
@@ -134,7 +140,7 @@ pub fn init_logging(config: LoggingConfig) -> Result<()> {
             .with_ansi(config.use_colors)
             .with_level(true)
             .with_target(true)
-            .with_filter(LevelFilter::from_level(config.level));
+            .with_filter(filter.clone());
         layers.push(stdout_layer.boxed());
     }
 
@@ -157,7 +163,7 @@ pub fn init_logging(config: LoggingConfig) -> Result<()> {
             .with_ansi(false)
             .with_level(true)
             .with_target(true)
-            .with_filter(LevelFilter::from_level(config.level));
+            .with_filter(filter);
         layers.push(file_layer.boxed());
     }
 
