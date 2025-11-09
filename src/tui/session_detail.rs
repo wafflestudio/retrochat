@@ -62,51 +62,96 @@ impl SessionDetailWidget {
                 }
             }
 
+            // Load analytics data for this session
+            match self.query_service.get_session_analytics(session_id).await {
+                Ok(analytics) => {
+                    self.state.update_analytics(analytics);
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "No analytics available for session");
+                    self.state.update_analytics(None);
+                }
+            }
+
             self.state.loading = false;
         }
         Ok(())
     }
 
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        // Check if we should scroll analytics instead of messages
+        let scroll_analytics = self.state.show_analytics && self.state.analytics.is_some();
+
         match key.code {
             KeyCode::Up => {
-                self.state.scroll_up();
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_up();
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_up();
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Down => {
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_down(max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_down(max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_down(max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::PageUp => {
                 let page_size = 10;
-                self.state.scroll_page_up(page_size);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_page_up(page_size);
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_page_up(page_size);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::PageDown => {
                 let page_size = 10;
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_page_down(page_size, max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_page_down(page_size, max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_page_down(page_size, max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Home => {
-                self.state.scroll_to_top();
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_to_top();
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_to_top();
+                    self.update_scroll_state();
+                }
             }
             KeyCode::End => {
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_to_bottom(max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_to_bottom(max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_to_bottom(max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Char('d') => {
                 // D: Toggle tool details (expand/collapse)
                 self.state.toggle_tool_details();
             }
             KeyCode::Char('a') => {
-                // A: Start analysis for current session
-                // This would require returning a signal to the app
-                // For now, just show a message that this functionality is available via CLI
-                // TODO: Implement analysis start from session detail
+                // A: Toggle analytics panel
+                self.state.toggle_analytics();
             }
             _ => {}
         }
@@ -125,8 +170,14 @@ impl SessionDetailWidget {
         // Render session header
         self.render_session_header(f, chunks[0]);
 
-        // Render main content area
-        self.render_messages(f, chunks[1]);
+        // Render content based on toggle state
+        if self.state.show_analytics && self.state.analytics.is_some() {
+            // Show only analytics when toggled
+            self.render_analytics(f, chunks[1]);
+        } else {
+            // Show messages by default
+            self.render_messages(f, chunks[1]);
+        }
     }
 
     fn render_session_header(&self, f: &mut Frame, area: Rect) {
@@ -141,14 +192,22 @@ impl SessionDetailWidget {
                 "Ongoing"
             };
 
+            // Check if analytics is available
+            let analytics_str = if self.state.analytics.is_some() {
+                " | Analytics: Available"
+            } else {
+                ""
+            };
+
             format!(
-                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {} | Keys: 'd'=tool-details",
+                "Provider: {} | Project: {} | Messages: {} | Tokens: {} | Started: {} | Status: {}{} | Keys: 'd'=tool-details 'a'=analytics",
                 session.provider,
                 project_str,
                 session.message_count,
                 session.token_count.unwrap_or(0),
                 &session.start_time.format("%Y-%m-%d %H:%M").to_string(),
                 session.state,
+                analytics_str,
             )
         } else {
             "No session selected".to_string()
@@ -447,5 +506,300 @@ impl SessionDetailWidget {
     fn update_scroll_state(&mut self) {
         let total_lines = self.get_total_lines();
         self.state.update_scroll_state(total_lines);
+    }
+
+    fn get_analytics_max_scroll(&self) -> usize {
+        let total_lines = self.get_analytics_total_lines();
+        let visible_lines = 20; // Approximate visible lines
+        total_lines.saturating_sub(visible_lines)
+    }
+
+    fn update_analytics_scroll_state(&mut self) {
+        let total_lines = self.get_analytics_total_lines();
+        self.state.update_analytics_scroll_state(total_lines);
+    }
+
+    fn get_analytics_total_lines(&self) -> usize {
+        // Count total lines that will be rendered in analytics
+        if let Some(analytics_data) = &self.state.analytics {
+            let mut line_count = 0;
+
+            // Status line
+            if analytics_data.latest_request.is_some() {
+                line_count += 2; // Status + blank line
+            }
+
+            // Active request
+            if analytics_data.active_request.is_some() {
+                line_count += 2; // Active request + blank line
+            }
+
+            // Analytics content
+            if let Some(analytics) = &analytics_data.latest_analytics {
+                // Scores section: header + blank + 6 scores + blank
+                line_count += 9;
+
+                // Metrics section: header + blank + 6 metrics + blank
+                line_count += 9;
+
+                // Insights section
+                if !analytics.qualitative_output.insights.is_empty() {
+                    line_count += 2; // Header + blank
+                                     // Estimate 3-5 lines per insight (title + wrapped description)
+                    let insights_count = analytics.qualitative_output.insights.len().min(3);
+                    line_count += insights_count * 4;
+                }
+
+                // Model line
+                if analytics.model_used.is_some() {
+                    line_count += 1;
+                }
+            } else if analytics_data.active_request.is_none() {
+                line_count += 1; // "No completed analysis" message
+            }
+
+            line_count
+        } else {
+            1 // "No analytics available"
+        }
+    }
+
+    fn render_analytics(&mut self, f: &mut Frame, area: Rect) {
+        let analytics_data = match &self.state.analytics {
+            Some(session_analytics) => session_analytics,
+            None => {
+                let paragraph = Paragraph::new("No analytics available")
+                    .block(Block::default().borders(Borders::ALL).title("Analytics"))
+                    .style(Style::default().fg(Color::Gray));
+                f.render_widget(paragraph, area);
+                return;
+            }
+        };
+
+        let mut lines = Vec::new();
+
+        // Show status of latest request
+        if let Some(request) = &analytics_data.latest_request {
+            lines.push(Line::from(vec![
+                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("{:?}", request.status),
+                    Style::default().fg(match request.status {
+                        crate::models::OperationStatus::Completed => Color::Green,
+                        crate::models::OperationStatus::Running => Color::Yellow,
+                        crate::models::OperationStatus::Pending => Color::Blue,
+                        crate::models::OperationStatus::Failed => Color::Red,
+                        crate::models::OperationStatus::Cancelled => Color::Gray,
+                    }),
+                ),
+            ]));
+            lines.push(Line::from(""));
+        }
+
+        // Show active request if any
+        if let Some(active) = &analytics_data.active_request {
+            lines.push(Line::from(vec![Span::styled(
+                format!("⏳ Analysis in progress: {:?}", active.status),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+            lines.push(Line::from(""));
+        }
+
+        // Show analytics results if available
+        if let Some(analytics) = &analytics_data.latest_analytics {
+            // Scores section
+            lines.push(Line::from(vec![Span::styled(
+                "📊 Scores",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )]));
+            lines.push(Line::from(""));
+
+            let scores = &analytics.scores;
+            lines.push(Line::from(vec![
+                Span::raw("  Overall:        "),
+                Span::styled(
+                    format!("{:.1}/10", scores.overall),
+                    Style::default()
+                        .fg(Self::score_color(scores.overall))
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Code Quality:   "),
+                Span::styled(
+                    format!("{:.1}/10", scores.code_quality),
+                    Style::default().fg(Self::score_color(scores.code_quality)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Productivity:   "),
+                Span::styled(
+                    format!("{:.1}/10", scores.productivity),
+                    Style::default().fg(Self::score_color(scores.productivity)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Efficiency:     "),
+                Span::styled(
+                    format!("{:.1}/10", scores.efficiency),
+                    Style::default().fg(Self::score_color(scores.efficiency)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Collaboration:  "),
+                Span::styled(
+                    format!("{:.1}/10", scores.collaboration),
+                    Style::default().fg(Self::score_color(scores.collaboration)),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  Learning:       "),
+                Span::styled(
+                    format!("{:.1}/10", scores.learning),
+                    Style::default().fg(Self::score_color(scores.learning)),
+                ),
+            ]));
+            lines.push(Line::from(""));
+
+            // Metrics section
+            lines.push(Line::from(vec![Span::styled(
+                "📈 Metrics",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )]));
+            lines.push(Line::from(""));
+
+            let metrics = &analytics.metrics;
+            lines.push(Line::from(format!(
+                "  Files Modified:     {}",
+                metrics.total_files_modified
+            )));
+            lines.push(Line::from(format!(
+                "  Files Read:         {}",
+                metrics.total_files_read
+            )));
+            lines.push(Line::from(format!(
+                "  Lines Added:        {}",
+                metrics.lines_added
+            )));
+            lines.push(Line::from(format!(
+                "  Lines Removed:      {}",
+                metrics.lines_removed
+            )));
+            lines.push(Line::from(format!(
+                "  Tokens Used:        {}",
+                metrics.total_tokens_used
+            )));
+            lines.push(Line::from(format!(
+                "  Duration:           {:.1} min",
+                metrics.session_duration_minutes
+            )));
+            lines.push(Line::from(""));
+
+            // Key insights from qualitative output
+            if !analytics.qualitative_output.insights.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    "💡 Key Insights",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                )]));
+                lines.push(Line::from(""));
+
+                // Show first few insights
+                for (idx, insight) in analytics
+                    .qualitative_output
+                    .insights
+                    .iter()
+                    .take(3)
+                    .enumerate()
+                {
+                    lines.push(Line::from(vec![Span::styled(
+                        format!("  {}. {}", idx + 1, insight.title),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    )]));
+
+                    // Wrap the insight description
+                    let wrapped_desc =
+                        wrap_text(&insight.description, area.width.saturating_sub(6) as usize);
+                    for line in wrapped_desc {
+                        lines.push(Line::from(format!("     {line}")));
+                    }
+                    lines.push(Line::from(""));
+                }
+            }
+
+            // Show model used
+            if let Some(model) = &analytics.model_used {
+                lines.push(Line::from(vec![
+                    Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(model, Style::default().fg(Color::Gray)),
+                ]));
+            }
+        } else if analytics_data.active_request.is_none() {
+            lines.push(Line::from(vec![Span::styled(
+                "No completed analysis available",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+        }
+
+        // Calculate visible area and apply scrolling
+        let available_height = area.height.saturating_sub(2) as usize; // Account for borders
+        let total_lines = lines.len();
+
+        let visible_lines: Vec<Line> = lines
+            .into_iter()
+            .skip(self.state.analytics_scroll)
+            .take(available_height)
+            .collect();
+
+        let paragraph = Paragraph::new(visible_lines)
+            .block(Block::default().borders(Borders::ALL).title("Analytics"))
+            .wrap(Wrap { trim: true })
+            .scroll((0, 0));
+
+        f.render_widget(paragraph, area);
+
+        // Render scrollbar if content is scrollable
+        if total_lines > available_height {
+            let scrollbar_area = Rect {
+                x: area.x + area.width - 1,
+                y: area.y + 1,
+                width: 1,
+                height: area.height - 2,
+            };
+
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+
+            f.render_stateful_widget(
+                scrollbar,
+                scrollbar_area,
+                &mut self.state.analytics_scroll_state,
+            );
+        }
+    }
+
+    fn score_color(score: f64) -> Color {
+        if score >= 8.0 {
+            Color::Green
+        } else if score >= 6.0 {
+            Color::Yellow
+        } else if score >= 4.0 {
+            Color::Rgb(255, 165, 0) // Orange
+        } else {
+            Color::Red
+        }
     }
 }

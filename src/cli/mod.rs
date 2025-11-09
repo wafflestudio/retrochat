@@ -221,7 +221,7 @@ impl Cli {
                     if setup::is_first_time_user() {
                         // Run setup wizard (interactive import)
                         if let Err(e) = setup::run_setup_wizard().await {
-                            eprintln!("Setup failed: {}", e);
+                            eprintln!("Setup failed: {e}");
                             return Err(e);
                         }
                     }

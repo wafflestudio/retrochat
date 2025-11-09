@@ -111,6 +111,8 @@ impl EventHandler {
             KeyCode::PageDown => vec![UserAction::SessionDetailPageDown],
             KeyCode::Home => vec![UserAction::SessionDetailHome],
             KeyCode::End => vec![UserAction::SessionDetailEnd],
+            KeyCode::Char('d') => vec![UserAction::SessionDetailToggleToolDetails],
+            KeyCode::Char('a') => vec![UserAction::SessionDetailToggleAnalytics],
             _ => vec![],
         }
     }

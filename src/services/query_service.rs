@@ -1,5 +1,7 @@
-use crate::database::{ChatSessionRepository, DatabaseManager};
-use crate::models::{ChatSession, Message, OperationStatus};
+use crate::database::{
+    AnalyticsRepository, AnalyticsRequestRepository, ChatSessionRepository, DatabaseManager,
+};
+use crate::models::{Analytics, AnalyticsRequest, ChatSession, Message, OperationStatus};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -317,6 +319,7 @@ impl QueryService {
 
         // Convert to SessionSummary format with actual first message preview
         let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let analytics_request_repo = AnalyticsRequestRepository::new(self.db_manager.clone());
         let mut sessions = Vec::new();
 
         for session in paginated_sessions {
@@ -338,6 +341,22 @@ impl QueryService {
                 })
                 .unwrap_or_else(|| "No messages available".to_string());
 
+            // Check for analytics requests for this session
+            let (has_analytics, analytics_status) = analytics_request_repo
+                .find_by_session_id(&session.id.to_string())
+                .await
+                .ok()
+                .and_then(|requests| {
+                    if requests.is_empty() {
+                        None
+                    } else {
+                        // Get the most recent request status
+                        let latest_status = requests.first().map(|r| r.status.clone());
+                        Some((true, latest_status))
+                    }
+                })
+                .unwrap_or((false, None));
+
             sessions.push(SessionSummary {
                 session_id: session.id.to_string(),
                 provider: session.provider.to_string(),
@@ -350,8 +369,8 @@ impl QueryService {
                 message_count: session.message_count as i32,
                 total_tokens: session.token_count.map(|t| t as i32),
                 first_message_preview,
-                has_analytics: false,           // TODO: 나중에고치기
-                analytics_status: Option::None, // TODO: 나중에고치기
+                has_analytics,
+                analytics_status,
             });
         }
 
@@ -488,6 +507,65 @@ impl QueryService {
             search_duration_ms,
         })
     }
+
+    /// Get analytics information for a session
+    /// Returns both the latest completed analytics and any pending/running requests
+    pub async fn get_session_analytics(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionAnalytics>> {
+        let analytics_request_repo = AnalyticsRequestRepository::new(self.db_manager.clone());
+        let analytics_repo = AnalyticsRepository::new(&self.db_manager);
+
+        // Get all analytics requests for this session
+        let requests = analytics_request_repo
+            .find_by_session_id(session_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch analytics requests: {e}"))?;
+
+        if requests.is_empty() {
+            return Ok(None);
+        }
+
+        // Find the most recent completed request
+        let completed_request = requests
+            .iter()
+            .find(|r| r.status == OperationStatus::Completed);
+
+        // Get the analytics result if available
+        let analytics = if let Some(request) = completed_request {
+            analytics_repo
+                .get_analytics_by_request_id(&request.id)
+                .await
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
+
+        // Find any active (pending/running) requests
+        let active_request = requests
+            .iter()
+            .find(|r| r.status == OperationStatus::Pending || r.status == OperationStatus::Running)
+            .cloned();
+
+        Ok(Some(SessionAnalytics {
+            latest_analytics: analytics,
+            latest_request: requests.first().cloned(),
+            active_request,
+        }))
+    }
+}
+
+/// Analytics information for a session
+#[derive(Debug, Clone)]
+pub struct SessionAnalytics {
+    /// The latest completed analytics result (if any)
+    pub latest_analytics: Option<Analytics>,
+    /// The most recent analytics request (regardless of status)
+    pub latest_request: Option<AnalyticsRequest>,
+    /// Any currently active (pending/running) request
+    pub active_request: Option<AnalyticsRequest>,
 }
 
 impl Default for QueryService {
