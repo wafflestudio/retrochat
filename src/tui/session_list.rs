@@ -132,12 +132,16 @@ impl SessionListWidget {
             "Loading sessions...".to_string()
         } else {
             format!(
-                "Sessions: {} | Page: {}/{} | Sort: {} {} | Press 's' to change sort, 'o' to toggle order",
+                "Sessions: {} | Page: {}/{} | Sort: {} {}",
                 self.state.total_count,
                 self.state.page,
                 total_pages.max(1),
                 self.state.sort_by.as_str(),
-                if matches!(self.state.sort_order, SortOrder::Ascending) { "↑" } else { "↓" }
+                if matches!(self.state.sort_order, SortOrder::Ascending) {
+                    "↑"
+                } else {
+                    "↓"
+                }
             )
         };
 

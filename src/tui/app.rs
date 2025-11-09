@@ -203,7 +203,7 @@ impl App {
             // Auto-refresh data periodically - frequent refresh for active views
             let refresh_interval = match self.state.mode {
                 AppMode::SessionList => Duration::from_secs(3), // Refresh every 3 seconds for session list to catch status changes
-                AppMode::SessionDetail => Duration::from_secs(5), // Refresh every 5 seconds for session detail
+                AppMode::SessionDetail => Duration::from_secs(3), // Refresh every 3 seconds for session detail
                 _ => Duration::from_secs(30), // Normal 30 second refresh for other views
             };
 
@@ -523,13 +523,12 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit | Auto-refreshes every 5s"
+                "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit"
             }
-            AppMode::SessionDetail => {
-                "↑/↓: Scroll | w: Wrap | Esc: Back | ?: Help | q: Quit | Auto-refreshes every 5s"
-            }
+            AppMode::SessionDetail => "↑/↓: Scroll | Esc: Back | ?: Help | q: Quit",
             AppMode::Help => "Any key: Close Help",
-        }.to_string();
+        }
+        .to_string();
 
         // Processing status removed from bottom area
 
@@ -557,16 +556,19 @@ impl App {
             Line::from(""),
             Line::from("Session List:"),
             Line::from("  ↑/↓            - Navigate sessions"),
+            Line::from("  Page Up/Down   - Fast navigation"),
+            Line::from("  Home/End       - Jump to start/end"),
             Line::from("  Enter          - View session details"),
+            Line::from("  s              - Change sort field"),
+            Line::from("  o              - Toggle sort order"),
             Line::from("  a              - Start analytics analysis"),
-            Line::from("  (Auto-refreshes every 5 seconds)"),
             Line::from(""),
             Line::from("Session Detail:"),
             Line::from("  ↑/↓            - Scroll messages"),
             Line::from("  Page Up/Down   - Fast scroll"),
             Line::from("  Home/End       - Jump to start/end"),
-            Line::from("  w              - Toggle word wrap"),
-            Line::from("  (Auto-refreshes every 5 seconds)"),
+            Line::from("  d              - Toggle tool details"),
+            Line::from("  a              - Toggle analytics view"),
         ];
 
         let dialog = Dialog::new(DialogType::Help, content).size(80, 70);
