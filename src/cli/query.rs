@@ -17,6 +17,7 @@ pub struct TimelineParams {
     pub no_truncate: bool,
     pub truncate_head: usize,
     pub truncate_tail: usize,
+    pub no_tool: bool,
 }
 
 pub async fn handle_sessions_command(
@@ -226,20 +227,26 @@ pub async fn handle_timeline_command(params: TimelineParams) -> Result<()> {
 
     // Format output
     match params.format.as_str() {
-        "jsonl" => format_jsonl(&messages),
+        "jsonl" => format_jsonl(&messages, params.no_tool),
         _ => format_compact(
             &messages,
             !params.no_truncate,
             params.truncate_head,
             params.truncate_tail,
+            params.no_tool,
         ),
     }
 
     Ok(())
 }
 
-fn format_compact(messages: &[Message], truncate: bool, head_chars: usize, tail_chars: usize) {
+fn format_compact(messages: &[Message], truncate: bool, head_chars: usize, tail_chars: usize, no_tool: bool) {
     for msg in messages {
+        // Filter out tool messages if no_tool is enabled
+        if no_tool && is_tool_message(&msg.content) {
+            continue;
+        }
+
         let content = if truncate {
             truncate_message(&msg.content, head_chars, tail_chars)
         } else {
@@ -272,10 +279,56 @@ fn truncate_message(content: &str, head_chars: usize, tail_chars: usize) -> Stri
     format!("{head} [...] {tail}")
 }
 
-fn format_jsonl(messages: &[Message]) {
+fn format_jsonl(messages: &[Message], no_tool: bool) {
     for msg in messages {
+        // Filter out tool messages if no_tool is enabled
+        if no_tool && is_tool_message(&msg.content) {
+            continue;
+        }
+
         if let Ok(json) = serde_json::to_string(msg) {
             println!("{json}");
         }
+    }
+}
+
+/// Check if a message is a tool use or tool result message
+fn is_tool_message(content: &str) -> bool {
+    content.starts_with("[Tool Use:")
+        || content.starts_with("[Tool Result]")
+        || content.trim().starts_with("[Tool Use:")
+        || content.trim().starts_with("[Tool Result]")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_tool_message_tool_use() {
+        assert!(is_tool_message("[Tool Use: Read]"));
+        assert!(is_tool_message("[Tool Use: Grep]"));
+        assert!(is_tool_message("  [Tool Use: Edit]")); // with leading whitespace
+    }
+
+    #[test]
+    fn test_is_tool_message_tool_result() {
+        assert!(is_tool_message("[Tool Result]"));
+        assert!(is_tool_message("  [Tool Result]")); // with leading whitespace
+    }
+
+    #[test]
+    fn test_is_tool_message_regular_message() {
+        assert!(!is_tool_message("This is a regular message"));
+        assert!(!is_tool_message("User message content"));
+        assert!(!is_tool_message("Assistant response"));
+        assert!(!is_tool_message(""));
+    }
+
+    #[test]
+    fn test_is_tool_message_false_positives() {
+        // Should not match if [Tool is in the middle
+        assert!(!is_tool_message("Here is [Tool Use: something]"));
+        assert!(!is_tool_message("Text before [Tool Result]"));
     }
 }

@@ -134,6 +134,9 @@ pub enum Commands {
         /// Output file path (optional, prints to stdout if not specified)
         #[arg(short, long)]
         output: Option<String>,
+        /// Exclude tool use and tool result messages
+        #[arg(long)]
+        no_tool: bool,
     },
 }
 
@@ -320,6 +323,7 @@ impl Cli {
                     truncate_head,
                     truncate_tail,
                     output,
+                    no_tool,
                 } => {
                     // TODO: Handle output file if specified
                     if output.is_some() {
@@ -339,6 +343,7 @@ impl Cli {
                         no_truncate,
                         truncate_head,
                         truncate_tail,
+                        no_tool,
                     })
                     .await
                 }
