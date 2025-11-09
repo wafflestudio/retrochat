@@ -42,10 +42,6 @@ pub enum UserAction {
     SessionDetailHome,
     SessionDetailEnd,
 
-    // Analytics actions
-    AnalyticsNavigate(NavigationDirection),
-    AnalyticsRefresh,
-
     // Data refresh actions
     RefreshCurrentView,
 }
