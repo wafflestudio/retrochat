@@ -268,6 +268,10 @@ impl App {
                     return Ok(vec![UserAction::SelectSession(action_str)]);
                 }
             }
+        } else if self.state.mode == AppMode::SessionDetail {
+            // Delegate all keys to session_detail widget which has proper analytics-aware scrolling
+            self.session_detail.handle_key(key).await?;
+            return Ok(vec![]);
         }
 
         Ok(vec![])
@@ -343,37 +347,17 @@ impl App {
                 self.session_list.refresh().await?;
             }
 
-            // Session detail actions
-            SessionDetailScrollUp => {
-                self.session_detail.state.scroll_up();
-            }
-            SessionDetailScrollDown => {
-                let max_scroll = self.session_detail.get_max_scroll();
-                self.session_detail.state.scroll_down(max_scroll);
-            }
-            SessionDetailPageUp => {
-                let page_size = 10;
-                self.session_detail.state.scroll_page_up(page_size);
-            }
-            SessionDetailPageDown => {
-                let page_size = 10;
-                let max_scroll = self.session_detail.get_max_scroll();
-                self.session_detail
-                    .state
-                    .scroll_page_down(page_size, max_scroll);
-            }
-            SessionDetailHome => {
-                self.session_detail.state.scroll_to_top();
-            }
-            SessionDetailEnd => {
-                let max_scroll = self.session_detail.get_max_scroll();
-                self.session_detail.state.scroll_to_bottom(max_scroll);
-            }
-            SessionDetailToggleToolDetails => {
-                self.session_detail.state.toggle_tool_details();
-            }
-            SessionDetailToggleAnalytics => {
-                self.session_detail.state.toggle_analytics();
+            // Session detail actions - now handled by widget's handle_key method
+            // These actions are kept for backward compatibility but are no longer used
+            SessionDetailScrollUp
+            | SessionDetailScrollDown
+            | SessionDetailPageUp
+            | SessionDetailPageDown
+            | SessionDetailHome
+            | SessionDetailEnd
+            | SessionDetailToggleToolDetails
+            | SessionDetailToggleAnalytics => {
+                // No-op: These are now handled directly by session_detail widget
             }
 
             // Data refresh actions

@@ -103,18 +103,10 @@ impl EventHandler {
         }
     }
 
-    fn handle_session_detail_keys(&self, key: KeyEvent) -> Vec<UserAction> {
-        match key.code {
-            KeyCode::Up => vec![UserAction::SessionDetailScrollUp],
-            KeyCode::Down => vec![UserAction::SessionDetailScrollDown],
-            KeyCode::PageUp => vec![UserAction::SessionDetailPageUp],
-            KeyCode::PageDown => vec![UserAction::SessionDetailPageDown],
-            KeyCode::Home => vec![UserAction::SessionDetailHome],
-            KeyCode::End => vec![UserAction::SessionDetailEnd],
-            KeyCode::Char('d') => vec![UserAction::SessionDetailToggleToolDetails],
-            KeyCode::Char('a') => vec![UserAction::SessionDetailToggleAnalytics],
-            _ => vec![],
-        }
+    fn handle_session_detail_keys(&self, _key: KeyEvent) -> Vec<UserAction> {
+        // All SessionDetail keys are now handled by the widget's handle_key method
+        // This allows for proper analytics-aware scrolling
+        vec![]
     }
 }
 
