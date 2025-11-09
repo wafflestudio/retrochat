@@ -28,6 +28,10 @@ pub struct SessionDetailState {
     pub show_tool_details: bool,
     /// Whether to show analytics panel
     pub show_analytics: bool,
+    /// Last known viewport height for messages (used for scroll calculations)
+    pub viewport_height: usize,
+    /// Last known viewport height for analytics (used for scroll calculations)
+    pub analytics_viewport_height: usize,
 }
 
 impl SessionDetailState {
@@ -45,6 +49,8 @@ impl SessionDetailState {
             loading: false,
             show_tool_details: false,
             show_analytics: false,
+            viewport_height: 20,           // Default fallback
+            analytics_viewport_height: 20, // Default fallback
         }
     }
 
@@ -129,6 +135,9 @@ impl SessionDetailState {
     /// Update the scrollbar state
     pub fn update_scroll_state(&mut self, total_lines: usize) {
         self.scroll_state = self.scroll_state.content_length(total_lines);
+        self.scroll_state = self
+            .scroll_state
+            .viewport_content_length(self.viewport_height);
         self.scroll_state = self.scroll_state.position(self.current_scroll);
     }
 
@@ -164,6 +173,9 @@ impl SessionDetailState {
     /// Update analytics scrollbar state
     pub fn update_analytics_scroll_state(&mut self, total_lines: usize) {
         self.analytics_scroll_state = self.analytics_scroll_state.content_length(total_lines);
+        self.analytics_scroll_state = self
+            .analytics_scroll_state
+            .viewport_content_length(self.analytics_viewport_height);
         self.analytics_scroll_state = self.analytics_scroll_state.position(self.analytics_scroll);
     }
 }

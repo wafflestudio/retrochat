@@ -236,7 +236,7 @@ impl ToolDisplayFormatter {
         let border_width = config.width.saturating_sub(4);
         lines.push(self.create_tool_border(&title, border_width, true));
 
-        // File info line
+        // File info line with size and line count
         let size_info = if let Some(size) = data.content_size {
             if size > 1024 {
                 format!("{:.1} KB", size as f64 / 1024.0)
@@ -247,14 +247,75 @@ impl ToolDisplayFormatter {
             "unknown size".to_string()
         };
 
+        let lines_count = data.lines_after().unwrap_or(0);
+        let summary = if lines_count > 0 {
+            format!(" ({lines_count} lines, {size_info})")
+        } else {
+            format!(" ({size_info})")
+        };
+
         lines.push(Line::from(vec![
             Span::raw("┃ "),
             Span::styled("📝 ", Style::default().fg(Color::Yellow)),
             Span::styled(
-                format!("Write file ({size_info})"),
+                format!("Write file{summary}"),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
+
+        // Show content preview if details enabled
+        if config.show_details {
+            if let Some(content) = &data.content {
+                lines.push(Line::from("┃"));
+
+                let content_lines: Vec<&str> = content.lines().collect();
+                let max_lines = config.max_output_lines;
+                let display_lines = if content_lines.len() > max_lines {
+                    &content_lines[..max_lines]
+                } else {
+                    &content_lines[..]
+                };
+
+                // Show content with line numbers
+                for (idx, line) in display_lines.iter().enumerate() {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("{:>3} ", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled("+ ", Style::default().fg(Color::Green)),
+                        Span::styled(line.to_string(), Style::default().fg(Color::Green)),
+                    ]));
+                }
+
+                // Show truncation indicator if needed
+                if content_lines.len() > max_lines {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("    ... ({} more lines)", content_lines.len() - max_lines),
+                            Style::default()
+                                .fg(Color::DarkGray)
+                                .add_modifier(Modifier::ITALIC),
+                        ),
+                    ]));
+                }
+            }
+        } else {
+            // When details are not shown, still show a brief summary
+            if lines_count > 0 {
+                lines.push(Line::from(vec![
+                    Span::raw("┃ "),
+                    Span::styled(
+                        format!("  Writing {lines_count} lines"),
+                        Style::default()
+                            .fg(Color::Gray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+            }
+        }
 
         // Bottom border
         lines.push(self.create_tool_border(&format!(" {tool_label} "), border_width, false));
@@ -277,42 +338,168 @@ impl ToolDisplayFormatter {
         let border_width = config.width.saturating_sub(4);
         lines.push(self.create_tool_border(&title, border_width, true));
 
-        // Edit type line
+        // Edit type and summary line
         let edit_type = if data.is_refactoring() {
             "✏️  Refactoring (bulk replacement)"
         } else {
             "✏️  Editing file"
         };
 
+        let lines_before = data.lines_before().unwrap_or(0);
+        let lines_after = data.lines_after().unwrap_or(0);
+        let summary = if lines_before > 0 || lines_after > 0 {
+            format!(" ({lines_before} → {lines_after} lines)")
+        } else {
+            String::new()
+        };
+
         lines.push(Line::from(vec![
             Span::raw("┃ "),
-            Span::styled(edit_type.to_string(), Style::default().fg(Color::Magenta)),
+            Span::styled(
+                format!("{edit_type}{summary}"),
+                Style::default().fg(Color::Magenta),
+            ),
         ]));
 
         // Show diff if details enabled
         if config.show_details {
             lines.push(Line::from("┃"));
 
-            if let Some(old) = &data.old_string {
-                let old_lines: Vec<&str> = old.lines().take(3).collect();
-                for line in old_lines {
+            // Create unified diff view
+            let (old_str, new_str) = match (&data.old_string, &data.new_string) {
+                (Some(o), Some(n)) => (o.as_str(), n.as_str()),
+                (Some(o), None) => (o.as_str(), ""),
+                (None, Some(n)) => ("", n.as_str()),
+                (None, None) => ("", ""),
+            };
+
+            let old_lines_vec: Vec<&str> = old_str.lines().collect();
+            let new_lines_vec: Vec<&str> = new_str.lines().collect();
+
+            let max_lines = config.max_output_lines;
+            let total_lines = old_lines_vec.len().max(new_lines_vec.len());
+
+            // If content is small enough, show full diff
+            if total_lines <= max_lines {
+                // Show all old lines (removed)
+                for (idx, line) in old_lines_vec.iter().enumerate() {
                     lines.push(Line::from(vec![
                         Span::raw("┃ "),
+                        Span::styled(
+                            format!("{:>3} ", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
                         Span::styled("- ", Style::default().fg(Color::Red)),
                         Span::styled(line.to_string(), Style::default().fg(Color::Red)),
                     ]));
                 }
-            }
 
-            if let Some(new) = &data.new_string {
-                let new_lines: Vec<&str> = new.lines().take(3).collect();
-                for line in new_lines {
+                // Separator if both old and new exist
+                if !old_lines_vec.is_empty() && !new_lines_vec.is_empty() {
                     lines.push(Line::from(vec![
                         Span::raw("┃ "),
+                        Span::styled("    ╌╌╌", Style::default().fg(Color::DarkGray)),
+                    ]));
+                }
+
+                // Show all new lines (added)
+                for (idx, line) in new_lines_vec.iter().enumerate() {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("{:>3} ", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
                         Span::styled("+ ", Style::default().fg(Color::Green)),
                         Span::styled(line.to_string(), Style::default().fg(Color::Green)),
                     ]));
                 }
+            } else {
+                // Content is large, show truncated view
+                let show_lines = max_lines / 2;
+
+                // Show first N old lines
+                for (idx, line) in old_lines_vec.iter().take(show_lines).enumerate() {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("{:>3} ", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled("- ", Style::default().fg(Color::Red)),
+                        Span::styled(line.to_string(), Style::default().fg(Color::Red)),
+                    ]));
+                }
+
+                if old_lines_vec.len() > show_lines {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("    ... ({} more lines)", old_lines_vec.len() - show_lines),
+                            Style::default()
+                                .fg(Color::DarkGray)
+                                .add_modifier(Modifier::ITALIC),
+                        ),
+                    ]));
+                }
+
+                // Separator
+                if !old_lines_vec.is_empty() && !new_lines_vec.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled("    ╌╌╌", Style::default().fg(Color::DarkGray)),
+                    ]));
+                }
+
+                // Show first N new lines
+                for (idx, line) in new_lines_vec.iter().take(show_lines).enumerate() {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("{:>3} ", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled("+ ", Style::default().fg(Color::Green)),
+                        Span::styled(line.to_string(), Style::default().fg(Color::Green)),
+                    ]));
+                }
+
+                if new_lines_vec.len() > show_lines {
+                    lines.push(Line::from(vec![
+                        Span::raw("┃ "),
+                        Span::styled(
+                            format!("    ... ({} more lines)", new_lines_vec.len() - show_lines),
+                            Style::default()
+                                .fg(Color::DarkGray)
+                                .add_modifier(Modifier::ITALIC),
+                        ),
+                    ]));
+                }
+            }
+        } else {
+            // When details are not shown, still show a summary
+            let lines_before = data.lines_before().unwrap_or(0);
+            let lines_after = data.lines_after().unwrap_or(0);
+            if lines_before > 0 || lines_after > 0 {
+                let change_summary = if lines_before == lines_after {
+                    format!("Modified {lines_after} lines")
+                } else if lines_before < lines_after {
+                    let added = lines_after - lines_before;
+                    format!("Added {added} lines ({lines_before} → {lines_after})")
+                } else {
+                    let removed = lines_before - lines_after;
+                    format!("Removed {removed} lines ({lines_before} → {lines_after})")
+                };
+
+                lines.push(Line::from(vec![
+                    Span::raw("┃ "),
+                    Span::styled(
+                        format!("  {change_summary}"),
+                        Style::default()
+                            .fg(Color::Gray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
             }
         }
 
