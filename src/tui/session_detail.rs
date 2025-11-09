@@ -79,35 +79,71 @@ impl SessionDetailWidget {
     }
 
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        // Check if we should scroll analytics instead of messages
+        let scroll_analytics = self.state.show_analytics && self.state.analytics.is_some();
+
         match key.code {
             KeyCode::Up => {
-                self.state.scroll_up();
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_up();
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_up();
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Down => {
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_down(max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_down(max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_down(max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::PageUp => {
                 let page_size = 10;
-                self.state.scroll_page_up(page_size);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_page_up(page_size);
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_page_up(page_size);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::PageDown => {
                 let page_size = 10;
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_page_down(page_size, max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_page_down(page_size, max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_page_down(page_size, max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Home => {
-                self.state.scroll_to_top();
-                self.update_scroll_state();
+                if scroll_analytics {
+                    self.state.analytics_scroll_to_top();
+                    self.update_analytics_scroll_state();
+                } else {
+                    self.state.scroll_to_top();
+                    self.update_scroll_state();
+                }
             }
             KeyCode::End => {
-                let max_scroll = self.get_max_scroll();
-                self.state.scroll_to_bottom(max_scroll);
-                self.update_scroll_state();
+                if scroll_analytics {
+                    let max_scroll = self.get_analytics_max_scroll();
+                    self.state.analytics_scroll_to_bottom(max_scroll);
+                    self.update_analytics_scroll_state();
+                } else {
+                    let max_scroll = self.get_max_scroll();
+                    self.state.scroll_to_bottom(max_scroll);
+                    self.update_scroll_state();
+                }
             }
             KeyCode::Char('d') => {
                 // D: Toggle tool details (expand/collapse)
@@ -472,7 +508,63 @@ impl SessionDetailWidget {
         self.state.update_scroll_state(total_lines);
     }
 
-    fn render_analytics(&self, f: &mut Frame, area: Rect) {
+    fn get_analytics_max_scroll(&self) -> usize {
+        let total_lines = self.get_analytics_total_lines();
+        let visible_lines = 20; // Approximate visible lines
+        total_lines.saturating_sub(visible_lines)
+    }
+
+    fn update_analytics_scroll_state(&mut self) {
+        let total_lines = self.get_analytics_total_lines();
+        self.state.update_analytics_scroll_state(total_lines);
+    }
+
+    fn get_analytics_total_lines(&self) -> usize {
+        // Count total lines that will be rendered in analytics
+        if let Some(analytics_data) = &self.state.analytics {
+            let mut line_count = 0;
+
+            // Status line
+            if analytics_data.latest_request.is_some() {
+                line_count += 2; // Status + blank line
+            }
+
+            // Active request
+            if analytics_data.active_request.is_some() {
+                line_count += 2; // Active request + blank line
+            }
+
+            // Analytics content
+            if let Some(analytics) = &analytics_data.latest_analytics {
+                // Scores section: header + blank + 6 scores + blank
+                line_count += 9;
+
+                // Metrics section: header + blank + 6 metrics + blank
+                line_count += 9;
+
+                // Insights section
+                if !analytics.qualitative_output.insights.is_empty() {
+                    line_count += 2; // Header + blank
+                                     // Estimate 3-5 lines per insight (title + wrapped description)
+                    let insights_count = analytics.qualitative_output.insights.len().min(3);
+                    line_count += insights_count * 4;
+                }
+
+                // Model line
+                if analytics.model_used.is_some() {
+                    line_count += 1;
+                }
+            } else if analytics_data.active_request.is_none() {
+                line_count += 1; // "No completed analysis" message
+            }
+
+            line_count
+        } else {
+            1 // "No analytics available"
+        }
+    }
+
+    fn render_analytics(&mut self, f: &mut Frame, area: Rect) {
         let analytics_data = match &self.state.analytics {
             Some(session_analytics) => session_analytics,
             None => {
@@ -660,12 +752,43 @@ impl SessionDetailWidget {
             )]));
         }
 
-        let paragraph = Paragraph::new(lines)
+        // Calculate visible area and apply scrolling
+        let available_height = area.height.saturating_sub(2) as usize; // Account for borders
+        let total_lines = lines.len();
+
+        let visible_lines: Vec<Line> = lines
+            .into_iter()
+            .skip(self.state.analytics_scroll)
+            .take(available_height)
+            .collect();
+
+        let paragraph = Paragraph::new(visible_lines)
             .block(Block::default().borders(Borders::ALL).title("Analytics"))
             .wrap(Wrap { trim: true })
             .scroll((0, 0));
 
         f.render_widget(paragraph, area);
+
+        // Render scrollbar if content is scrollable
+        if total_lines > available_height {
+            let scrollbar_area = Rect {
+                x: area.x + area.width - 1,
+                y: area.y + 1,
+                width: 1,
+                height: area.height - 2,
+            };
+
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+
+            f.render_stateful_widget(
+                scrollbar,
+                scrollbar_area,
+                &mut self.state.analytics_scroll_state,
+            );
+        }
     }
 
     fn score_color(score: f64) -> Color {

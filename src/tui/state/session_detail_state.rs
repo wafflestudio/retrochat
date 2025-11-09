@@ -16,8 +16,12 @@ pub struct SessionDetailState {
     pub analytics: Option<SessionAnalytics>,
     /// Scrollbar state for messages
     pub scroll_state: ScrollbarState,
-    /// Current scroll position (line number)
+    /// Current scroll position (line number) for messages
     pub current_scroll: usize,
+    /// Scrollbar state for analytics
+    pub analytics_scroll_state: ScrollbarState,
+    /// Current scroll position for analytics
+    pub analytics_scroll: usize,
     /// Loading indicator
     pub loading: bool,
     /// Whether to show detailed tool output (expanded view)
@@ -36,6 +40,8 @@ impl SessionDetailState {
             analytics: None,
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
+            analytics_scroll_state: ScrollbarState::default(),
+            analytics_scroll: 0,
             loading: false,
             show_tool_details: false,
             show_analytics: false,
@@ -124,6 +130,41 @@ impl SessionDetailState {
     pub fn update_scroll_state(&mut self, total_lines: usize) {
         self.scroll_state = self.scroll_state.content_length(total_lines);
         self.scroll_state = self.scroll_state.position(self.current_scroll);
+    }
+
+    /// Analytics scroll methods
+    pub fn analytics_scroll_up(&mut self) {
+        if self.analytics_scroll > 0 {
+            self.analytics_scroll -= 1;
+        }
+    }
+
+    pub fn analytics_scroll_down(&mut self, max_scroll: usize) {
+        if self.analytics_scroll < max_scroll {
+            self.analytics_scroll += 1;
+        }
+    }
+
+    pub fn analytics_scroll_page_up(&mut self, page_size: usize) {
+        self.analytics_scroll = self.analytics_scroll.saturating_sub(page_size);
+    }
+
+    pub fn analytics_scroll_page_down(&mut self, page_size: usize, max_scroll: usize) {
+        self.analytics_scroll = (self.analytics_scroll + page_size).min(max_scroll);
+    }
+
+    pub fn analytics_scroll_to_top(&mut self) {
+        self.analytics_scroll = 0;
+    }
+
+    pub fn analytics_scroll_to_bottom(&mut self, max_scroll: usize) {
+        self.analytics_scroll = max_scroll;
+    }
+
+    /// Update analytics scrollbar state
+    pub fn update_analytics_scroll_state(&mut self, total_lines: usize) {
+        self.analytics_scroll_state = self.analytics_scroll_state.content_length(total_lines);
+        self.analytics_scroll_state = self.analytics_scroll_state.position(self.analytics_scroll);
     }
 }
 
