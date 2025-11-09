@@ -123,45 +123,23 @@ impl SessionDetailWidget {
     }
 
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4), // Session header
+                Constraint::Min(0),    // Main content
+            ])
+            .split(area);
+
+        // Render session header
+        self.render_session_header(f, chunks[0]);
+
+        // Render content based on toggle state
         if self.state.show_analytics && self.state.analytics.is_some() {
-            // Split view: messages on left, analytics on right
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(4), // Session header
-                    Constraint::Min(0),    // Main content
-                ])
-                .split(area);
-
-            // Render session header
-            self.render_session_header(f, chunks[0]);
-
-            // Split content area horizontally
-            let content_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(50), // Messages
-                    Constraint::Percentage(50), // Analytics
-                ])
-                .split(chunks[1]);
-
-            // Render messages and analytics side by side
-            self.render_messages(f, content_chunks[0]);
-            self.render_analytics(f, content_chunks[1]);
+            // Show only analytics when toggled
+            self.render_analytics(f, chunks[1]);
         } else {
-            // Normal view: just messages
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(4), // Session header
-                    Constraint::Min(0),    // Main content
-                ])
-                .split(area);
-
-            // Render session header
-            self.render_session_header(f, chunks[0]);
-
-            // Render main content area
+            // Show messages by default
             self.render_messages(f, chunks[1]);
         }
     }
