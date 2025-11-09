@@ -243,6 +243,10 @@ impl SessionDetailWidget {
 
         // Calculate visible messages based on scroll
         let available_height = area.height.saturating_sub(2) as usize; // Account for borders
+
+        // Store viewport height for scroll calculations
+        self.state.viewport_height = available_height;
+
         let message_lines = self.calculate_message_lines(area.width.saturating_sub(4) as usize);
 
         let visible_lines: Vec<Line> = message_lines
@@ -499,8 +503,8 @@ impl SessionDetailWidget {
 
     pub fn get_max_scroll(&self) -> usize {
         let total_lines = self.get_total_lines();
-        let visible_lines = 20; // Approximate visible lines
-        total_lines.saturating_sub(visible_lines)
+        // Use actual viewport height from last render
+        total_lines.saturating_sub(self.state.viewport_height)
     }
 
     fn update_scroll_state(&mut self) {
@@ -510,8 +514,8 @@ impl SessionDetailWidget {
 
     fn get_analytics_max_scroll(&self) -> usize {
         let total_lines = self.get_analytics_total_lines();
-        let visible_lines = 20; // Approximate visible lines
-        total_lines.saturating_sub(visible_lines)
+        // Use actual viewport height from last render
+        total_lines.saturating_sub(self.state.analytics_viewport_height)
     }
 
     fn update_analytics_scroll_state(&mut self) {
@@ -754,6 +758,10 @@ impl SessionDetailWidget {
 
         // Calculate visible area and apply scrolling
         let available_height = area.height.saturating_sub(2) as usize; // Account for borders
+
+        // Store viewport height for scroll calculations
+        self.state.analytics_viewport_height = available_height;
+
         let total_lines = lines.len();
 
         let visible_lines: Vec<Line> = lines

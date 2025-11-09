@@ -28,6 +28,10 @@ pub struct SessionDetailState {
     pub show_tool_details: bool,
     /// Whether to show analytics panel
     pub show_analytics: bool,
+    /// Last known viewport height for messages (used for scroll calculations)
+    pub viewport_height: usize,
+    /// Last known viewport height for analytics (used for scroll calculations)
+    pub analytics_viewport_height: usize,
 }
 
 impl SessionDetailState {
@@ -45,6 +49,8 @@ impl SessionDetailState {
             loading: false,
             show_tool_details: false,
             show_analytics: false,
+            viewport_height: 20,           // Default fallback
+            analytics_viewport_height: 20, // Default fallback
         }
     }
 
