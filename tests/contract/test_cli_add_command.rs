@@ -14,11 +14,12 @@ fn test_sync_import_command_structure() {
 
     match sync_cmd {
         Commands::Sync {
-            command: SyncCommands::Import {
-                path,
-                providers,
-                overwrite,
-            },
+            command:
+                SyncCommands::Import {
+                    path,
+                    providers,
+                    overwrite,
+                },
         } => {
             assert!(path.is_none());
             assert_eq!(providers.len(), 0);

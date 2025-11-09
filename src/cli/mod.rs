@@ -355,7 +355,9 @@ impl Cli {
                 } => {
                     // TODO: Handle output file if specified
                     if output.is_some() {
-                        eprintln!("Warning: --output option is not yet implemented. Printing to stdout.");
+                        eprintln!(
+                            "Warning: --output option is not yet implemented. Printing to stdout."
+                        );
                     }
 
                     query::handle_timeline_command(query::TimelineParams {
