@@ -2,7 +2,7 @@
 
 LLM Agent Chat History Retrospect Application
 
-A powerful TUI (Terminal User Interface) application for analyzing and retrospecting on your LLM chat history from various providers like Claude, Cursor, Gemini, and more.
+A powerful TUI (Terminal User Interface) application for analyzing and retrospecting on your LLM chat history from various providers like Claude, Gemini, and more.
 
 ## Installation
 
@@ -11,32 +11,32 @@ A powerful TUI (Terminal User Interface) application for analyzing and retrospec
 npm install -g @sanggggg/retrochat
 
 # Or use with npx
-npx @sanggggg/retrochat tui
+npx @sanggggg/retrochat
 ```
 
 ## Quick Start
 
 ```bash
-# Launch the TUI interface
-retrochat tui
+# Launch the TUI interface (default mode)
+retrochat
 
 # Import chat history from providers
-retrochat import claude cursor
+retrochat sync claude gemini
 
 # Watch for new chats
-retrochat watch all --verbose
+retrochat sync all -w --verbose
 
-# Analyze your chat sessions
-retrochat analyze insights
+# Run AI analysis (requires GOOGLE_AI_API_KEY)
+retrochat analysis run --all
 ```
 
 ## Features
 
 - 📊 **TUI Interface**: Beautiful terminal interface for browsing chat history
-- 🔍 **Multi-Provider Support**: Import from Claude, Cursor, Gemini, and more
-- 📈 **Analytics**: Generate insights and export data
-- 🔄 **Auto-Watch**: Automatically import new chats
-- 🤖 **AI-Powered Retrospection**: Analyze sessions with AI assistance
+- 🔍 **Multi-Provider Support**: Import from Claude Code, Gemini, Codex, and more
+- 📈 **Query & Search**: Browse sessions, search messages, and filter by provider
+- 🔄 **Auto-Watch**: Automatically sync new chats in real-time
+- 🤖 **AI-Powered Analysis**: Analyze sessions with Google AI assistance
 
 ## Requirements
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run end-to-end tests: generate examples and import them
+# Run end-to-end tests: generate examples and sync them
 
 set -e
 
@@ -7,18 +7,18 @@ set -e
 echo "Generating example files..."
 python3 scripts/generate-example.py
 
-# Import examples using test database
-echo "Importing example files..."
+# Sync examples using test database
+echo "Syncing example files..."
 echo "Using test database: ~/.retrochat/retrochat_e2e.db"
 
 export RETROCHAT_DB=~/.retrochat/retrochat_e2e.db
 
-cargo run -- init
-cargo run -- import --path examples/local_claude.jsonl --overwrite || true
-cargo run -- import --path examples/local_codex.jsonl --overwrite || true
-cargo run -- import --path examples/local_gemini.json --overwrite || true
+# Database is auto-initialized on first sync
+cargo run -- sync --path examples/local_claude.jsonl --overwrite || true
+cargo run -- sync --path examples/local_codex.jsonl --overwrite || true
+cargo run -- sync --path examples/local_gemini.json --overwrite || true
 
-echo "Example import complete"
+echo "Example sync complete"
 
 # Cleanup
 echo "Cleaning up test database..."

@@ -3,6 +3,7 @@
 t = "test --verbose"
 c = "check --verbose"
 b = "build"
+br = "build --release"
 
 # Code quality aliases
 fmt-check = "fmt --all -- --check"
@@ -10,6 +11,4 @@ fmt-fix = "fmt --all"
 clippy-strict = "clippy -- -D warnings"
 
 # Application run aliases
-tui = "run -- tui"
-watch = "run -- watch all --verbose"
-init = "run -- init"
+tui = "run"
