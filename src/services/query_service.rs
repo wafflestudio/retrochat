@@ -319,6 +319,7 @@ impl QueryService {
 
         // Convert to SessionSummary format with actual first message preview
         let message_repo = crate::database::MessageRepository::new(&self.db_manager);
+        let analytics_request_repo = AnalyticsRequestRepository::new(self.db_manager.clone());
         let mut sessions = Vec::new();
 
         for session in paginated_sessions {
@@ -340,6 +341,22 @@ impl QueryService {
                 })
                 .unwrap_or_else(|| "No messages available".to_string());
 
+            // Check for analytics requests for this session
+            let (has_analytics, analytics_status) = analytics_request_repo
+                .find_by_session_id(&session.id.to_string())
+                .await
+                .ok()
+                .and_then(|requests| {
+                    if requests.is_empty() {
+                        None
+                    } else {
+                        // Get the most recent request status
+                        let latest_status = requests.first().map(|r| r.status.clone());
+                        Some((true, latest_status))
+                    }
+                })
+                .unwrap_or((false, None));
+
             sessions.push(SessionSummary {
                 session_id: session.id.to_string(),
                 provider: session.provider.to_string(),
@@ -352,8 +369,8 @@ impl QueryService {
                 message_count: session.message_count as i32,
                 total_tokens: session.token_count.map(|t| t as i32),
                 first_message_preview,
-                has_analytics: false,           // TODO: 나중에고치기
-                analytics_status: Option::None, // TODO: 나중에고치기
+                has_analytics,
+                analytics_status,
             });
         }
 
