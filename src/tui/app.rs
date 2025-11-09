@@ -553,6 +553,7 @@ impl App {
             Line::from("  Home/End       - Jump to start/end"),
             Line::from("  d              - Toggle tool details"),
             Line::from("  a              - Toggle analytics view"),
+            Line::from("  t              - Toggle thinking messages"),
         ];
 
         let dialog = Dialog::new(DialogType::Help, content).size(80, 70);

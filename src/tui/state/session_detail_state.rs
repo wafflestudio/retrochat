@@ -28,6 +28,8 @@ pub struct SessionDetailState {
     pub show_tool_details: bool,
     /// Whether to show analytics panel
     pub show_analytics: bool,
+    /// Whether to show thinking/reasoning messages
+    pub show_thinking: bool,
     /// Last known viewport height for messages (used for scroll calculations)
     pub viewport_height: usize,
     /// Last known viewport height for analytics (used for scroll calculations)
@@ -49,6 +51,7 @@ impl SessionDetailState {
             loading: false,
             show_tool_details: false,
             show_analytics: false,
+            show_thinking: true,           // Show thinking messages by default
             viewport_height: 20,           // Default fallback
             analytics_viewport_height: 20, // Default fallback
         }
@@ -127,6 +130,11 @@ impl SessionDetailState {
         self.show_analytics = !self.show_analytics;
     }
 
+    /// Toggle thinking messages visibility
+    pub fn toggle_thinking(&mut self) {
+        self.show_thinking = !self.show_thinking;
+    }
+
     /// Update analytics data
     pub fn update_analytics(&mut self, analytics: Option<SessionAnalytics>) {
         self.analytics = analytics;
@@ -198,6 +206,7 @@ mod tests {
         assert_eq!(state.current_scroll, 0);
         assert!(!state.show_tool_details);
         assert!(!state.loading);
+        assert!(state.show_thinking); // Thinking messages shown by default
     }
 
     #[test]
@@ -255,6 +264,18 @@ mod tests {
 
         state.scroll_page_up(page_size);
         assert_eq!(state.current_scroll, 10);
+    }
+
+    #[test]
+    fn test_toggle_thinking() {
+        let mut state = SessionDetailState::new();
+        assert!(state.show_thinking); // Default is true
+
+        state.toggle_thinking();
+        assert!(!state.show_thinking); // Toggled to false
+
+        state.toggle_thinking();
+        assert!(state.show_thinking); // Toggled back to true
     }
 
     #[test]
