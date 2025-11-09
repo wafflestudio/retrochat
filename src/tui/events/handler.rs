@@ -58,11 +58,8 @@ impl EventHandler {
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 if show_help {
                     return vec![UserAction::ToggleHelp];
-                } else {
-                    match mode {
-                        AppMode::SessionDetail => return vec![UserAction::NavigateBack],
-                        _ => {}
-                    }
+                } else if mode == &AppMode::SessionDetail {
+                    return vec![UserAction::NavigateBack];
                 }
             }
 
