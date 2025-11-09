@@ -373,6 +373,12 @@ impl App {
                 let max_scroll = self.session_detail.get_max_scroll();
                 self.session_detail.state.scroll_to_bottom(max_scroll);
             }
+            SessionDetailToggleToolDetails => {
+                self.session_detail.state.toggle_tool_details();
+            }
+            SessionDetailToggleAnalytics => {
+                self.session_detail.state.toggle_analytics();
+            }
 
             // Analytics actions
             AnalyticsNavigate(_direction) => {

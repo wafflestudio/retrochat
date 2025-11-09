@@ -41,6 +41,8 @@ pub enum UserAction {
     SessionDetailPageDown,
     SessionDetailHome,
     SessionDetailEnd,
+    SessionDetailToggleToolDetails,
+    SessionDetailToggleAnalytics,
 
     // Analytics actions
     AnalyticsNavigate(NavigationDirection),
