@@ -521,7 +521,7 @@ impl QueryService {
         let requests = analytics_request_repo
             .find_by_session_id(session_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch analytics requests: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to fetch analytics requests: {e}"))?;
 
         if requests.is_empty() {
             return Ok(None);

@@ -730,7 +730,7 @@ impl SessionDetailWidget {
                     let wrapped_desc =
                         wrap_text(&insight.description, area.width.saturating_sub(6) as usize);
                     for line in wrapped_desc {
-                        lines.push(Line::from(format!("     {}", line)));
+                        lines.push(Line::from(format!("     {line}")));
                     }
                     lines.push(Line::from(""));
                 }
