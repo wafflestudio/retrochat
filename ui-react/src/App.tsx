@@ -1,26 +1,17 @@
-import { useState } from "react";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./components/ui/select";
-import { SessionList } from "./components/SessionList";
-import { SessionDetail } from "./components/SessionDetail";
-import { SearchModal } from "./components/SearchModal";
-import { useSessions } from "./hooks/useSessions";
-import { useSessionDetail } from "./hooks/useSessionDetail";
-import { useSearch } from "./hooks/useSearch";
-import { Search } from "lucide-react";
+import { Search } from 'lucide-react'
+import { useState } from 'react'
+import { SearchModal } from './components/SearchModal'
+import { SessionDetail } from './components/SessionDetail'
+import { SessionList } from './components/SessionList'
+import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
+import { useSearch } from './hooks/useSearch'
+import { useSessionDetail } from './hooks/useSessionDetail'
+import { useSessions } from './hooks/useSessions'
 
 function App() {
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null
-  );
-  const [provider, setProvider] = useState<string>("");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [provider, _setProvider] = useState<string>('')
 
   // Custom hooks
   const {
@@ -32,13 +23,13 @@ function App() {
     canGoNext,
     nextPage,
     prevPage,
-  } = useSessions(provider);
+  } = useSessions(provider)
 
   const {
     session,
     loading: detailLoading,
     error: detailError,
-  } = useSessionDetail(selectedSessionId);
+  } = useSessionDetail(selectedSessionId)
 
   const {
     query,
@@ -49,25 +40,25 @@ function App() {
     isOpen: searchOpen,
     performSearch,
     closeSearch,
-  } = useSearch();
+  } = useSearch()
 
   const handleSessionClick = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-  };
+    setSelectedSessionId(sessionId)
+  }
 
   const handleSearchResultClick = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-  };
+    setSelectedSessionId(sessionId)
+  }
 
   const handleSearch = () => {
-    performSearch();
-  };
+    performSearch()
+  }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      handleSearch();
+    if (e.key === 'Enter') {
+      handleSearch()
     }
-  };
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -101,11 +92,15 @@ function App() {
           {/* Search Bar */}
           <div className="p-6 border-b border-border/50 space-y-4 bg-background/50 backdrop-blur-sm">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
+              <label
+                htmlFor="search-input"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block"
+              >
                 Search
               </label>
               <div className="flex gap-2">
                 <Input
+                  id="search-input"
                   type="text"
                   placeholder="Search messages..."
                   value={query}
@@ -125,10 +120,10 @@ function App() {
 
             {/* Provider Filter */}
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
                 Provider
-              </label>
-              {/* <Select value={provider} onValueChange={setProvider}>
+              </div>
+              {/* <Select value={provider} onValueChange={_setProvider}>
                 <SelectTrigger className="bg-background/80 border-border/50 focus:border-primary transition-colors h-10">
                   <SelectValue placeholder="All Providers" />
                 </SelectTrigger>
@@ -159,11 +154,7 @@ function App() {
 
         {/* Main Detail View */}
         <main className="flex-1 overflow-hidden">
-          <SessionDetail
-            session={session}
-            loading={detailLoading}
-            error={detailError}
-          />
+          <SessionDetail session={session} loading={detailLoading} error={detailError} />
         </main>
       </div>
 
@@ -177,7 +168,7 @@ function App() {
         onResultClick={handleSearchResultClick}
       />
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

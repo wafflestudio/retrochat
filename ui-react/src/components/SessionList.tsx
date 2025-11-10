@@ -1,20 +1,20 @@
-import { ScrollArea } from './ui/scroll-area';
-import { Button } from './ui/button';
-import { SessionItem } from './SessionItem';
-import { ChevronLeft, ChevronRight, Loader2, AlertCircle, Inbox } from 'lucide-react';
-import { Session } from '@/types';
+import { AlertCircle, ChevronLeft, ChevronRight, Inbox, Loader2 } from 'lucide-react'
+import type { Session } from '@/types'
+import { SessionItem } from './SessionItem'
+import { Button } from './ui/button'
+import { ScrollArea } from './ui/scroll-area'
 
 interface SessionListProps {
-  sessions: Session[];
-  loading: boolean;
-  error: string | null;
-  currentPage: number;
-  canGoPrev: boolean;
-  canGoNext: boolean;
-  onPrevPage: () => void;
-  onNextPage: () => void;
-  activeSessionId: string | null;
-  onSessionClick: (sessionId: string) => void;
+  sessions: Session[]
+  loading: boolean
+  error: string | null
+  currentPage: number
+  canGoPrev: boolean
+  canGoNext: boolean
+  onPrevPage: () => void
+  onNextPage: () => void
+  activeSessionId: string | null
+  onSessionClick: (sessionId: string) => void
 }
 
 export function SessionList({
@@ -35,7 +35,7 @@ export function SessionList({
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
         <p className="text-sm text-muted-foreground font-medium">Loading sessions...</p>
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -49,7 +49,7 @@ export function SessionList({
           <p className="text-xs text-muted-foreground">{error}</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (sessions.length === 0) {
@@ -63,7 +63,7 @@ export function SessionList({
           <p className="text-xs text-muted-foreground">Try adjusting your filters</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -105,9 +105,7 @@ export function SessionList({
             Prev
           </Button>
           <div className="px-3 py-1.5 rounded-md bg-muted">
-            <span className="text-xs font-semibold text-foreground">
-              Page {currentPage}
-            </span>
+            <span className="text-xs font-semibold text-foreground">Page {currentPage}</span>
           </div>
           <Button
             variant="outline"
@@ -122,5 +120,5 @@ export function SessionList({
         </div>
       </div>
     </div>
-  );
+  )
 }

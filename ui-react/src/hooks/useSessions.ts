@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
-import { getSessions } from '../utils/tauri';
-import { Session } from '@/types';
+import { useCallback, useEffect, useState } from 'react'
+import type { Session } from '@/types'
+import { getSessions } from '../utils/tauri'
 
 interface UseSessionsReturn {
-  sessions: Session[];
-  loading: boolean;
-  error: string | null;
-  currentPage: number;
-  hasMore: boolean;
-  canGoPrev: boolean;
-  canGoNext: boolean;
-  nextPage: () => void;
-  prevPage: () => void;
-  refresh: () => void;
+  sessions: Session[]
+  loading: boolean
+  error: string | null
+  currentPage: number
+  hasMore: boolean
+  canGoPrev: boolean
+  canGoNext: boolean
+  nextPage: () => void
+  prevPage: () => void
+  refresh: () => void
 }
 
 /**
@@ -21,48 +21,48 @@ interface UseSessionsReturn {
  * @returns Sessions data and controls
  */
 export function useSessions(provider: string = ''): UseSessionsReturn {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const pageSize = 20;
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const pageSize = 20
+
+  const loadSessions = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await getSessions(currentPage, pageSize, provider || null)
+      setSessions(data)
+      setHasMore(data.length >= pageSize)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setError(errorMessage)
+      console.error('Failed to load sessions:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [currentPage, provider])
 
   useEffect(() => {
-    loadSessions();
-  }, [currentPage, provider]);
-
-  const loadSessions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getSessions(currentPage, pageSize, provider || null);
-      setSessions(data);
-      setHasMore(data.length >= pageSize);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      console.error('Failed to load sessions:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadSessions()
+  }, [loadSessions])
 
   const nextPage = () => {
     if (hasMore) {
-      setCurrentPage((prev) => prev + 1);
+      setCurrentPage((prev) => prev + 1)
     }
-  };
+  }
 
   const prevPage = () => {
     if (currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      setCurrentPage((prev) => prev - 1)
     }
-  };
+  }
 
   const refresh = () => {
-    loadSessions();
-  };
+    loadSessions()
+  }
 
   return {
     sessions,
@@ -75,5 +75,5 @@ export function useSessions(provider: string = ''): UseSessionsReturn {
     nextPage,
     prevPage,
     refresh,
-  };
+  }
 }

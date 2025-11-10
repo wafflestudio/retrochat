@@ -1,14 +1,14 @@
-import { ScrollArea } from './ui/scroll-area';
-import { Badge } from './ui/badge';
-import { Message } from './Message';
-import { formatDate } from '../utils/formatters';
-import { SessionWithMessages } from '@/types';
-import { Loader2, AlertCircle, MessageSquareText, Calendar, Clock, Layers } from 'lucide-react';
+import { AlertCircle, Calendar, Clock, Layers, Loader2, MessageSquareText } from 'lucide-react'
+import type { SessionWithMessages } from '@/types'
+import { formatDate } from '../utils/formatters'
+import { Message } from './Message'
+import { Badge } from './ui/badge'
+import { ScrollArea } from './ui/scroll-area'
 
 interface SessionDetailProps {
-  session: SessionWithMessages | null;
-  loading: boolean;
-  error: string | null;
+  session: SessionWithMessages | null
+  loading: boolean
+  error: string | null
 }
 
 export function SessionDetail({ session, loading, error }: SessionDetailProps) {
@@ -18,7 +18,7 @@ export function SessionDetail({ session, loading, error }: SessionDetailProps) {
         <Loader2 className="h-10 w-10 text-primary animate-spin" />
         <p className="text-sm text-muted-foreground font-medium">Loading session details...</p>
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -32,7 +32,7 @@ export function SessionDetail({ session, loading, error }: SessionDetailProps) {
           <p className="text-xs text-muted-foreground">{error}</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (!session) {
@@ -48,7 +48,7 @@ export function SessionDetail({ session, loading, error }: SessionDetailProps) {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -109,11 +109,11 @@ export function SessionDetail({ session, loading, error }: SessionDetailProps) {
       {/* Messages */}
       <ScrollArea className="flex-1 p-8 bg-muted/20">
         <div className="space-y-4 max-w-5xl mx-auto">
-          {session.messages.map((message, index) => (
-            <Message key={index} message={message} />
+          {session.messages.map((message) => (
+            <Message key={`${message.timestamp}-${message.role}`} message={message} />
           ))}
         </div>
       </ScrollArea>
     </div>
-  );
+  )
 }

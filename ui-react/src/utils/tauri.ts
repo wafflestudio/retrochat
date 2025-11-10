@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
-import { Session, SessionWithMessages, SearchResult } from '@/types';
+import { invoke } from '@tauri-apps/api/core'
+import type { SearchResult, Session, SessionWithMessages } from '@/types'
 
 /**
  * Get paginated list of chat sessions
@@ -17,7 +17,7 @@ export async function getSessions(
     page,
     pageSize,
     provider,
-  });
+  })
 }
 
 /**
@@ -26,7 +26,7 @@ export async function getSessions(
  * @returns Session detail with messages
  */
 export async function getSessionDetail(sessionId: string): Promise<SessionWithMessages> {
-  return await invoke('get_session_detail', { sessionId });
+  return await invoke('get_session_detail', { sessionId })
 }
 
 /**
@@ -36,7 +36,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionWithMe
  * @returns Search results
  */
 export async function searchMessages(query: string, limit: number = 50): Promise<SearchResult[]> {
-  return await invoke('search_messages', { query, limit });
+  return await invoke('search_messages', { query, limit })
 }
 
 /**
@@ -44,5 +44,5 @@ export async function searchMessages(query: string, limit: number = 50): Promise
  * @returns List of providers
  */
 export async function getProviders(): Promise<string[]> {
-  return await invoke('get_providers');
+  return await invoke('get_providers')
 }

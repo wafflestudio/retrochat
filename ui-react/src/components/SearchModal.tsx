@@ -1,35 +1,38 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { ScrollArea } from './ui/scroll-area';
-import { formatDateTime } from '../utils/formatters';
-import { SearchResult } from '@/types';
-import { Loader2, SearchX, User, Bot, Settings, MessageSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Bot, Loader2, MessageSquare, SearchX, Settings, User } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { SearchResult } from '@/types'
+import { formatDateTime } from '../utils/formatters'
+import { Badge } from './ui/badge'
+import { Card } from './ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
+import { ScrollArea } from './ui/scroll-area'
 
 interface SearchResultItemProps {
-  result: SearchResult;
-  onClick: () => void;
+  result: SearchResult
+  onClick: () => void
 }
 
 function SearchResultItem({ result, onClick }: SearchResultItemProps) {
   const getRoleIcon = (role: string) => {
-    const r = role.toLowerCase();
-    if (r === 'user') return User;
-    if (r === 'assistant') return Bot;
-    if (r === 'system') return Settings;
-    return MessageSquare;
-  };
+    const r = role.toLowerCase()
+    if (r === 'user') return User
+    if (r === 'assistant') return Bot
+    if (r === 'system') return Settings
+    return MessageSquare
+  }
 
   const getRoleColor = (role: string) => {
-    const r = role.toLowerCase();
-    if (r === 'user') return 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-300';
-    if (r === 'assistant') return 'bg-violet-500/10 text-violet-700 border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300';
-    if (r === 'system') return 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300';
-    return 'bg-muted text-muted-foreground border-muted-foreground/30';
-  };
+    const r = role.toLowerCase()
+    if (r === 'user')
+      return 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-300'
+    if (r === 'assistant')
+      return 'bg-violet-500/10 text-violet-700 border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300'
+    if (r === 'system')
+      return 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300'
+    return 'bg-muted text-muted-foreground border-muted-foreground/30'
+  }
 
-  const RoleIcon = getRoleIcon(result.role);
+  const RoleIcon = getRoleIcon(result.role)
 
   return (
     <Card
@@ -40,15 +43,15 @@ function SearchResultItem({ result, onClick }: SearchResultItemProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <Badge
             variant="outline"
-            className={cn("capitalize font-semibold text-xs px-2 py-1 flex items-center gap-1", getRoleColor(result.role))}
+            className={cn(
+              'capitalize font-semibold text-xs px-2 py-1 flex items-center gap-1',
+              getRoleColor(result.role)
+            )}
           >
             <RoleIcon className="h-3 w-3" />
             {result.role}
           </Badge>
-          <Badge
-            variant="secondary"
-            className="text-xs uppercase tracking-wide"
-          >
+          <Badge variant="secondary" className="text-xs uppercase tracking-wide">
             {result.provider}
           </Badge>
         </div>
@@ -60,16 +63,16 @@ function SearchResultItem({ result, onClick }: SearchResultItemProps) {
         {result.content}
       </div>
     </Card>
-  );
+  )
 }
 
 interface SearchModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  results: SearchResult[];
-  loading: boolean;
-  error: string | null;
-  onResultClick: (sessionId: string) => void;
+  isOpen: boolean
+  onClose: () => void
+  results: SearchResult[]
+  loading: boolean
+  error: string | null
+  onResultClick: (sessionId: string) => void
 }
 
 export function SearchModal({
@@ -127,13 +130,13 @@ export function SearchModal({
             </div>
             <ScrollArea className="max-h-[60vh]">
               <div className="space-y-3 pr-4">
-                {results.map((result, index) => (
+                {results.map((result) => (
                   <SearchResultItem
-                    key={index}
+                    key={`${result.session_id}-${result.timestamp}-${result.role}`}
                     result={result}
                     onClick={() => {
-                      onResultClick(result.session_id);
-                      onClose();
+                      onResultClick(result.session_id)
+                      onClose()
                     }}
                   />
                 ))}
@@ -143,5 +146,5 @@ export function SearchModal({
         )}
       </DialogContent>
     </Dialog>
-  );
+  )
 }
