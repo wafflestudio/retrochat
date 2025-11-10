@@ -240,7 +240,13 @@ pub async fn handle_timeline_command(params: TimelineParams) -> Result<()> {
     Ok(())
 }
 
-fn format_compact(messages: &[Message], truncate: bool, head_chars: usize, tail_chars: usize, no_tool: bool) {
+fn format_compact(
+    messages: &[Message],
+    truncate: bool,
+    head_chars: usize,
+    tail_chars: usize,
+    no_tool: bool,
+) {
     for msg in messages {
         // Filter out tool messages if no_tool is enabled
         if no_tool && is_tool_message(&msg.content) {
