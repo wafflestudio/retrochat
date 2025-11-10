@@ -1,15 +1,29 @@
 import { useState, useEffect } from 'react';
 import { getSessions } from '../utils/tauri';
+import { Session } from '@/types';
+
+interface UseSessionsReturn {
+  sessions: Session[];
+  loading: boolean;
+  error: string | null;
+  currentPage: number;
+  hasMore: boolean;
+  canGoPrev: boolean;
+  canGoNext: boolean;
+  nextPage: () => void;
+  prevPage: () => void;
+  refresh: () => void;
+}
 
 /**
  * Hook for managing session data and pagination
- * @param {string} provider - Filter by provider
- * @returns {Object} Sessions data and controls
+ * @param provider - Filter by provider
+ * @returns Sessions data and controls
  */
-export function useSessions(provider = '') {
-  const [sessions, setSessions] = useState([]);
+export function useSessions(provider: string = ''): UseSessionsReturn {
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 20;
@@ -26,7 +40,8 @@ export function useSessions(provider = '') {
       setSessions(data);
       setHasMore(data.length >= pageSize);
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
       console.error('Failed to load sessions:', err);
     } finally {
       setLoading(false);

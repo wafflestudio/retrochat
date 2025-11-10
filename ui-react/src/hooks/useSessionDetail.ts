@@ -1,15 +1,23 @@
 import { useState, useEffect } from 'react';
 import { getSessionDetail } from '../utils/tauri';
+import { SessionWithMessages } from '@/types';
+
+interface UseSessionDetailReturn {
+  session: SessionWithMessages | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+}
 
 /**
  * Hook for loading session detail
- * @param {string|null} sessionId - Session ID to load
- * @returns {Object} Session detail data and state
+ * @param sessionId - Session ID to load
+ * @returns Session detail data and state
  */
-export function useSessionDetail(sessionId) {
-  const [session, setSession] = useState(null);
+export function useSessionDetail(sessionId: string | null): UseSessionDetailReturn {
+  const [session, setSession] = useState<SessionWithMessages | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -29,7 +37,8 @@ export function useSessionDetail(sessionId) {
       const data = await getSessionDetail(sessionId);
       setSession(data);
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
       console.error('Failed to load session detail:', err);
     } finally {
       setLoading(false);
