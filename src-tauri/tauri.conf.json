@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "identifier": "com.retrochat.app",
   "build": {
-    "frontendDist": "../ui",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "frontendDist": "../ui-react/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "cd ../ui-react && npm run dev",
+    "beforeBuildCommand": "cd ../ui-react && npm run build"
   },
   "bundle": {
     "active": false,

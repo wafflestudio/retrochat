@@ -14,18 +14,25 @@ retrochat/
 │   ├── Cargo.toml         # Tauri dependencies
 │   ├── tauri.conf.json    # Tauri configuration
 │   └── build.rs           # Build script
-├── ui/                    # Frontend (HTML/CSS/JS)
-│   ├── index.html
-│   ├── styles.css
-│   └── app.js
+├── ui-react/              # Frontend (React + Vite + shadcn/ui)
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── hooks/         # Custom React hooks
+│   │   ├── utils/         # Utility functions
+│   │   ├── App.jsx        # Main application component
+│   │   └── main.jsx       # Application entry point
+│   ├── package.json       # Node dependencies
+│   └── vite.config.js     # Vite configuration
+├── ui/                    # Legacy Frontend (HTML/CSS/JS) - kept for reference
 └── Cargo.toml             # Main project dependencies
 ```
 
 ## Prerequisites
 
 1. **Rust** - Already installed (1.75+)
-2. **Node.js** - Not required for this setup (we're using vanilla HTML/CSS/JS)
-3. **System dependencies** - Required for Tauri
+2. **Node.js** - Required (v18+ recommended) for the React frontend
+3. **npm** - Comes with Node.js
+4. **System dependencies** - Required for Tauri
 
 ### macOS
 ```bash
@@ -66,6 +73,15 @@ cargo install tauri-cli
 
 ## Development
 
+### First-time Setup
+
+Install the React frontend dependencies:
+
+```bash
+cd ui-react
+npm install
+```
+
 ### Running in Development Mode
 
 From the project root:
@@ -76,9 +92,11 @@ cargo tauri dev
 ```
 
 This will:
-1. Build the Rust backend
-2. Serve the frontend from the `ui/` directory
-3. Open the application window
+1. Start the Vite development server (React frontend with HMR)
+2. Build the Rust backend
+3. Open the application window with hot-reload enabled
+
+**Note**: The Tauri config is set up to automatically start the Vite dev server, so you don't need to run it separately.
 
 ### Building for Production
 
@@ -87,7 +105,23 @@ cd src-tauri
 cargo tauri build
 ```
 
+This will:
+1. Build the React frontend for production (`ui-react/dist`)
+2. Build the Tauri application
+3. Create platform-specific bundles
+
 The built application will be in `src-tauri/target/release/bundle/`.
+
+### Manual Frontend Development
+
+If you want to develop the frontend separately:
+
+```bash
+cd ui-react
+npm run dev
+```
+
+This starts the Vite dev server on `http://localhost:5173`.
 
 ## Available Tauri Commands
 
@@ -127,27 +161,61 @@ Returns the list of available providers.
 
 ## Frontend Development
 
-The frontend is built with vanilla HTML/CSS/JavaScript and uses the Tauri API to communicate with the backend.
+The frontend is built with **React**, **Vite**, **Tailwind CSS**, and **shadcn/ui** components. It uses the Tauri API to communicate with the Rust backend.
 
-### Key Files
+### Technology Stack
 
-- **`ui/index.html`** - Main HTML structure
-- **`ui/styles.css`** - Styling and layout
-- **`ui/app.js`** - Application logic and Tauri command invocations
+- **React 18** - UI framework
+- **Vite** - Build tool and dev server (fast HMR)
+- **Tailwind CSS v4** - Utility-first CSS framework
+- **shadcn/ui** - High-quality, accessible component library
+- **Lucide React** - Icon library
+- **@tauri-apps/api** - Tauri JavaScript bindings
 
-### Using Tauri Commands in JavaScript
+### Key Directories
+
+- **`ui-react/src/components/`** - React components (SessionList, SessionDetail, SearchModal, UI components)
+- **`ui-react/src/hooks/`** - Custom React hooks (useSessions, useSessionDetail, useSearch)
+- **`ui-react/src/utils/`** - Utility functions (Tauri API wrappers, formatters)
+- **`ui-react/src/App.jsx`** - Main application component
+
+### Using Tauri Commands in React
 
 ```javascript
-// Import Tauri API
-const { invoke } = window.__TAURI__.core;
+// Import from utils/tauri.js wrapper
+import { getSessions, getSessionDetail, searchMessages } from './utils/tauri';
 
-// Call a Tauri command
-const sessions = await invoke('get_sessions', {
-    page: 1,
-    pageSize: 20,
-    provider: 'Claude',
-});
+// In a React component or hook
+const sessions = await getSessions(page, pageSize, provider);
+const detail = await getSessionDetail(sessionId);
+const results = await searchMessages(query, limit);
 ```
+
+### Component Architecture
+
+The application uses a clean component hierarchy:
+
+```
+App.jsx (main container)
+├── SessionList (sidebar with pagination)
+│   └── SessionItem (individual session cards)
+├── SessionDetail (main content area)
+│   └── Message (individual message display)
+└── SearchModal (search overlay)
+    └── SearchResultItem (search result cards)
+```
+
+### Styling with shadcn/ui
+
+Components use shadcn/ui primitives for consistent design:
+- `Button` - Interactive buttons with variants
+- `Card` - Content containers
+- `Input` - Form inputs
+- `Select` - Dropdown selects
+- `Badge` - Status indicators
+- `Dialog` - Modal overlays
+
+All components are styled with Tailwind CSS utilities and support theming through CSS variables.
 
 ## Architecture
 
