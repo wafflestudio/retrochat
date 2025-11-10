@@ -82,3 +82,8 @@ examples/local_*
 
 # Claude Code context directories
 .context/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
