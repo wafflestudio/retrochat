@@ -5,8 +5,8 @@
   "build": {
     "frontendDist": "../ui-react/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "cd ../ui-react && npm run dev",
-    "beforeBuildCommand": "cd ../ui-react && npm run build"
+    "beforeDevCommand": "cd ui-react && npm run dev",
+    "beforeBuildCommand": "cd ui-react && npm run build"
   },
   "bundle": {
     "active": false,
