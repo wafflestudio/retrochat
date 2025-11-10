@@ -1,7 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use retrochat::database::{config, DatabaseManager, MessageRepository, ToolOperationRepository};
+use retrochat::database::{config, DatabaseManager, ToolOperationRepository};
 use retrochat::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
     AnalyticsRequestService, QueryService, SearchRequest, SessionDetailRequest, SessionFilters,
