@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Analytics, AnalyticsRequest, SearchResult, Session, SessionWithMessages } from '@/types'
+import type {
+  Analytics,
+  AnalyticsRequest,
+  SearchResult,
+  Session,
+  SessionWithMessages,
+} from '@/types'
 
 /**
  * Get paginated list of chat sessions
