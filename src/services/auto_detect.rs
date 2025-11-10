@@ -83,7 +83,7 @@ impl AutoDetectService {
         }
     }
 
-    /// Check if directory exists and count potential session files
+    /// Check if directory exists and count potential session files (recursive)
     fn check_directory(path: &Path, patterns: &[&str]) -> (bool, usize) {
         if !path.exists() || !path.is_dir() {
             return (false, 0);
@@ -91,7 +91,7 @@ impl AutoDetectService {
 
         let mut count = 0;
 
-        // Try to count files matching patterns
+        // Try to count files matching patterns (recursive)
         if let Ok(entries) = std::fs::read_dir(path) {
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
@@ -105,6 +105,11 @@ impl AutoDetectService {
                                 break;
                             }
                         }
+                    } else if file_type.is_dir() {
+                        // Recursively scan subdirectories
+                        let subdir = entry.path();
+                        let (_, subcount) = Self::check_directory(&subdir, patterns);
+                        count += subcount;
                     }
                 }
             }
