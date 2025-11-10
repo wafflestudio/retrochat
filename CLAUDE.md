@@ -1,9 +1,20 @@
 # retrochat Development Guidelines
 
 ## Active Technologies
+
+### Core Application (CLI/TUI)
 - Rust 1.75+ with Ratatui, SQLite, Serde, Clap, Tokio (001-i-want-to)
 - Rust 1.75+ (from existing project) + Ratatui (TUI), SQLite/SQLx (storage), Serde (serialization), Clap (CLI), Tokio (async), reqwest (HTTP client for Google AI) (002-add-retrospection-process)
 - SQLite with SQLx migration from rusqlite (existing) (002-add-retrospection-process)
+
+### Tauri Desktop Application
+- Tauri 2.0 (Rust backend)
+- React 19 with TypeScript
+- Vite for build tooling
+- shadcn/ui component library
+- Tailwind CSS for styling
+- Biome for code formatting and linting
+- pnpm for package management
 
 ## Project Structure
 ```
@@ -13,6 +24,17 @@ src/
 ├── cli/          # Command-line interface
 ├── tui/          # Terminal user interface
 └── lib/          # Shared utilities
+
+src-tauri/        # Tauri desktop application backend
+├── src/          # Tauri Rust application code
+├── Cargo.toml    # Tauri dependencies
+└── tauri.conf.json # Tauri configuration
+
+ui-react/         # React frontend for Tauri desktop app
+├── src/          # React components and application code
+├── package.json  # Frontend dependencies
+├── biome.json    # Biome configuration for linting/formatting
+└── vite.config.js # Vite build configuration
 
 tests/
 ├── contract/     # API contract tests
@@ -79,6 +101,56 @@ cargo run -- export --format json                     # Export to JSON
 cargo run -- export --format jsonl                    # Export to JSONL
 ```
 
+### Tauri Desktop Application
+
+The project includes a Tauri desktop application with a React frontend.
+
+#### Frontend Development (ui-react/)
+```bash
+cd ui-react
+
+# Development
+pnpm install           # Install dependencies
+pnpm dev              # Start Vite dev server (for UI development only)
+
+# Code quality
+pnpm biome:check      # Check linting and formatting
+pnpm biome:format     # Format code with Biome
+pnpm biome:lint       # Lint code
+pnpm biome:lint:fix   # Fix linting issues
+pnpm biome:ci         # Run CI checks (format + lint)
+
+# Build
+pnpm build            # Build production bundle
+```
+
+#### Tauri Application (src-tauri/)
+```bash
+cd src-tauri
+
+# Development
+cargo tauri dev       # Run Tauri app in development mode (hot reload)
+
+# Build
+cargo tauri build     # Build production Tauri application
+
+# Testing
+cargo test            # Run Tauri backend tests
+cargo clippy          # Run clippy on Tauri code
+```
+
+#### Working with Both Modules
+
+The Tauri application consists of two main parts:
+1. **Backend (src-tauri/)**: Rust code that provides system integration and exposes commands to the frontend
+2. **Frontend (ui-react/)**: React app that provides the UI, built with Vite + shadcn/ui + Tailwind CSS
+
+Development workflow:
+- The frontend (`ui-react/`) uses Biome for code formatting and linting (not Prettier/ESLint)
+- The backend (`src-tauri/`) follows the same Rust conventions as the main CLI/TUI app
+- Use `cargo tauri dev` to run both frontend and backend together with hot reload
+- The Tauri backend can import and use the main `retrochat` library (from `src/`)
+
 ## Code Style
 Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 
@@ -126,5 +198,24 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
   use crate::env::providers as env_vars;
   let dirs = std::env::var(env_vars::CLAUDE_DIRS)?;
   ```
+
+### Tauri Frontend Development Rules (ui-react/)
+
+#### Code Formatting & Linting (CRITICAL)
+- **ALWAYS use Biome**: The frontend uses Biome, not Prettier or ESLint
+- **Run before committing**: Always run `pnpm biome:format` and `pnpm biome:lint:fix` before committing
+- **CI enforcement**: CI runs `pnpm biome:ci` to enforce code quality
+- **Zero warnings policy**: All Biome warnings must be addressed before pushing
+
+#### Frontend Architecture
+- **Component Structure**: Use functional components with hooks
+- **shadcn/ui Components**: Prefer using shadcn/ui components from `src/components/ui/`
+- **Styling**: Use Tailwind CSS utility classes, follow the project's design system
+- **Type Safety**: Always use TypeScript types, avoid `any` types
+
+#### Tauri Integration
+- **Backend Communication**: Use Tauri commands to communicate with the Rust backend
+- **Shared Types**: Keep TypeScript types in sync with Rust types when communicating between frontend and backend
+- **Error Handling**: Handle Tauri command errors gracefully in the UI
 
 <!-- MANUAL ADDITIONS END -->
