@@ -48,7 +48,22 @@ export async function getProviders(): Promise<string[]> {
 }
 
 /**
- * Create a new analysis request for a session
+ * Analyze a session (creates and executes analysis in one call)
+ * This is the recommended method for most use cases.
+ * @param sessionId - Session UUID
+ * @param customPrompt - Optional custom prompt for analysis
+ * @returns Completed analytics request with results
+ */
+export async function analyzeSession(
+  sessionId: string,
+  customPrompt?: string
+): Promise<AnalyticsRequest> {
+  return await invoke('analyze_session', { sessionId, customPrompt })
+}
+
+/**
+ * Create a new analysis request for a session without executing it
+ * Use this for advanced use cases where you want to defer execution.
  * @param sessionId - Session UUID
  * @param customPrompt - Optional custom prompt for analysis
  * @returns Created analytics request

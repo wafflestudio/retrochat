@@ -274,6 +274,51 @@ async fn get_providers(_state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<St
 }
 
 // Analysis Commands
+
+/// Convenience command: Create and execute analysis in one call
+#[tauri::command]
+async fn analyze_session(
+    state: State<'_, Arc<Mutex<AppState>>>,
+    session_id: String,
+    custom_prompt: Option<String>,
+) -> Result<AnalyticsRequestItem, String> {
+    let state_guard = state.lock().await;
+
+    let analytics_service = state_guard.analytics_service.as_ref().ok_or(
+        "Analytics service not available. Please set GOOGLE_AI_API_KEY environment variable.",
+    )?;
+
+    // Create the request
+    let request = analytics_service
+        .create_analysis_request(session_id, None, custom_prompt)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let request_id = request.id.clone();
+
+    // Execute immediately
+    analytics_service
+        .execute_analysis(request_id.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Get the updated status
+    let completed_request = analytics_service
+        .get_analysis_status(request_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(AnalyticsRequestItem {
+        id: completed_request.id,
+        session_id: completed_request.session_id,
+        status: completed_request.status.to_string(),
+        started_at: completed_request.started_at.to_rfc3339(),
+        completed_at: completed_request.completed_at.map(|dt| dt.to_rfc3339()),
+        error_message: completed_request.error_message,
+    })
+}
+
+/// Create an analysis request without executing it (for advanced use cases)
 #[tauri::command]
 async fn create_analysis(
     state: State<'_, Arc<Mutex<AppState>>>,
@@ -457,6 +502,7 @@ async fn main() -> anyhow::Result<()> {
             get_session_detail,
             search_messages,
             get_providers,
+            analyze_session,
             create_analysis,
             run_analysis,
             get_analysis_status,
