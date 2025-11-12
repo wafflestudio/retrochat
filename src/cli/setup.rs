@@ -172,7 +172,7 @@ fn setup_api_key_interactive() {
                 eprintln!("Add this line manually to ~/.zshrc or ~/.bashrc:");
                 eprintln!(
                     "  {}",
-                    style(format!("export GOOGLE_AI_API_KEY=\"{}\"", api_key)).cyan()
+                    style(format!("export GOOGLE_AI_API_KEY=\"{api_key}\"")).cyan()
                 );
                 eprintln!();
             }
@@ -320,7 +320,7 @@ fn configure_provider_paths() -> Result<bool> {
             "Codex"
         };
 
-        let path = match Text::new(&format!("Enter {} directory path:", provider_name))
+        let path = match Text::new(&format!("Enter {provider_name} directory path:"))
             .with_help_message("Full path to chat history directory")
             .prompt()
         {
@@ -339,17 +339,17 @@ fn configure_provider_paths() -> Result<bool> {
         if choice.starts_with("1.") {
             println!(
                 "    {}",
-                style(format!("export RETROCHAT_CLAUDE_DIRS=\"{}\"", path)).dim()
+                style(format!("export RETROCHAT_CLAUDE_DIRS=\"{path}\"")).dim()
             );
         } else if choice.starts_with("2.") {
             println!(
                 "    {}",
-                style(format!("export RETROCHAT_GEMINI_DIRS=\"{}\"", path)).dim()
+                style(format!("export RETROCHAT_GEMINI_DIRS=\"{path}\"")).dim()
             );
         } else {
             println!(
                 "    {}",
-                style(format!("export RETROCHAT_CODEX_DIRS=\"{}\"", path)).dim()
+                style(format!("export RETROCHAT_CODEX_DIRS=\"{path}\"")).dim()
             );
         }
         println!();
@@ -540,8 +540,7 @@ fn add_to_shell_config(api_key: &str) -> Result<()> {
 
     // Append to file
     let export_line = format!(
-        "\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{}\"\n",
-        api_key
+        "\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{api_key}\"\n"
     );
     let mut file = OpenOptions::new()
         .create(true)

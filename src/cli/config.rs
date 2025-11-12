@@ -8,10 +8,10 @@ pub async fn handle_config_get(key: String) -> Result<()> {
     let config = Config::load()?;
 
     if let Some(value) = config.get(&key) {
-        println!("{}", value);
+        println!("{value}");
         Ok(())
     } else {
-        anyhow::bail!("Config key '{}' not found", key);
+        anyhow::bail!("Config key '{key}' not found");
     }
 }
 

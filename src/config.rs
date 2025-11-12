@@ -94,7 +94,7 @@ impl Config {
             "google-ai-api-key" | "google_ai_api_key" => {
                 self.api.google_ai_api_key = Some(value);
             }
-            _ => anyhow::bail!("Unknown config key: {}", key),
+            _ => anyhow::bail!("Unknown config key: {key}"),
         }
         Ok(())
     }
@@ -105,7 +105,7 @@ impl Config {
             "google-ai-api-key" | "google_ai_api_key" => {
                 self.api.google_ai_api_key = None;
             }
-            _ => anyhow::bail!("Unknown config key: {}", key),
+            _ => anyhow::bail!("Unknown config key: {key}"),
         }
         Ok(())
     }
