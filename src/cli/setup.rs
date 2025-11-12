@@ -15,7 +15,7 @@ static CROSS: Emoji<'_, '_> = Emoji("✗ ", "[X]");
 /// Run the interactive setup wizard for first-time users
 pub async fn run_setup_wizard() -> Result<()> {
     use inquire::Select;
-    
+
     println!(
         "\n{} {}",
         SPARKLES,
@@ -67,7 +67,12 @@ pub async fn run_setup_wizard() -> Result<()> {
                 "2. Configure provider paths",
             ];
 
-            let choice = match Select::new("No chat histories found. What would you like to do?", options).prompt() {
+            let choice = match Select::new(
+                "No chat histories found. What would you like to do?",
+                options,
+            )
+            .prompt()
+            {
                 Ok(c) => c,
                 Err(_) => break,
             };
@@ -94,39 +99,59 @@ pub async fn run_setup_wizard() -> Result<()> {
 /// Step 1: API Key Setup (interactive, only once)
 fn setup_api_key_interactive() {
     use inquire::{Select, Text};
-    
+
     // Check if already configured
     if crate::config::has_google_ai_api_key() {
-        println!("{} Google AI API key is already configured", style("✓").green());
+        println!(
+            "{} Google AI API key is already configured",
+            style("✓").green()
+        );
         println!();
         return;
     }
-    
+
     // Show setup prompt
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
-    println!("  {} {}", style("🔑").bold(), style("API Key Setup (Optional)").bold().cyan());
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("🔑").bold(),
+        style("API Key Setup (Optional)").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
     println!();
     println!("For AI-powered analytics, configure your Google AI API key.");
-    println!("💡 Get your key: {}", style("https://aistudio.google.com/app/apikey").underlined());
+    println!(
+        "💡 Get your key: {}",
+        style("https://aistudio.google.com/app/apikey").underlined()
+    );
     println!();
-    
+
     let options = vec![
         "1. Shell config (~/.zshrc or ~/.bashrc) - For all programs",
         "2. RetroChat config only (~/.retrochat/config.toml)",
         "3. Skip for now",
     ];
-    
-    let choice = match Select::new("How would you like to configure your API key?", options).prompt() {
-        Ok(choice) => choice,
-        Err(_) => {
-            println!("{}", style("\nSkipped. Configure later with:").dim());
-            println!("  {}", style("retrochat config set google-ai-api-key YOUR_KEY").cyan());
-            println!();
-            return;
-        }
-    };
-    
+
+    let choice =
+        match Select::new("How would you like to configure your API key?", options).prompt() {
+            Ok(choice) => choice,
+            Err(_) => {
+                println!("{}", style("\nSkipped. Configure later with:").dim());
+                println!(
+                    "  {}",
+                    style("retrochat config set google-ai-api-key YOUR_KEY").cyan()
+                );
+                println!();
+                return;
+            }
+        };
+
     match choice {
         s if s.starts_with("1.") => {
             println!();
@@ -141,15 +166,18 @@ fn setup_api_key_interactive() {
                     return;
                 }
             };
-            
+
             if let Err(e) = add_to_shell_config(&api_key) {
                 eprintln!("{} Failed: {}", style("✗").red(), e);
                 eprintln!("Add this line manually to ~/.zshrc or ~/.bashrc:");
-                eprintln!("  {}", style(format!("export GOOGLE_AI_API_KEY=\"{}\"", api_key)).cyan());
+                eprintln!(
+                    "  {}",
+                    style(format!("export GOOGLE_AI_API_KEY=\"{}\"", api_key)).cyan()
+                );
                 eprintln!();
             }
         }
-        
+
         s if s.starts_with("2.") => {
             println!();
             let api_key = match Text::new("Enter your Google AI API key:")
@@ -163,7 +191,7 @@ fn setup_api_key_interactive() {
                     return;
                 }
             };
-            
+
             match save_to_retrochat_config(&api_key) {
                 Ok(_) => {
                     println!();
@@ -177,11 +205,14 @@ fn setup_api_key_interactive() {
                 }
             }
         }
-        
+
         _ => {
             println!();
             println!("{}", style("Skipped. Configure later with:").dim());
-            println!("  {}", style("retrochat config set google-ai-api-key YOUR_KEY").cyan());
+            println!(
+                "  {}",
+                style("retrochat config set google-ai-api-key YOUR_KEY").cyan()
+            );
             println!();
         }
     }
@@ -192,9 +223,19 @@ async fn setup_database_initialize() -> Result<()> {
     config::ensure_config_dir()?;
     let db_path = config::get_default_db_path()?;
 
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
-    println!("  {} {}", style("💾").bold(), style("Database").bold().cyan());
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("💾").bold(),
+        style("Database").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
     println!();
 
     if db_path.exists() {
@@ -214,28 +255,44 @@ async fn setup_database_initialize() -> Result<()> {
 
 /// Step 3: Scan chat histories
 fn scan_chat_histories() -> Vec<DetectedProvider> {
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
-    println!("  {} {}", style("🔍").bold(), style("Chat History Scan").bold().cyan());
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("🔍").bold(),
+        style("Chat History Scan").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
     println!();
     println!("Scanning for chat histories...");
-    
+
     let detected = AutoDetectService::scan_all();
     display_detected_providers(&detected);
-    
+
     detected
 }
 
 /// Step 4: Configure provider paths (returns true if user completed, false if cancelled)
 fn configure_provider_paths() -> Result<bool> {
     use inquire::{Select, Text};
-    
+
     println!();
     println!("Configure provider paths:");
-    println!("  💡 Changes will be saved to: {}", style("~/.retrochat/config.toml").cyan());
-    println!("  After configuration, run: {}", style("retrochat sync").cyan());
+    println!(
+        "  💡 Changes will be saved to: {}",
+        style("~/.retrochat/config.toml").cyan()
+    );
+    println!(
+        "  After configuration, run: {}",
+        style("retrochat sync").cyan()
+    );
     println!();
-    
+
     loop {
         let options = vec![
             "1. Claude Code path",
@@ -243,16 +300,16 @@ fn configure_provider_paths() -> Result<bool> {
             "3. Codex path",
             "4. Done (rescan)",
         ];
-        
+
         let choice = match Select::new("Select provider to configure:", options).prompt() {
             Ok(c) => c,
             Err(_) => return Ok(false),
         };
-        
+
         if choice.starts_with("4.") {
             return Ok(true);
         }
-        
+
         // Get path input
         println!();
         let provider_name = if choice.starts_with("1.") {
@@ -262,7 +319,7 @@ fn configure_provider_paths() -> Result<bool> {
         } else {
             "Codex"
         };
-        
+
         let path = match Text::new(&format!("Enter {} directory path:", provider_name))
             .with_help_message("Full path to chat history directory")
             .prompt()
@@ -274,17 +331,26 @@ fn configure_provider_paths() -> Result<bool> {
                 continue;
             }
         };
-        
+
         // Save to config (TODO: implement actual saving to env vars in config)
         println!();
         println!("{} Path saved: {}", style("✓").green(), style(&path).cyan());
         println!("  💡 Manually add to ~/.zshrc for persistence:");
         if choice.starts_with("1.") {
-            println!("    {}", style(format!("export RETROCHAT_CLAUDE_DIRS=\"{}\"", path)).dim());
+            println!(
+                "    {}",
+                style(format!("export RETROCHAT_CLAUDE_DIRS=\"{}\"", path)).dim()
+            );
         } else if choice.starts_with("2.") {
-            println!("    {}", style(format!("export RETROCHAT_GEMINI_DIRS=\"{}\"", path)).dim());
+            println!(
+                "    {}",
+                style(format!("export RETROCHAT_GEMINI_DIRS=\"{}\"", path)).dim()
+            );
         } else {
-            println!("    {}", style(format!("export RETROCHAT_CODEX_DIRS=\"{}\"", path)).dim());
+            println!(
+                "    {}",
+                style(format!("export RETROCHAT_CODEX_DIRS=\"{}\"", path)).dim()
+            );
         }
         println!();
     }
@@ -440,7 +506,7 @@ pub fn needs_setup() -> Result<bool> {
 fn add_to_shell_config(api_key: &str) -> Result<()> {
     use std::fs::OpenOptions;
     use std::io::{Read, Write};
-    
+
     // Detect shell config file
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
     let shell_config = if home.join(".zshrc").exists() {
@@ -451,43 +517,59 @@ fn add_to_shell_config(api_key: &str) -> Result<()> {
         // Default to .zshrc for macOS
         home.join(".zshrc")
     };
-    
+
     // Read existing content
     let mut existing_content = String::new();
     if shell_config.exists() {
         let mut file = std::fs::File::open(&shell_config)?;
         file.read_to_string(&mut existing_content)?;
     }
-    
+
     // Check if already exists
     if existing_content.contains("GOOGLE_AI_API_KEY") {
         println!();
-        println!("{} GOOGLE_AI_API_KEY already exists in {}", 
-            style("ℹ").blue(), 
+        println!(
+            "{} GOOGLE_AI_API_KEY already exists in {}",
+            style("ℹ").blue(),
             style(shell_config.display()).dim()
         );
         println!("  Please update it manually if needed.");
         println!();
         return Ok(());
     }
-    
+
     // Append to file
-    let export_line = format!("\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{}\"\n", api_key);
+    let export_line = format!(
+        "\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{}\"\n",
+        api_key
+    );
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&shell_config)?;
     file.write_all(export_line.as_bytes())?;
-    
+
     println!();
-    println!("{} API key added to {}", style("✓").green(), style(shell_config.display()).cyan());
+    println!(
+        "{} API key added to {}",
+        style("✓").green(),
+        style(shell_config.display()).cyan()
+    );
     println!();
-    println!("{}", style("⚠ Important: Reload your shell to apply changes:").yellow().bold());
-    println!("  {}", style(format!("source {}", shell_config.display())).cyan());
+    println!(
+        "{}",
+        style("⚠ Important: Reload your shell to apply changes:")
+            .yellow()
+            .bold()
+    );
+    println!(
+        "  {}",
+        style(format!("source {}", shell_config.display())).cyan()
+    );
     println!();
     println!("Or open a new terminal window.");
     println!();
-    
+
     Ok(())
 }
 

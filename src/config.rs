@@ -59,8 +59,7 @@ impl Config {
             })?;
         }
 
-        let contents = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
+        let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
         fs::write(&config_path, contents)
             .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
@@ -70,8 +69,12 @@ impl Config {
         {
             use std::os::unix::fs::PermissionsExt;
             let permissions = fs::Permissions::from_mode(0o600);
-            fs::set_permissions(&config_path, permissions)
-                .with_context(|| format!("Failed to set permissions on config file: {}", config_path.display()))?;
+            fs::set_permissions(&config_path, permissions).with_context(|| {
+                format!(
+                    "Failed to set permissions on config file: {}",
+                    config_path.display()
+                )
+            })?;
         }
 
         Ok(())
@@ -80,9 +83,7 @@ impl Config {
     /// Get a config value by key
     pub fn get(&self, key: &str) -> Option<String> {
         match key {
-            "google-ai-api-key" | "google_ai_api_key" => {
-                self.api.google_ai_api_key.clone()
-            }
+            "google-ai-api-key" | "google_ai_api_key" => self.api.google_ai_api_key.clone(),
             _ => None,
         }
     }
@@ -162,12 +163,16 @@ mod tests {
     #[test]
     fn test_config_set_get() {
         let mut config = Config::default();
-        
-        config.set("google-ai-api-key", "test-key".to_string()).unwrap();
-        assert_eq!(config.get("google-ai-api-key"), Some("test-key".to_string()));
-        
+
+        config
+            .set("google-ai-api-key", "test-key".to_string())
+            .unwrap();
+        assert_eq!(
+            config.get("google-ai-api-key"),
+            Some("test-key".to_string())
+        );
+
         config.unset("google-ai-api-key").unwrap();
         assert_eq!(config.get("google-ai-api-key"), None);
     }
 }
-

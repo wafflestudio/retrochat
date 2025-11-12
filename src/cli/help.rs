@@ -176,30 +176,81 @@ pub fn print_environment_config() {
 /// Print full getting started guide for TUI
 pub fn print_full_getting_started() {
     use console::style;
-    
+
     println!();
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
-    println!("  {} {}", style("📂").bold(), style("Import Chat Files").bold().cyan());
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("📂").bold(),
+        style("Import Chat Files").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
     println!();
     println!("From providers:");
-    println!("  {} {}", style("$").dim(), style("retrochat import claude").cyan());
-    println!("  {} {}", style("$").dim(), style("retrochat import gemini").cyan());
-    println!("  {} {}", style("$").dim(), style("retrochat import codex").cyan());
-    println!("  {} {}                    {}", style("$").dim(), style("retrochat import all").cyan(), style("# All at once").dim());
+    println!(
+        "  {} {}",
+        style("$").dim(),
+        style("retrochat import claude").cyan()
+    );
+    println!(
+        "  {} {}",
+        style("$").dim(),
+        style("retrochat import gemini").cyan()
+    );
+    println!(
+        "  {} {}",
+        style("$").dim(),
+        style("retrochat import codex").cyan()
+    );
+    println!(
+        "  {} {}                    {}",
+        style("$").dim(),
+        style("retrochat import all").cyan(),
+        style("# All at once").dim()
+    );
     println!();
     println!("From custom path:");
-    println!("  {} {}", style("$").dim(), style("retrochat import --path <directory>").cyan());
+    println!(
+        "  {} {}",
+        style("$").dim(),
+        style("retrochat import --path <directory>").cyan()
+    );
     println!();
     println!("Supported: Claude Code, Gemini CLI, Codex");
     println!();
     println!();
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
-    println!("  {} {}", style("🚀").bold(), style("Next Steps").bold().cyan());
-    println!("{}", style("────────────────────────────────────────────────────────────────────────────").dim());
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("🚀").bold(),
+        style("Next Steps").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
     println!();
-    println!("  {} {}                           {}", style("$").dim(), style("retrochat tui").cyan(), style("# Launch TUI").dim());
-    println!("  {} {}             {}", style("$").dim(), style("retrochat analytics execute").cyan(), style("# Generate insights").dim());
+    println!(
+        "  {} {}                           {}",
+        style("$").dim(),
+        style("retrochat tui").cyan(),
+        style("# Launch TUI").dim()
+    );
+    println!(
+        "  {} {}             {}",
+        style("$").dim(),
+        style("retrochat analytics execute").cyan(),
+        style("# Generate insights").dim()
+    );
     println!();
 }
 

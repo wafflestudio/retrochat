@@ -27,7 +27,10 @@ pub async fn handle_config_set(key: String, value: String) -> Result<()> {
         style("✓").green(),
         style(&key).cyan()
     );
-    println!("  Saved to: {}", style(Config::get_config_path()?.display()).dim());
+    println!(
+        "  Saved to: {}",
+        style(Config::get_config_path()?.display()).dim()
+    );
 
     Ok(())
 }
@@ -57,7 +60,10 @@ pub async fn handle_config_list() -> Result<()> {
         println!("{}", style("No configuration set.").dim());
         println!();
         println!("💡 Set a config value:");
-        println!("  {}", style("retrochat config set google-ai-api-key YOUR_KEY").cyan());
+        println!(
+            "  {}",
+            style("retrochat config set google-ai-api-key YOUR_KEY").cyan()
+        );
     } else {
         println!("{}", style("Configuration:").bold());
         println!();
@@ -65,7 +71,10 @@ pub async fn handle_config_list() -> Result<()> {
             println!("  {} = {}", style(key).cyan(), style(value).dim());
         }
         println!();
-        println!("  Config file: {}", style(Config::get_config_path()?.display()).dim());
+        println!(
+            "  Config file: {}",
+            style(Config::get_config_path()?.display()).dim()
+        );
     }
 
     Ok(())
@@ -77,4 +86,3 @@ pub async fn handle_config_path() -> Result<()> {
     println!("{}", config_path.display());
     Ok(())
 }
-
