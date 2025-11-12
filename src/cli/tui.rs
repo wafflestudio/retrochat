@@ -115,13 +115,98 @@ impl TuiLauncher {
     }
 }
 
+/// Print API key setup guide if not configured
+fn print_api_key_setup_guide() {
+    use console::style;
+
+    // Check if API key is already configured
+    if crate::config::has_google_ai_api_key() {
+        println!("{} Google AI API key is configured", style("✓").green());
+        println!();
+        return;
+    }
+
+    // API key is not configured, show setup guide
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!(
+        "  {} {}",
+        style("🔑").bold(),
+        style("API Key Setup (Optional)").bold().cyan()
+    );
+    println!(
+        "{}",
+        style("────────────────────────────────────────────────────────────────────────────").dim()
+    );
+    println!();
+    println!("To use AI-powered analytics, configure your Google AI API key:");
+    println!();
+    println!(
+        "{} {}",
+        style("Method 1:").green().bold(),
+        style("Environment Variable (All Programs) ✅").bold()
+    );
+    println!();
+    println!("  Add to ~/.zshrc (macOS):");
+    println!(
+        "    {}",
+        style("export GOOGLE_AI_API_KEY=\"your-api-key-here\"").cyan()
+    );
+    println!();
+    println!("  Reload: {}", style("source ~/.zshrc").cyan());
+    println!();
+    println!(
+        "{} {}",
+        style("Method 2:").green().bold(),
+        style("Config File (This Program Only) ⚙️").bold()
+    );
+    println!();
+    println!(
+        "  {}",
+        style("retrochat config set google-ai-api-key YOUR_KEY").cyan()
+    );
+    println!();
+    println!(
+        "💡 Get your key: {}",
+        style("https://aistudio.google.com/app/apikey").underlined()
+    );
+    println!();
+    println!("Skip for now? No problem! Set it up later anytime.");
+    println!();
+}
+
 pub async fn handle_tui_command() -> Result<()> {
+    use console::style;
+
     // Check if database file exists, if not provide guidance
     let db_path = crate::database::config::get_default_db_path()?;
     if !db_path.exists() {
-        TuiLauncher::print_welcome_message();
-        println!("No database found. Let's get you started!");
+        println!(
+            "{}",
+            style("════════════════════════════════════════════════════════════════════════════")
+                .dim()
+        );
+        println!(
+            "                {}",
+            style("RetroChat - LLM Chat History Analysis").bold().cyan()
+        );
+        println!(
+            "{}",
+            style("════════════════════════════════════════════════════════════════════════════")
+                .dim()
+        );
         println!();
+        println!(
+            "{} No database found. Let's set things up!",
+            style("👋").bold()
+        );
+        println!();
+
+        // Check if Google AI API key is configured
+        print_api_key_setup_guide();
+
         TuiLauncher::print_getting_started();
         return Ok(());
     }
@@ -134,9 +219,7 @@ pub async fn handle_tui_command() -> Result<()> {
     // Create and launch TUI
     let launcher = TuiLauncher::new(db_manager);
 
-    TuiLauncher::print_welcome_message();
-    TuiLauncher::print_keyboard_shortcuts();
-
+    // Launch directly (welcome messages are shown by setup wizard)
     match launcher.launch().await {
         Ok(()) => Ok(()),
         Err(e) => {

@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod config;
 pub mod help;
 pub mod import;
 pub mod init;
@@ -11,7 +12,6 @@ use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use crate::env::apis as env_vars;
 use crate::models::Provider;
 
 #[derive(Parser)]
@@ -138,6 +138,15 @@ pub enum Commands {
         #[arg(long)]
         no_tool: bool,
     },
+
+    /// Interactive setup wizard for first-time users
+    Setup,
+
+    /// Manage configuration settings
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -198,6 +207,31 @@ pub enum AnalysisCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Get a configuration value
+    Get {
+        /// Configuration key to get
+        key: String,
+    },
+    /// Set a configuration value
+    Set {
+        /// Configuration key to set
+        key: String,
+        /// Value to set
+        value: String,
+    },
+    /// Remove a configuration value
+    Unset {
+        /// Configuration key to remove
+        key: String,
+    },
+    /// List all configuration values
+    List,
+    /// Show the path to the config file
+    Path,
+}
+
 impl Cli {
     pub fn run(self) -> anyhow::Result<()> {
         let rt = Runtime::new()?;
@@ -224,6 +258,11 @@ impl Cli {
                     }
 
                     // After setup (or if DB already exists), launch TUI
+                    println!("{}",console::style("────────────────────────────────────────────────────────────────────────────").dim());
+                    println!("  {} {}", console::style("🚀").bold(), console::style("Launching TUI").bold().cyan());
+                    println!("{}", console::style("────────────────────────────────────────────────────────────────────────────").dim());
+                    println!();
+
                     return tui::handle_tui_command().await;
                 }
                 Some(cmd) => cmd,
@@ -347,6 +386,21 @@ impl Cli {
                     })
                     .await
                 }
+
+                // ═══════════════════════════════════════════════════
+                // Setup & Configuration
+                // ═══════════════════════════════════════════════════
+                Commands::Setup => setup::run_setup_wizard().await,
+
+                Commands::Config { command } => match command {
+                    ConfigCommands::Get { key } => config::handle_config_get(key).await,
+                    ConfigCommands::Set { key, value } => {
+                        config::handle_config_set(key, value).await
+                    }
+                    ConfigCommands::Unset { key } => config::handle_config_unset(key).await,
+                    ConfigCommands::List => config::handle_config_list().await,
+                    ConfigCommands::Path => config::handle_config_path().await,
+                },
             }
         })
     }
@@ -365,7 +419,8 @@ impl Cli {
         let db_path = crate::database::config::get_default_db_path()?;
         let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
-        let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).unwrap_or_else(|_| "".to_string());
+        // Get API key with priority: environment variable > config file
+        let api_key = crate::config::get_google_ai_api_key()?.unwrap_or_default();
 
         let google_ai_config = if api_key.is_empty() {
             GoogleAiConfig::default()
