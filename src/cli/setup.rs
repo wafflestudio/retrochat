@@ -539,9 +539,8 @@ fn add_to_shell_config(api_key: &str) -> Result<()> {
     }
 
     // Append to file
-    let export_line = format!(
-        "\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{api_key}\"\n"
-    );
+    let export_line =
+        format!("\n# RetroChat - Google AI API Key\nexport GOOGLE_AI_API_KEY=\"{api_key}\"\n");
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
