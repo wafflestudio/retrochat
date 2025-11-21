@@ -1,4 +1,5 @@
 use crate::models::Analytics;
+use crate::services::analytics::models::{QualitativeCategoryList, QualitativeItem};
 use anyhow::Result;
 use console::style;
 use std::str::FromStr;
@@ -855,52 +856,97 @@ impl AnalyticsFormatter {
         println!("\n💭 QUALITATIVE INSIGHTS");
         println!("─────────────────────");
 
-        println!("\n💡 Key Insights:");
-        for insight in &analysis.qualitative_output.insights {
-            println!(
-                "  [{}] {}: {}",
-                insight.category, insight.title, insight.description
-            );
-            println!("    Confidence: {:.1}%", insight.confidence * 100.0);
-        }
+        let categories = QualitativeCategoryList::default_categories();
 
-        if !analysis.qualitative_output.good_patterns.is_empty() {
-            println!("\n✅ Good Patterns:");
-            for pattern in &analysis.qualitative_output.good_patterns {
-                println!(
-                    "  • {} ({} times): {}",
-                    pattern.pattern_name, pattern.frequency, pattern.description
-                );
-                println!("    Impact: {}", pattern.impact);
+        for category in &categories.categories {
+            let items = analysis.qualitative_output.items_by_category(&category.id);
+            if items.is_empty() {
+                continue;
+            }
+
+            let icon = self.get_category_icon_plain(&category.icon);
+            println!("\n{} {}:", icon, category.name);
+
+            for item in items {
+                self.print_item_plain(item, category);
             }
         }
+    }
 
-        if !analysis.qualitative_output.improvement_areas.is_empty() {
-            println!("\n🔧 Improvement Areas:");
-            for area in &analysis.qualitative_output.improvement_areas {
-                println!("  • {} [{}]", area.area_name, area.priority);
-                println!("    Current: {}", area.current_state);
-                println!("    Suggestion: {}", area.suggested_improvement);
-                println!("    Expected Impact: {}", area.expected_impact);
+    fn get_category_icon_plain(&self, icon: &str) -> &'static str {
+        match icon {
+            "lightbulb" => "💡",
+            "check" => "✅",
+            "wrench" => "🔧",
+            "target" => "🎯",
+            "book" => "📚",
+            _ => "•",
+        }
+    }
+
+    fn print_item_plain(
+        &self,
+        item: &QualitativeItem,
+        category: &crate::services::analytics::models::QualitativeCategory,
+    ) {
+        // Print title with any relevant metadata inline
+        let mut title_line = format!("  • {}", item.title);
+
+        // Add category-specific inline metadata
+        match category.id.as_str() {
+            "insight" => {
+                if let Some(cat) = item.get_string("category") {
+                    title_line.push_str(&format!(" [{}]", cat));
+                }
             }
+            "good_pattern" => {
+                if let Some(freq) = item.get_number("frequency") {
+                    title_line.push_str(&format!(" ({:.0} times)", freq));
+                }
+            }
+            "improvement" => {
+                if let Some(priority) = item.get_string("priority") {
+                    title_line.push_str(&format!(" [{}]", priority));
+                }
+            }
+            _ => {}
         }
 
-        if !analysis.qualitative_output.recommendations.is_empty() {
-            println!("\n🎯 Recommendations:");
-            for rec in &analysis.qualitative_output.recommendations {
-                println!("  • {}: {}", rec.title, rec.description);
-                println!("    Impact Score: {:.1}/10", rec.impact_score * 10.0);
-                println!("    Difficulty: {}", rec.implementation_difficulty);
-            }
-        }
+        println!("{}", title_line);
+        println!("    {}", item.description);
 
-        if !analysis.qualitative_output.learning_observations.is_empty() {
-            println!("\n📚 Learning Observations:");
-            for obs in &analysis.qualitative_output.learning_observations {
-                println!("  • {} ({})", obs.observation, obs.skill_area);
-                println!("    Progress: {}", obs.progress_indicator);
-                if !obs.next_steps.is_empty() {
-                    println!("    Next Steps: {}", obs.next_steps.join(", "));
+        // Print category-specific metadata
+        for field in &category.metadata_schema {
+            if let Some(value) = item.metadata.get(&field.key) {
+                // Skip fields already shown inline
+                if matches!(
+                    (category.id.as_str(), field.key.as_str()),
+                    ("insight", "category")
+                        | ("good_pattern", "frequency")
+                        | ("improvement", "priority")
+                ) {
+                    continue;
+                }
+
+                let display_value = match value {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Number(n) => {
+                        if field.key.contains("score") || field.key.contains("confidence") {
+                            format!("{:.1}%", n.as_f64().unwrap_or(0.0) * 100.0)
+                        } else {
+                            format!("{:.1}", n.as_f64().unwrap_or(0.0))
+                        }
+                    }
+                    serde_json::Value::Array(arr) => arr
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    _ => continue,
+                };
+
+                if !display_value.is_empty() {
+                    println!("    {}: {}", field.display_name, display_value);
                 }
             }
         }
@@ -919,202 +965,190 @@ impl AnalyticsFormatter {
         );
         println!("{}", style(self.box_separator(width)).green());
 
-        // Key Insights with markdown-style rendering
-        if !analysis.qualitative_output.insights.is_empty() {
-            println!("{} {}", style("│").green(), style("💡 Key Insights").bold());
-            println!("{}", style("│").green());
+        let categories = QualitativeCategoryList::default_categories();
+        let mut first_category = true;
 
-            for insight in &analysis.qualitative_output.insights {
-                let confidence_color = if insight.confidence >= 0.8 {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).green()
-                } else if insight.confidence >= 0.6 {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).yellow()
-                } else {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).red()
-                };
-
-                println!(
-                    "{} {} {} {} {}",
-                    style("│").green(),
-                    style("  •").cyan(),
-                    style(&insight.title).bold(),
-                    style(format!("[{}]", insight.category)).dim(),
-                    confidence_color
-                );
-
-                // Wrap description text
-                for line in self.wrap_text(&insight.description, width - 8) {
-                    println!("{}     {}", style("│").green(), style(line).dim());
-                }
-                println!("{}", style("│").green());
+        for category in &categories.categories {
+            let items = analysis.qualitative_output.items_by_category(&category.id);
+            if items.is_empty() {
+                continue;
             }
-        }
 
-        // Good Patterns
-        if !analysis.qualitative_output.good_patterns.is_empty() {
-            println!("{}", style(self.box_separator(width)).green());
+            if !first_category {
+                println!("{}", style(self.box_separator(width)).green());
+            }
+            first_category = false;
+
+            let icon = self.get_category_icon_enhanced(&category.icon);
             println!(
                 "{} {}",
                 style("│").green(),
-                style("✅ Good Patterns").bold()
+                style(format!("{} {}", icon, category.name)).bold()
             );
             println!("{}", style("│").green());
 
-            for pattern in &analysis.qualitative_output.good_patterns {
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").green(),
-                    style(&pattern.pattern_name).bold(),
-                    style(format!("({} times)", pattern.frequency)).dim()
-                );
-
-                for line in self.wrap_text(&pattern.description, width - 8) {
-                    println!("{}     {}", style("│").green(), line);
-                }
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    style(&pattern.impact).cyan()
-                );
-                println!("{}", style("│").green());
-            }
-        }
-
-        // Improvement Areas
-        if !analysis.qualitative_output.improvement_areas.is_empty() {
-            println!("{}", style(self.box_separator(width)).green());
-            println!(
-                "{} {}",
-                style("│").green(),
-                style("🔧 Improvement Areas").bold()
-            );
-            println!("{}", style("│").green());
-
-            for area in &analysis.qualitative_output.improvement_areas {
-                let priority_style = match area.priority.to_lowercase().as_str() {
-                    "high" | "critical" => style(&area.priority).red(),
-                    "medium" => style(&area.priority).yellow(),
-                    _ => style(&area.priority).blue(),
-                };
-
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").yellow(),
-                    style(&area.area_name).bold(),
-                    priority_style
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Current:").dim(),
-                    &area.current_state
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Suggestion:").dim(),
-                    style(&area.suggested_improvement).cyan()
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    &area.expected_impact
-                );
-                println!("{}", style("│").green());
-            }
-        }
-
-        // Recommendations
-        if !analysis.qualitative_output.recommendations.is_empty() {
-            println!("{}", style(self.box_separator(width)).green());
-            println!(
-                "{} {}",
-                style("│").green(),
-                style("🎯 Recommendations").bold()
-            );
-            println!("{}", style("│").green());
-
-            for (idx, rec) in analysis
-                .qualitative_output
-                .recommendations
-                .iter()
-                .enumerate()
-            {
-                println!(
-                    "{} {} {}",
-                    style("│").green(),
-                    style(format!("  {}.", idx + 1)).cyan(),
-                    style(&rec.title).bold()
-                );
-
-                for line in self.wrap_text(&rec.description, width - 8) {
-                    println!("{}     {}", style("│").green(), line);
-                }
-
-                println!(
-                    "{}     {} {} | {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    self.impact_visualization(rec.impact_score),
-                    style("Difficulty:").dim(),
-                    style(&rec.implementation_difficulty).yellow()
-                );
-                println!("{}", style("│").green());
-            }
-        }
-
-        // Learning Observations
-        if !analysis.qualitative_output.learning_observations.is_empty() {
-            println!("{}", style(self.box_separator(width)).green());
-            println!(
-                "{} {}",
-                style("│").green(),
-                style("📚 Learning Observations").bold()
-            );
-            println!("{}", style("│").green());
-
-            for obs in &analysis.qualitative_output.learning_observations {
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").blue(),
-                    style(&obs.observation).bold(),
-                    style(format!("[{}]", obs.skill_area)).dim()
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Progress:").dim(),
-                    style(&obs.progress_indicator).cyan()
-                );
-
-                if !obs.next_steps.is_empty() {
-                    println!("{}     {}", style("│").green(), style("Next Steps:").dim());
-                    for step in &obs.next_steps {
-                        println!(
-                            "{}       {} {}",
-                            style("│").green(),
-                            style("→").cyan(),
-                            step
-                        );
-                    }
-                }
-                println!("{}", style("│").green());
+            for (idx, item) in items.iter().enumerate() {
+                self.print_item_enhanced(item, category, idx, width);
             }
         }
 
         println!("{}", style(self.box_bottom(width)).green());
 
         Ok(())
+    }
+
+    fn get_category_icon_enhanced(&self, icon: &str) -> &'static str {
+        match icon {
+            "lightbulb" => "💡",
+            "check" => "✅",
+            "wrench" => "🔧",
+            "target" => "🎯",
+            "book" => "📚",
+            _ => "•",
+        }
+    }
+
+    fn print_item_enhanced(
+        &self,
+        item: &QualitativeItem,
+        category: &crate::services::analytics::models::QualitativeCategory,
+        idx: usize,
+        width: usize,
+    ) {
+        // Build title line with inline metadata
+        let bullet = match category.id.as_str() {
+            "insight" => style("  •".to_string()).cyan(),
+            "good_pattern" => style("  •".to_string()).green(),
+            "improvement" => style("  •".to_string()).yellow(),
+            "recommendation" => style(format!("  {}.", idx + 1)).cyan(),
+            "learning" => style("  •".to_string()).blue(),
+            _ => style("  •".to_string()).white(),
+        };
+
+        // Print title with inline metadata
+        let mut inline_parts: Vec<String> = vec![];
+
+        match category.id.as_str() {
+            "insight" => {
+                if let Some(cat) = item.get_string("category") {
+                    inline_parts.push(format!("[{}]", cat));
+                }
+                if let Some(conf) = item.get_number("confidence") {
+                    let conf_str = format!("{:.0}%", conf * 100.0);
+                    let styled = if conf >= 0.8 {
+                        style(conf_str).green().to_string()
+                    } else if conf >= 0.6 {
+                        style(conf_str).yellow().to_string()
+                    } else {
+                        style(conf_str).red().to_string()
+                    };
+                    inline_parts.push(styled);
+                }
+            }
+            "good_pattern" => {
+                if let Some(freq) = item.get_number("frequency") {
+                    inline_parts.push(format!("({:.0} times)", freq));
+                }
+            }
+            "improvement" => {
+                if let Some(priority) = item.get_string("priority") {
+                    let styled = match priority.to_lowercase().as_str() {
+                        "high" | "critical" => style(priority).red().to_string(),
+                        "medium" => style(priority).yellow().to_string(),
+                        _ => style(priority).blue().to_string(),
+                    };
+                    inline_parts.push(styled);
+                }
+            }
+            "learning" => {
+                if let Some(skill) = item.get_string("skill_area") {
+                    inline_parts.push(format!("[{}]", skill));
+                }
+            }
+            _ => {}
+        }
+
+        let inline_suffix = if inline_parts.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", inline_parts.join(" "))
+        };
+
+        println!(
+            "{} {} {}{}",
+            style("│").green(),
+            bullet,
+            style(&item.title).bold(),
+            style(&inline_suffix).dim()
+        );
+
+        // Wrap and print description
+        for line in self.wrap_text(&item.description, width - 8) {
+            println!("{}     {}", style("│").green(), style(line).dim());
+        }
+
+        // Print remaining metadata fields
+        for field in &category.metadata_schema {
+            // Skip fields already shown inline
+            let skip_inline = matches!(
+                (category.id.as_str(), field.key.as_str()),
+                ("insight", "category")
+                    | ("insight", "confidence")
+                    | ("good_pattern", "frequency")
+                    | ("improvement", "priority")
+                    | ("learning", "skill_area")
+            );
+
+            if skip_inline {
+                continue;
+            }
+
+            if let Some(value) = item.metadata.get(&field.key) {
+                match value {
+                    serde_json::Value::String(s) if !s.is_empty() => {
+                        println!(
+                            "{}     {} {}",
+                            style("│").green(),
+                            style(format!("{}:", field.display_name)).dim(),
+                            style(s).cyan()
+                        );
+                    }
+                    serde_json::Value::Number(n) => {
+                        let display = if field.key.contains("score") {
+                            self.impact_visualization(n.as_f64().unwrap_or(0.0))
+                        } else {
+                            style(format!("{:.1}", n.as_f64().unwrap_or(0.0))).cyan()
+                        };
+                        println!(
+                            "{}     {} {}",
+                            style("│").green(),
+                            style(format!("{}:", field.display_name)).dim(),
+                            display
+                        );
+                    }
+                    serde_json::Value::Array(arr) if !arr.is_empty() => {
+                        println!(
+                            "{}     {}",
+                            style("│").green(),
+                            style(format!("{}:", field.display_name)).dim()
+                        );
+                        for v in arr {
+                            if let Some(s) = v.as_str() {
+                                println!(
+                                    "{}       {} {}",
+                                    style("│").green(),
+                                    style("→").cyan(),
+                                    s
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        println!("{}", style("│").green());
     }
 
     // =============================================================================

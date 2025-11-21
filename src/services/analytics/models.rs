@@ -1,6 +1,150 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
+
+// =============================================================================
+// Qualitative Category Models (for configurable qualitative output)
+// =============================================================================
+
+/// Schema definition for metadata fields in a qualitative category
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetadataSchema {
+    /// Key name for this metadata field
+    pub key: String,
+    /// Display name for UI
+    pub display_name: String,
+    /// Type of value: "string", "number", "array"
+    pub value_type: String,
+    /// Description of what this field represents
+    pub description: String,
+}
+
+/// A qualitative category definition loaded from JSON
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeCategory {
+    /// Unique identifier for the category (e.g., "insight", "good_pattern")
+    pub id: String,
+    /// Display name (e.g., "Key Insights")
+    pub name: String,
+    /// What this category captures
+    pub description: String,
+    /// Icon identifier for UI (e.g., "lightbulb", "check")
+    pub icon: String,
+    /// Schema for metadata fields
+    pub metadata_schema: Vec<MetadataSchema>,
+}
+
+/// Container for qualitative categories with version
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeCategoryList {
+    /// Schema version
+    #[serde(default = "default_category_version")]
+    pub version: String,
+    /// List of categories
+    pub categories: Vec<QualitativeCategory>,
+}
+
+fn default_category_version() -> String {
+    "1.0".to_string()
+}
+
+impl QualitativeCategoryList {
+    /// Load categories from a JSON file
+    pub fn from_json_file(path: &Path) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let category_list: QualitativeCategoryList = serde_json::from_str(&content)?;
+        Ok(category_list)
+    }
+
+    /// Load categories from embedded JSON string
+    pub fn from_json_str(json: &str) -> anyhow::Result<Self> {
+        let category_list: QualitativeCategoryList = serde_json::from_str(json)?;
+        Ok(category_list)
+    }
+
+    /// Get default categories (embedded in binary)
+    pub fn default_categories() -> Self {
+        let json = include_str!("../../../resources/qualitative_categories.json");
+        Self::from_json_str(json).expect("Default qualitative categories should be valid JSON")
+    }
+
+    /// Get a category by ID
+    pub fn get_category(&self, id: &str) -> Option<&QualitativeCategory> {
+        self.categories.iter().find(|c| c.id == id)
+    }
+}
+
+/// A generic qualitative item that can represent any type of insight/pattern/recommendation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeItem {
+    /// Category ID (references QualitativeCategory.id)
+    pub category_id: String,
+    /// Primary title/name
+    pub title: String,
+    /// Detailed description
+    pub description: String,
+    /// Flexible metadata fields (category-specific)
+    #[serde(default)]
+    pub metadata: HashMap<String, Value>,
+}
+
+impl QualitativeItem {
+    /// Create a new item with the given category, title, and description
+    pub fn new(category_id: &str, title: &str, description: &str) -> Self {
+        Self {
+            category_id: category_id.to_string(),
+            title: title.to_string(),
+            description: description.to_string(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Add a string metadata field
+    pub fn with_string(mut self, key: &str, value: &str) -> Self {
+        self.metadata
+            .insert(key.to_string(), Value::String(value.to_string()));
+        self
+    }
+
+    /// Add a number metadata field
+    pub fn with_number(mut self, key: &str, value: f64) -> Self {
+        self.metadata.insert(
+            key.to_string(),
+            Value::Number(
+                serde_json::Number::from_f64(value).unwrap_or(serde_json::Number::from(0)),
+            ),
+        );
+        self
+    }
+
+    /// Add an array metadata field
+    pub fn with_array(mut self, key: &str, values: Vec<String>) -> Self {
+        self.metadata.insert(
+            key.to_string(),
+            Value::Array(values.into_iter().map(Value::String).collect()),
+        );
+        self
+    }
+
+    /// Get a string metadata value
+    pub fn get_string(&self, key: &str) -> Option<&str> {
+        self.metadata.get(key).and_then(|v| v.as_str())
+    }
+
+    /// Get a number metadata value
+    pub fn get_number(&self, key: &str) -> Option<f64> {
+        self.metadata.get(key).and_then(|v| v.as_f64())
+    }
+
+    /// Get an array metadata value
+    pub fn get_array(&self, key: &str) -> Option<Vec<&str>> {
+        self.metadata.get(key).and_then(|v| {
+            v.as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+        })
+    }
+}
 
 // =============================================================================
 // Rubric Models (for LLM-as-a-judge evaluation)
@@ -214,11 +358,8 @@ pub struct QuantitativeOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualitativeOutput {
-    pub insights: Vec<Insight>,
-    pub good_patterns: Vec<GoodPattern>,
-    pub improvement_areas: Vec<ImprovementArea>,
-    pub recommendations: Vec<Recommendation>,
-    pub learning_observations: Vec<LearningObservation>,
+    /// All qualitative items grouped by category_id
+    pub items: Vec<QualitativeItem>,
     /// Rubric-based evaluation scores (LLM-as-a-judge)
     #[serde(default)]
     pub rubric_scores: Vec<RubricScore>,
@@ -227,45 +368,40 @@ pub struct QualitativeOutput {
     pub rubric_summary: Option<RubricEvaluationSummary>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Insight {
-    pub title: String,
-    pub description: String,
-    pub category: String,
-    pub confidence: f64,
-}
+impl QualitativeOutput {
+    /// Create an empty QualitativeOutput
+    pub fn empty() -> Self {
+        Self {
+            items: Vec::new(),
+            rubric_scores: Vec::new(),
+            rubric_summary: None,
+        }
+    }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GoodPattern {
-    pub pattern_name: String,
-    pub description: String,
-    pub frequency: u64,
-    pub impact: String,
-}
+    /// Get items filtered by category ID
+    pub fn items_by_category(&self, category_id: &str) -> Vec<&QualitativeItem> {
+        self.items
+            .iter()
+            .filter(|item| item.category_id == category_id)
+            .collect()
+    }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImprovementArea {
-    pub area_name: String,
-    pub current_state: String,
-    pub suggested_improvement: String,
-    pub expected_impact: String,
-    pub priority: String,
-}
+    /// Add an item to the output
+    pub fn add_item(&mut self, item: QualitativeItem) {
+        self.items.push(item);
+    }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Recommendation {
-    pub title: String,
-    pub description: String,
-    pub impact_score: f64,
-    pub implementation_difficulty: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LearningObservation {
-    pub observation: String,
-    pub skill_area: String,
-    pub progress_indicator: String,
-    pub next_steps: Vec<String>,
+    /// Get all unique category IDs present in items
+    pub fn category_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .items
+            .iter()
+            .map(|item| item.category_id.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
 }
 
 // =============================================================================

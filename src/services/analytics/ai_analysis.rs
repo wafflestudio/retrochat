@@ -1,7 +1,7 @@
 use super::models::{
-    GoodPattern, ImprovementArea, Insight, LearningObservation, QualitativeInput,
-    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, Rubric,
-    RubricEvaluationSummary, RubricList, RubricScore,
+    QualitativeCategoryList, QualitativeInput, QualitativeItem, QualitativeOutput,
+    QuantitativeInput, QuantitativeOutput, Rubric, RubricEvaluationSummary, RubricList,
+    RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
@@ -157,8 +157,30 @@ fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
 
     let tech_stack = input.project_context.technology_stack.join(", ");
 
+    // Load categories from JSON to generate the schema dynamically
+    let categories = QualitativeCategoryList::default_categories();
+
+    // Build category descriptions and schema
+    let category_list = categories
+        .categories
+        .iter()
+        .enumerate()
+        .map(|(i, cat)| {
+            format!(
+                "{}. **{}**: {} (1-3 items)",
+                i + 1,
+                cat.name,
+                cat.description
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Build JSON schema from categories
+    let schema = build_json_schema_from_categories(&categories);
+
     format!(
-        r#"Analytics the following development session and provide qualitative insights.
+        r#"Analyze the following development session and provide qualitative insights.
 
 ## Session Context
 
@@ -179,58 +201,12 @@ fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
 
 ## Task
 
-Provide a comprehensive qualitative analysis with:
+Provide a comprehensive qualitative analysis with the following categories:
 
-1. **Insights**: Key observations about the development patterns (2-4 insights)
-2. **Good Patterns**: Positive habits and practices observed (1-3 patterns)
-3. **Improvement Areas**: Areas that could be enhanced (1-3 areas)
-4. **Recommendations**: Actionable suggestions for improvement (2-3 recommendations)
-5. **Learning Observations**: Growth and learning indicators (1-2 observations)
+{}
 
-Return ONLY a valid JSON object with this exact structure:
-{{
-  "insights": [
-    {{
-      "title": "string",
-      "description": "string",
-      "category": "string (Productivity/Technical/Learning/Collaboration)",
-      "confidence": 0.0
-    }}
-  ],
-  "good_patterns": [
-    {{
-      "pattern_name": "string",
-      "description": "string",
-      "frequency": 1,
-      "impact": "string (High/Medium/Low - description)"
-    }}
-  ],
-  "improvement_areas": [
-    {{
-      "area_name": "string",
-      "current_state": "string",
-      "suggested_improvement": "string",
-      "expected_impact": "string",
-      "priority": "string (High/Medium/Low)"
-    }}
-  ],
-  "recommendations": [
-    {{
-      "title": "string",
-      "description": "string",
-      "impact_score": 0.0,
-      "implementation_difficulty": "string (Easy/Medium/Hard)"
-    }}
-  ],
-  "learning_observations": [
-    {{
-      "observation": "string",
-      "skill_area": "string",
-      "progress_indicator": "string",
-      "next_steps": ["string"]
-    }}
-  ]
-}}
+Return ONLY a valid JSON object with this structure:
+{}
 
 Important: Return ONLY the JSON object, no additional text or explanation."#,
         file_list,
@@ -241,8 +217,51 @@ Important: Return ONLY the JSON object, no additional text or explanation."#,
         input.project_context.project_type,
         tech_stack,
         input.project_context.project_complexity,
-        input.project_context.development_stage
+        input.project_context.development_stage,
+        category_list,
+        schema
     )
+}
+
+/// Build a JSON schema from the qualitative categories
+fn build_json_schema_from_categories(categories: &QualitativeCategoryList) -> String {
+    let mut schema = String::from("{\n  \"items\": [\n");
+
+    for (i, cat) in categories.categories.iter().enumerate() {
+        if i > 0 {
+            schema.push_str(",\n");
+        }
+
+        // Build metadata fields
+        let metadata_fields: Vec<String> = cat
+            .metadata_schema
+            .iter()
+            .map(|field| {
+                let value_example = match field.value_type.as_str() {
+                    "number" => "0.0".to_string(),
+                    "array" => "[\"string\"]".to_string(),
+                    _ => "\"string\"".to_string(),
+                };
+                format!("        \"{}\": {}", field.key, value_example)
+            })
+            .collect();
+
+        schema.push_str(&format!(
+            r#"    {{
+      "category_id": "{}",
+      "title": "string",
+      "description": "string",
+      "metadata": {{
+{}
+      }}
+    }}"#,
+            cat.id,
+            metadata_fields.join(",\n")
+        ));
+    }
+
+    schema.push_str("\n  ]\n}");
+    schema
 }
 
 // =============================================================================
@@ -271,10 +290,10 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
     // Try to extract JSON from the response
     let json_text = extract_json_from_text(response_text);
 
+    // Try to parse the new structure first
     match serde_json::from_str::<QualitativeOutput>(&json_text) {
         Ok(output) => {
             // Rubric fields will be populated separately by rubric evaluation
-            // if they are empty/None after parsing
             Ok(output)
         }
         Err(e) => {
@@ -283,21 +302,18 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
                 e,
                 response_text
             );
-            // If JSON parsing fails, return empty structures with error message
-            Ok(QualitativeOutput {
-                insights: vec![Insight {
-                    title: "Analysis Error".to_string(),
-                    description: format!("Failed to parse AI response: {e}"),
-                    category: "System".to_string(),
-                    confidence: 0.0,
-                }],
-                good_patterns: vec![],
-                improvement_areas: vec![],
-                recommendations: vec![],
-                learning_observations: vec![],
-                rubric_scores: vec![],
-                rubric_summary: None,
-            })
+            // If JSON parsing fails, return with error item
+            let mut output = QualitativeOutput::empty();
+            output.add_item(
+                QualitativeItem::new(
+                    "insight",
+                    "Analysis Error",
+                    &format!("Failed to parse AI response: {e}"),
+                )
+                .with_string("category", "System")
+                .with_number("confidence", 0.0),
+            );
+            Ok(output)
         }
     }
 }
@@ -414,19 +430,19 @@ pub fn generate_quantitative_analysis_fallback(
 pub fn generate_qualitative_analysis_fallback(
     qualitative_input: &QualitativeInput,
 ) -> Result<QualitativeOutput> {
-    let insights = generate_insights(qualitative_input);
-    let good_patterns = generate_good_patterns(qualitative_input);
-    let improvement_areas = generate_improvement_areas(qualitative_input);
-    let recommendations = generate_recommendations(qualitative_input);
-    let learning_observations = generate_learning_observations(qualitative_input);
+    let mut items = Vec::new();
+
+    // Generate items for each category
+    items.extend(generate_insight_items(qualitative_input));
+    items.extend(generate_good_pattern_items(qualitative_input));
+    items.extend(generate_improvement_items(qualitative_input));
+    items.extend(generate_recommendation_items(qualitative_input));
+    items.extend(generate_learning_items(qualitative_input));
+
     let (rubric_scores, rubric_summary) = generate_rubric_evaluation_fallback();
 
     Ok(QualitativeOutput {
-        insights,
-        good_patterns,
-        improvement_areas,
-        recommendations,
-        learning_observations,
+        items,
         rubric_scores,
         rubric_summary: Some(rubric_summary),
     })
@@ -516,160 +532,195 @@ fn calculate_learning_score(input: &QuantitativeInput) -> f64 {
 }
 
 // =============================================================================
-// Qualitative Analysis Functions
+// Qualitative Analysis Functions (Generic Item Generation)
 // =============================================================================
 
-fn generate_insights(input: &QualitativeInput) -> Vec<Insight> {
-    let mut insights = Vec::new();
+fn generate_insight_items(input: &QualitativeInput) -> Vec<QualitativeItem> {
+    let mut items = Vec::new();
 
     // File modification insights
     if input.file_contexts.len() > 5 {
-        insights.push(Insight {
-            title: "High File Activity".to_string(),
-            description:
-                "You worked on many files during this session, showing good project organization."
-                    .to_string(),
-            category: "Productivity".to_string(),
-            confidence: 0.8,
-        });
+        items.push(
+            QualitativeItem::new(
+                "insight",
+                "High File Activity",
+                "You worked on many files during this session, showing good project organization.",
+            )
+            .with_string("category", "Productivity")
+            .with_number("confidence", 0.8),
+        );
     }
 
     // Code quality insights
     if input.project_context.project_complexity > 0.7 {
-        insights.push(Insight {
-            title: "Complex Project Work".to_string(),
-            description:
-                "You're working on a complex project, which shows advanced development skills."
-                    .to_string(),
-            category: "Technical".to_string(),
-            confidence: 0.9,
-        });
+        items.push(
+            QualitativeItem::new(
+                "insight",
+                "Complex Project Work",
+                "You're working on a complex project, which shows advanced development skills.",
+            )
+            .with_string("category", "Technical")
+            .with_number("confidence", 0.9),
+        );
     }
 
     // Learning insights
     if !input.project_context.technology_stack.is_empty() {
-        insights.push(Insight {
-            title: "Technology Exploration".to_string(),
-            description: format!(
-                "You're working with: {}",
-                input.project_context.technology_stack.join(", ")
-            ),
-            category: "Learning".to_string(),
-            confidence: 0.7,
-        });
+        items.push(
+            QualitativeItem::new(
+                "insight",
+                "Technology Exploration",
+                &format!(
+                    "You're working with: {}",
+                    input.project_context.technology_stack.join(", ")
+                ),
+            )
+            .with_string("category", "Learning")
+            .with_number("confidence", 0.7),
+        );
     }
 
-    insights
+    items
 }
 
-fn generate_good_patterns(input: &QualitativeInput) -> Vec<GoodPattern> {
-    let mut patterns = Vec::new();
+fn generate_good_pattern_items(input: &QualitativeInput) -> Vec<QualitativeItem> {
+    let mut items = Vec::new();
 
     // File organization pattern
     if input.file_contexts.len() > 3 {
-        patterns.push(GoodPattern {
-            pattern_name: "Modular Development".to_string(),
-            description:
-                "You're working across multiple files, showing good modular development practices."
-                    .to_string(),
-            frequency: input.file_contexts.len() as u64,
-            impact: "High - improves code maintainability".to_string(),
-        });
+        items.push(
+            QualitativeItem::new(
+                "good_pattern",
+                "Modular Development",
+                "You're working across multiple files, showing good modular development practices.",
+            )
+            .with_number("frequency", input.file_contexts.len() as f64)
+            .with_string("impact", "High - improves code maintainability"),
+        );
     }
 
     // Technology usage pattern
     if input.project_context.technology_stack.len() > 1 {
-        patterns.push(GoodPattern {
-            pattern_name: "Technology Integration".to_string(),
-            description: "You're using multiple technologies together effectively.".to_string(),
-            frequency: 1,
-            impact: "Medium - shows technical versatility".to_string(),
-        });
+        items.push(
+            QualitativeItem::new(
+                "good_pattern",
+                "Technology Integration",
+                "You're using multiple technologies together effectively.",
+            )
+            .with_number("frequency", 1.0)
+            .with_string("impact", "Medium - shows technical versatility"),
+        );
     }
 
-    patterns
+    items
 }
 
-fn generate_improvement_areas(input: &QualitativeInput) -> Vec<ImprovementArea> {
-    let mut areas = Vec::new();
+fn generate_improvement_items(input: &QualitativeInput) -> Vec<QualitativeItem> {
+    let mut items = Vec::new();
 
     // Code organization improvement
     if input.file_contexts.len() < 2 {
-        areas.push(ImprovementArea {
-            area_name: "File Organization".to_string(),
-            current_state: "Working on single file".to_string(),
-            suggested_improvement:
-                "Consider breaking code into multiple files for better organization".to_string(),
-            expected_impact: "Improved maintainability and readability".to_string(),
-            priority: "Medium".to_string(),
-        });
+        items.push(
+            QualitativeItem::new("improvement", "File Organization", "Working on single file")
+                .with_string("current_state", "Working on single file")
+                .with_string(
+                    "suggestion",
+                    "Consider breaking code into multiple files for better organization",
+                )
+                .with_string("priority", "Medium"),
+        );
     }
 
     // Technology stack improvement
     if input.project_context.technology_stack.is_empty() {
-        areas.push(ImprovementArea {
-            area_name: "Technology Documentation".to_string(),
-            current_state: "No clear technology stack identified".to_string(),
-            suggested_improvement: "Document the technologies you're using for better context"
-                .to_string(),
-            expected_impact: "Better project understanding and maintenance".to_string(),
-            priority: "Low".to_string(),
-        });
+        items.push(
+            QualitativeItem::new(
+                "improvement",
+                "Technology Documentation",
+                "No clear technology stack identified",
+            )
+            .with_string("current_state", "No clear technology stack identified")
+            .with_string(
+                "suggestion",
+                "Document the technologies you're using for better context",
+            )
+            .with_string("priority", "Low"),
+        );
     }
 
-    areas
+    items
 }
 
-fn generate_recommendations(input: &QualitativeInput) -> Vec<Recommendation> {
-    let mut recommendations = Vec::new();
+fn generate_recommendation_items(input: &QualitativeInput) -> Vec<QualitativeItem> {
+    let mut items = Vec::new();
 
     // General recommendations based on project complexity
     if input.project_context.project_complexity > 0.8 {
-        recommendations.push(Recommendation {
-            title: "Consider Code Documentation".to_string(),
-            description: "For complex projects, consider adding more documentation to help with future maintenance.".to_string(),
-            impact_score: 0.8,
-            implementation_difficulty: "Medium".to_string(),
-        });
+        items.push(
+            QualitativeItem::new(
+                "recommendation",
+                "Consider Code Documentation",
+                "For complex projects, consider adding more documentation to help with future maintenance.",
+            )
+            .with_number("impact_score", 0.8)
+            .with_string("difficulty", "Medium"),
+        );
     }
 
     // Learning recommendations
     if input.project_context.technology_stack.len() > 2 {
-        recommendations.push(Recommendation {
-            title: "Deep Dive into Technologies".to_string(),
-            description: "You're using multiple technologies. Consider focusing on mastering one or two core technologies.".to_string(),
-            impact_score: 0.7,
-            implementation_difficulty: "Low".to_string(),
-        });
+        items.push(
+            QualitativeItem::new(
+                "recommendation",
+                "Deep Dive into Technologies",
+                "You're using multiple technologies. Consider focusing on mastering one or two core technologies.",
+            )
+            .with_number("impact_score", 0.7)
+            .with_string("difficulty", "Low"),
+        );
     }
 
-    recommendations
+    items
 }
 
-fn generate_learning_observations(input: &QualitativeInput) -> Vec<LearningObservation> {
-    let mut observations = Vec::new();
+fn generate_learning_items(input: &QualitativeInput) -> Vec<QualitativeItem> {
+    let mut items = Vec::new();
 
     // Technology learning observation
     if !input.project_context.technology_stack.is_empty() {
-        observations.push(LearningObservation {
-            observation: "Working with multiple technologies".to_string(),
-            skill_area: "Technology Integration".to_string(),
-            progress_indicator: "Active exploration".to_string(),
-            next_steps: vec!["Consider creating a technology reference guide".to_string()],
-        });
+        items.push(
+            QualitativeItem::new(
+                "learning",
+                "Working with multiple technologies",
+                "Active exploration of technology stack",
+            )
+            .with_string("skill_area", "Technology Integration")
+            .with_string("progress", "Active exploration")
+            .with_array(
+                "next_steps",
+                vec!["Consider creating a technology reference guide".to_string()],
+            ),
+        );
     }
 
     // Code organization learning observation
     if input.file_contexts.len() > 3 {
-        observations.push(LearningObservation {
-            observation: "Good file organization practices".to_string(),
-            skill_area: "Code Architecture".to_string(),
-            progress_indicator: "Consistent application".to_string(),
-            next_steps: vec!["Continue modular development approach".to_string()],
-        });
+        items.push(
+            QualitativeItem::new(
+                "learning",
+                "Good file organization practices",
+                "Consistent application of modular development",
+            )
+            .with_string("skill_area", "Code Architecture")
+            .with_string("progress", "Consistent application")
+            .with_array(
+                "next_steps",
+                vec!["Continue modular development approach".to_string()],
+            ),
+        );
     }
 
-    observations
+    items
 }
 
 // =============================================================================

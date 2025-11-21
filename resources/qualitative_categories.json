@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "categories": [
+    {
+      "id": "insight",
+      "name": "Key Insights",
+      "description": "Important observations about development patterns and behaviors",
+      "icon": "lightbulb",
+      "metadata_schema": [
+        {
+          "key": "category",
+          "display_name": "Category",
+          "value_type": "string",
+          "description": "Type of insight (Productivity, Technical, Learning, Collaboration)"
+        },
+        {
+          "key": "confidence",
+          "display_name": "Confidence",
+          "value_type": "number",
+          "description": "Confidence score from 0.0 to 1.0"
+        }
+      ]
+    },
+    {
+      "id": "good_pattern",
+      "name": "Good Patterns",
+      "description": "Positive habits and practices observed during the session",
+      "icon": "check",
+      "metadata_schema": [
+        {
+          "key": "frequency",
+          "display_name": "Frequency",
+          "value_type": "number",
+          "description": "How many times this pattern was observed"
+        },
+        {
+          "key": "impact",
+          "display_name": "Impact",
+          "value_type": "string",
+          "description": "Impact level and description (High/Medium/Low)"
+        }
+      ]
+    },
+    {
+      "id": "improvement",
+      "name": "Improvement Areas",
+      "description": "Areas that could be enhanced for better development workflow",
+      "icon": "wrench",
+      "metadata_schema": [
+        {
+          "key": "current_state",
+          "display_name": "Current State",
+          "value_type": "string",
+          "description": "Description of current situation"
+        },
+        {
+          "key": "suggestion",
+          "display_name": "Suggestion",
+          "value_type": "string",
+          "description": "Suggested improvement"
+        },
+        {
+          "key": "priority",
+          "display_name": "Priority",
+          "value_type": "string",
+          "description": "Priority level (High, Medium, Low)"
+        }
+      ]
+    },
+    {
+      "id": "recommendation",
+      "name": "Recommendations",
+      "description": "Actionable suggestions for improvement",
+      "icon": "target",
+      "metadata_schema": [
+        {
+          "key": "impact_score",
+          "display_name": "Impact Score",
+          "value_type": "number",
+          "description": "Expected impact from 0.0 to 1.0"
+        },
+        {
+          "key": "difficulty",
+          "display_name": "Difficulty",
+          "value_type": "string",
+          "description": "Implementation difficulty (Easy, Medium, Hard)"
+        }
+      ]
+    },
+    {
+      "id": "learning",
+      "name": "Learning Observations",
+      "description": "Growth and learning indicators from the session",
+      "icon": "book",
+      "metadata_schema": [
+        {
+          "key": "skill_area",
+          "display_name": "Skill Area",
+          "value_type": "string",
+          "description": "Area of skill being developed"
+        },
+        {
+          "key": "progress",
+          "display_name": "Progress",
+          "value_type": "string",
+          "description": "Progress indicator description"
+        },
+        {
+          "key": "next_steps",
+          "display_name": "Next Steps",
+          "value_type": "array",
+          "description": "Suggested next steps for continued learning"
+        }
+      ]
+    }
+  ]
+}
