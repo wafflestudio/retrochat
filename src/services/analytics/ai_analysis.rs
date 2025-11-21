@@ -1,6 +1,5 @@
 use super::models::{
-    GoodPattern, ImprovementArea, Insight, LearningObservation, QualitativeInput,
-    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, Rubric,
+    QualitativeInput, QualitativeOutput, QuantitativeInput, QuantitativeOutput, Rubric,
     RubricEvaluationSummary, RubricList, RubricScore,
 };
 use crate::models::message::MessageType;
@@ -25,13 +24,8 @@ pub async fn generate_quantitative_analysis_ai(
         temperature: Some(0.5),
     };
 
-    match ai_client.analytics(analysis_request).await {
-        Ok(response) => parse_quantitative_response(&response.text),
-        Err(e) => {
-            tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
-            generate_quantitative_analysis_fallback(quantitative_input)
-        }
-    }
+    let response = ai_client.analytics(analysis_request).await?;
+    parse_quantitative_response(&response.text)
 }
 
 pub async fn generate_qualitative_analysis_ai(
@@ -46,13 +40,8 @@ pub async fn generate_qualitative_analysis_ai(
         temperature: Some(0.7),
     };
 
-    match ai_client.analytics(analysis_request).await {
-        Ok(response) => parse_qualitative_response(&response.text),
-        Err(e) => {
-            tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
-            generate_qualitative_analysis_fallback(qualitative_input)
-        }
-    }
+    let response = ai_client.analytics(analysis_request).await?;
+    parse_qualitative_response(&response.text)
 }
 
 // =============================================================================
@@ -241,35 +230,14 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
     // Try to extract JSON from the response
     let json_text = extract_json_from_text(response_text);
 
-    match serde_json::from_str::<QualitativeOutput>(&json_text) {
-        Ok(output) => {
-            // Rubric fields will be populated separately by rubric evaluation
-            // if they are empty/None after parsing
-            Ok(output)
-        }
-        Err(e) => {
-            tracing::warn!(
-                "Failed to parse AI response as JSON: {}. Response: {}",
-                e,
-                response_text
-            );
-            // If JSON parsing fails, return empty structures with error message
-            Ok(QualitativeOutput {
-                insights: vec![Insight {
-                    title: "Analysis Error".to_string(),
-                    description: format!("Failed to parse AI response: {e}"),
-                    category: "System".to_string(),
-                    confidence: 0.0,
-                }],
-                good_patterns: vec![],
-                improvement_areas: vec![],
-                recommendations: vec![],
-                learning_observations: vec![],
-                rubric_scores: vec![],
-                rubric_summary: None,
-            })
-        }
-    }
+    serde_json::from_str::<QualitativeOutput>(&json_text).map_err(|e| {
+        tracing::warn!(
+            "Failed to parse AI response as JSON: {}. Response: {}",
+            e,
+            response_text
+        );
+        anyhow::anyhow!("Failed to parse AI qualitative response: {}", e)
+    })
 }
 
 fn extract_json_from_text(text: &str) -> String {
@@ -355,353 +323,6 @@ fn extract_score_after_keyword(text: &str, keyword: &str) -> f64 {
 
     // Default score if not found
     50.0
-}
-
-// =============================================================================
-// Fallback Analysis Functions (Rule-based)
-// =============================================================================
-
-pub fn generate_quantitative_analysis_fallback(
-    quantitative_input: &QuantitativeInput,
-) -> Result<QuantitativeOutput> {
-    let overall_score = calculate_overall_score(quantitative_input);
-    let code_quality_score = calculate_code_quality_score(quantitative_input);
-    let productivity_score = calculate_productivity_score(quantitative_input);
-    let efficiency_score = calculate_efficiency_score(quantitative_input);
-    let collaboration_score = calculate_collaboration_score(quantitative_input);
-    let learning_score = calculate_learning_score(quantitative_input);
-
-    Ok(QuantitativeOutput {
-        overall_score,
-        code_quality_score,
-        productivity_score,
-        efficiency_score,
-        collaboration_score,
-        learning_score,
-    })
-}
-
-pub fn generate_qualitative_analysis_fallback(
-    qualitative_input: &QualitativeInput,
-) -> Result<QualitativeOutput> {
-    // Parse the raw session to extract basic stats for fallback analysis
-    let session_stats = parse_session_stats(&qualitative_input.raw_session);
-
-    let insights = generate_insights_from_stats(&session_stats);
-    let good_patterns = generate_good_patterns_from_stats(&session_stats);
-    let improvement_areas = generate_improvement_areas_from_stats(&session_stats);
-    let recommendations = generate_recommendations_from_stats(&session_stats);
-    let learning_observations = generate_learning_observations_from_stats(&session_stats);
-    let (rubric_scores, rubric_summary) = generate_rubric_evaluation_fallback();
-
-    Ok(QualitativeOutput {
-        insights,
-        good_patterns,
-        improvement_areas,
-        recommendations,
-        learning_observations,
-        rubric_scores,
-        rubric_summary: Some(rubric_summary),
-    })
-}
-
-/// Basic statistics extracted from a session for fallback analysis
-struct SessionStats {
-    total_turns: u32,
-    user_turns: u32,
-    assistant_turns: u32,
-    tool_uses_count: u32,
-    has_tool_uses: bool,
-}
-
-// =============================================================================
-// Scoring Functions
-// =============================================================================
-
-fn calculate_overall_score(input: &QuantitativeInput) -> f64 {
-    let code_quality = calculate_code_quality_score(input);
-    let productivity = calculate_productivity_score(input);
-    let efficiency = calculate_efficiency_score(input);
-
-    (code_quality + productivity + efficiency) / 3.0
-}
-
-fn calculate_code_quality_score(input: &QuantitativeInput) -> f64 {
-    let refactoring_ratio = if input.file_changes.total_files_modified > 0 {
-        input.file_changes.refactoring_operations as f64
-            / input.file_changes.total_files_modified as f64
-    } else {
-        0.0
-    };
-
-    let net_growth_positive = if input.file_changes.net_code_growth > 0 {
-        1.0
-    } else {
-        0.0
-    };
-
-    // Score based on refactoring ratio and positive code growth
-    (refactoring_ratio * 50.0 + net_growth_positive * 30.0 + 20.0).min(100.0)
-}
-
-fn calculate_productivity_score(input: &QuantitativeInput) -> f64 {
-    let lines_per_hour = if input.time_metrics.total_session_time_minutes > 0.0 {
-        input.file_changes.lines_added as f64
-            / (input.time_metrics.total_session_time_minutes / 60.0)
-    } else {
-        0.0
-    };
-
-    let files_per_hour = if input.time_metrics.total_session_time_minutes > 0.0 {
-        input.file_changes.total_files_modified as f64
-            / (input.time_metrics.total_session_time_minutes / 60.0)
-    } else {
-        0.0
-    };
-
-    // Score based on lines and files per hour
-    ((lines_per_hour * 0.5 + files_per_hour * 0.5) * 2.0).min(100.0)
-}
-
-fn calculate_efficiency_score(input: &QuantitativeInput) -> f64 {
-    let token_efficiency = input.token_metrics.token_efficiency;
-    let tool_success_rate = if input.tool_usage.total_operations > 0 {
-        input.tool_usage.successful_operations as f64 / input.tool_usage.total_operations as f64
-    } else {
-        0.0
-    };
-
-    // Score based on token efficiency and tool success rate
-    (token_efficiency * 50.0 + tool_success_rate * 50.0).min(100.0)
-}
-
-fn calculate_collaboration_score(input: &QuantitativeInput) -> f64 {
-    let message_ratio = if input.token_metrics.input_tokens > 0 {
-        input.token_metrics.output_tokens as f64 / input.token_metrics.input_tokens as f64
-    } else {
-        0.0
-    };
-
-    // Score based on balanced conversation ratio
-    (message_ratio * 30.0 + 70.0).min(100.0)
-}
-
-fn calculate_learning_score(input: &QuantitativeInput) -> f64 {
-    let exploration_ratio = if input.file_changes.total_files_modified > 0 {
-        input.file_changes.total_files_read as f64 / input.file_changes.total_files_modified as f64
-    } else {
-        0.0
-    };
-
-    // Score based on file exploration vs modification
-    (exploration_ratio * 40.0 + 60.0).min(100.0)
-}
-
-// =============================================================================
-// Qualitative Analysis Functions (Fallback - based on session stats)
-// =============================================================================
-
-/// Parse basic statistics from the raw session JSON for fallback analysis
-fn parse_session_stats(raw_session: &str) -> SessionStats {
-    use super::models::SessionTranscript;
-
-    // Try to parse the JSON, fall back to defaults if parsing fails
-    match serde_json::from_str::<SessionTranscript>(raw_session) {
-        Ok(transcript) => {
-            let user_turns = transcript.turns.iter().filter(|t| t.role == "user").count() as u32;
-            let assistant_turns = transcript
-                .turns
-                .iter()
-                .filter(|t| t.role == "assistant")
-                .count() as u32;
-            let tool_uses_count: u32 = transcript
-                .turns
-                .iter()
-                .map(|t| t.tool_uses.len() as u32)
-                .sum();
-
-            SessionStats {
-                total_turns: transcript.total_turns,
-                user_turns,
-                assistant_turns,
-                tool_uses_count,
-                has_tool_uses: tool_uses_count > 0,
-            }
-        }
-        Err(_) => SessionStats {
-            total_turns: 0,
-            user_turns: 0,
-            assistant_turns: 0,
-            tool_uses_count: 0,
-            has_tool_uses: false,
-        },
-    }
-}
-
-fn generate_insights_from_stats(stats: &SessionStats) -> Vec<Insight> {
-    let mut insights = Vec::new();
-
-    // Conversation activity insight
-    if stats.total_turns > 5 {
-        insights.push(Insight {
-            title: "Active Development Session".to_string(),
-            description: format!(
-                "This session had {} conversation turns, indicating an engaged development process.",
-                stats.total_turns
-            ),
-            category: "Productivity".to_string(),
-            confidence: 0.8,
-        });
-    }
-
-    // Tool usage insight
-    if stats.has_tool_uses {
-        insights.push(Insight {
-            title: "Active Tool Usage".to_string(),
-            description: format!(
-                "The session involved {} tool operations, showing hands-on development work.",
-                stats.tool_uses_count
-            ),
-            category: "Technical".to_string(),
-            confidence: 0.9,
-        });
-    }
-
-    // Balanced conversation insight
-    if stats.user_turns > 0 && stats.assistant_turns > 0 {
-        let ratio = stats.assistant_turns as f64 / stats.user_turns as f64;
-        if (0.5..=2.0).contains(&ratio) {
-            insights.push(Insight {
-                title: "Balanced Collaboration".to_string(),
-                description:
-                    "The conversation shows a good balance between user requests and AI responses."
-                        .to_string(),
-                category: "Collaboration".to_string(),
-                confidence: 0.7,
-            });
-        }
-    }
-
-    insights
-}
-
-fn generate_good_patterns_from_stats(stats: &SessionStats) -> Vec<GoodPattern> {
-    let mut patterns = Vec::new();
-
-    // Consistent engagement pattern
-    if stats.total_turns > 3 {
-        patterns.push(GoodPattern {
-            pattern_name: "Iterative Development".to_string(),
-            description:
-                "Multiple conversation turns indicate an iterative approach to problem-solving."
-                    .to_string(),
-            frequency: stats.total_turns as u64,
-            impact: "High - enables progressive refinement".to_string(),
-        });
-    }
-
-    // Tool utilization pattern
-    if stats.tool_uses_count > 5 {
-        patterns.push(GoodPattern {
-            pattern_name: "Effective Tool Utilization".to_string(),
-            description: "Good use of AI tools for file operations and code manipulation."
-                .to_string(),
-            frequency: stats.tool_uses_count as u64,
-            impact: "Medium - increases development efficiency".to_string(),
-        });
-    }
-
-    patterns
-}
-
-fn generate_improvement_areas_from_stats(stats: &SessionStats) -> Vec<ImprovementArea> {
-    let mut areas = Vec::new();
-
-    // Short session improvement
-    if stats.total_turns < 3 {
-        areas.push(ImprovementArea {
-            area_name: "Session Engagement".to_string(),
-            current_state: "Brief interaction session".to_string(),
-            suggested_improvement:
-                "Consider more iterative conversations to explore solutions thoroughly".to_string(),
-            expected_impact: "Better problem understanding and solution quality".to_string(),
-            priority: "Medium".to_string(),
-        });
-    }
-
-    // No tool usage improvement
-    if !stats.has_tool_uses {
-        areas.push(ImprovementArea {
-            area_name: "Tool Utilization".to_string(),
-            current_state: "No tool operations detected".to_string(),
-            suggested_improvement:
-                "Leverage AI tool capabilities for file operations and code editing".to_string(),
-            expected_impact: "Faster development workflow".to_string(),
-            priority: "Low".to_string(),
-        });
-    }
-
-    areas
-}
-
-fn generate_recommendations_from_stats(stats: &SessionStats) -> Vec<Recommendation> {
-    let mut recommendations = Vec::new();
-
-    // Based on session length
-    if stats.total_turns > 10 {
-        recommendations.push(Recommendation {
-            title: "Session Organization".to_string(),
-            description: "For longer sessions, consider breaking work into smaller, focused tasks for better tracking.".to_string(),
-            impact_score: 0.7,
-            implementation_difficulty: "Easy".to_string(),
-        });
-    }
-
-    // Based on tool usage density
-    if stats.has_tool_uses && stats.tool_uses_count > stats.total_turns {
-        recommendations.push(Recommendation {
-            title: "Batch Operations".to_string(),
-            description: "Multiple tool operations per turn detected. Consider batching related operations for efficiency.".to_string(),
-            impact_score: 0.6,
-            implementation_difficulty: "Medium".to_string(),
-        });
-    }
-
-    // Default recommendation
-    recommendations.push(Recommendation {
-        title: "Continuous Learning".to_string(),
-        description:
-            "Review session outcomes to identify patterns and improve future AI interactions."
-                .to_string(),
-        impact_score: 0.8,
-        implementation_difficulty: "Low".to_string(),
-    });
-
-    recommendations
-}
-
-fn generate_learning_observations_from_stats(stats: &SessionStats) -> Vec<LearningObservation> {
-    let mut observations = Vec::new();
-
-    // General development observation
-    if stats.total_turns > 0 {
-        observations.push(LearningObservation {
-            observation: "Active engagement with AI development assistant".to_string(),
-            skill_area: "AI-Assisted Development".to_string(),
-            progress_indicator: if stats.tool_uses_count > 5 {
-                "Advanced usage"
-            } else {
-                "Developing proficiency"
-            }
-            .to_string(),
-            next_steps: vec![
-                "Explore more tool capabilities".to_string(),
-                "Practice iterative problem-solving".to_string(),
-            ],
-        });
-    }
-
-    observations
 }
 
 // =============================================================================
@@ -960,38 +581,4 @@ pub async fn score_all_rubrics(
     };
 
     Ok((scores, summary))
-}
-
-/// Generate rubric evaluation with fallback (no AI)
-pub fn generate_rubric_evaluation_fallback() -> (Vec<RubricScore>, RubricEvaluationSummary) {
-    let rubric_list = RubricList::default_rubrics();
-
-    let scores: Vec<RubricScore> = rubric_list
-        .rubrics
-        .iter()
-        .map(|rubric| RubricScore {
-            rubric_id: rubric.id.clone(),
-            rubric_name: rubric.name.clone(),
-            score: 3.0, // Default middle score
-            max_score: 5.0,
-            reasoning: "Fallback evaluation - AI analysis unavailable".to_string(),
-        })
-        .collect();
-
-    let total_score: f64 = scores.iter().map(|s| s.score).sum();
-    let max_score: f64 = scores.iter().map(|s| s.max_score).sum();
-
-    let summary = RubricEvaluationSummary {
-        total_score,
-        max_score,
-        percentage: if max_score > 0.0 {
-            (total_score / max_score) * 100.0
-        } else {
-            0.0
-        },
-        rubrics_evaluated: scores.len(),
-        rubrics_version: rubric_list.version,
-    };
-
-    (scores, summary)
 }
