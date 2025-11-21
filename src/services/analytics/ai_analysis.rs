@@ -1,9 +1,13 @@
 use super::models::{
     GoodPattern, ImprovementArea, Insight, LearningObservation, QualitativeInput,
-    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation,
+    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, Rubric,
+    RubricEvaluationSummary, RubricList, RubricScore,
 };
+use crate::models::message::MessageType;
+use crate::models::{Message, MessageRole};
 use crate::services::google_ai::GoogleAiClient;
 use anyhow::Result;
+use regex::Regex;
 
 // =============================================================================
 // AI Analysis Functions
@@ -268,7 +272,11 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
     let json_text = extract_json_from_text(response_text);
 
     match serde_json::from_str::<QualitativeOutput>(&json_text) {
-        Ok(output) => Ok(output),
+        Ok(output) => {
+            // Rubric fields will be populated separately by rubric evaluation
+            // if they are empty/None after parsing
+            Ok(output)
+        }
         Err(e) => {
             tracing::warn!(
                 "Failed to parse AI response as JSON: {}. Response: {}",
@@ -287,6 +295,8 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
                 improvement_areas: vec![],
                 recommendations: vec![],
                 learning_observations: vec![],
+                rubric_scores: vec![],
+                rubric_summary: None,
             })
         }
     }
@@ -409,6 +419,7 @@ pub fn generate_qualitative_analysis_fallback(
     let improvement_areas = generate_improvement_areas(qualitative_input);
     let recommendations = generate_recommendations(qualitative_input);
     let learning_observations = generate_learning_observations(qualitative_input);
+    let (rubric_scores, rubric_summary) = generate_rubric_evaluation_fallback();
 
     Ok(QualitativeOutput {
         insights,
@@ -416,6 +427,8 @@ pub fn generate_qualitative_analysis_fallback(
         improvement_areas,
         recommendations,
         learning_observations,
+        rubric_scores,
+        rubric_summary: Some(rubric_summary),
     })
 }
 
@@ -657,4 +670,296 @@ fn generate_learning_observations(input: &QualitativeInput) -> Vec<LearningObser
     }
 
     observations
+}
+
+// =============================================================================
+// Rubric-Based Evaluation (LLM-as-a-judge)
+// =============================================================================
+
+/// Format messages into a chat session representation for rubric evaluation
+pub fn format_messages_for_prompt(messages: &[Message]) -> String {
+    let mut formatted = String::new();
+    let mut turn_number = 0;
+
+    // Group messages into user-assistant turns
+    let mut i = 0;
+    while i < messages.len() {
+        let message = &messages[i];
+
+        // Skip thinking and system messages for evaluation
+        if message.is_thinking() || message.is_system_message() {
+            i += 1;
+            continue;
+        }
+
+        // Start a new turn when we see a user message
+        if message.is_user_message() {
+            turn_number += 1;
+            formatted.push_str(&format!("\n--- Turn {} ---\n", turn_number));
+        }
+
+        // Format the message
+        let role_str = match message.role {
+            MessageRole::User => "[User]",
+            MessageRole::Assistant => "[Assistant]",
+            MessageRole::System => "[System]",
+        };
+
+        formatted.push_str(&format!("{}\n", role_str));
+
+        // Add content (truncate if too long)
+        let content = if message.content.len() > 2000 {
+            format!("{}... (truncated)", &message.content[..2000])
+        } else {
+            message.content.clone()
+        };
+
+        // For tool operations, add a summary
+        match message.message_type {
+            MessageType::ToolRequest => {
+                formatted.push_str(&format!("[Tool Request]\n{}\n", content));
+            }
+            MessageType::ToolResult => {
+                // Truncate tool results more aggressively
+                let result_content = if content.len() > 500 {
+                    format!("{}... (truncated)", &content[..500])
+                } else {
+                    content
+                };
+                formatted.push_str(&format!("[Tool Result]\n{}\n", result_content));
+            }
+            _ => {
+                formatted.push_str(&format!("{}\n", content));
+            }
+        }
+
+        formatted.push('\n');
+        i += 1;
+    }
+
+    formatted
+}
+
+/// Build a judge prompt for a specific rubric
+fn build_rubric_judge_prompt(rubric: &Rubric, formatted_session: &str) -> String {
+    format!(
+        r#"You are an expert evaluator assessing how effectively a user interacts with an AI coding assistant.
+
+## Evaluation Rubric
+
+{rubric_content}
+
+## Scoring Scale
+
+1 - Poor: User demonstrates significant deficiencies in this area
+2 - Below Average: User shows some attempt but missing important elements
+3 - Average: User demonstrates adequate behavior with room for improvement
+4 - Good: User demonstrates strong skills in this area
+5 - Excellent: User demonstrates exceptional mastery in this area
+
+## Chat Session to Evaluate
+
+{session}
+
+## Instructions
+
+1. Read the entire chat session carefully
+2. Focus ONLY on the USER's behavior and communication, not the AI's responses
+3. Find specific evidence from the session that relates to this rubric
+4. Assign a score from 1-5 based strictly on the scoring criteria
+5. Provide 2-3 sentences of reasoning with specific evidence from the session
+
+## Required Output Format
+
+Respond EXACTLY in this format:
+SCORE: [1-5]
+REASONING: [Your 2-3 sentence explanation with specific evidence]
+
+Example:
+SCORE: 4
+REASONING: The user provided clear requirements by specifying the exact functionality needed and mentioning edge cases. They could improve by providing more context about the existing codebase structure."#,
+        rubric_content = rubric.format_for_prompt(),
+        session = formatted_session
+    )
+}
+
+/// Parse the LLM response to extract score and reasoning
+fn parse_rubric_score_response(response: &str) -> (Option<f64>, String) {
+    // Extract score using regex
+    let score_re = Regex::new(r"SCORE:\s*(\d+(?:\.\d+)?)").unwrap();
+    let score = score_re.captures(response).and_then(|caps| {
+        caps.get(1)
+            .and_then(|m| m.as_str().parse::<f64>().ok())
+            .map(|s| s.clamp(1.0, 5.0))
+    });
+
+    // Extract reasoning using regex
+    let reasoning_re = Regex::new(r"(?i)REASONING:\s*(.+?)(?:\n\n|\z)").unwrap();
+    let reasoning = reasoning_re
+        .captures(response)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().trim().to_string()))
+        .unwrap_or_default();
+
+    (score, reasoning)
+}
+
+/// Score a session against a single rubric
+pub async fn score_rubric(
+    rubric: &Rubric,
+    formatted_session: &str,
+    ai_client: &GoogleAiClient,
+) -> Result<RubricScore> {
+    let prompt = build_rubric_judge_prompt(rubric, formatted_session);
+
+    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
+        prompt: prompt.clone(),
+        max_tokens: Some(512),
+        temperature: Some(0.3), // Lower temperature for more consistent scoring
+    };
+
+    let (score, reasoning) = match ai_client.analytics(analysis_request).await {
+        Ok(response) => {
+            let (parsed_score, parsed_reasoning) = parse_rubric_score_response(&response.text);
+
+            // If parsing failed, retry with explicit format instruction
+            if parsed_score.is_none() {
+                tracing::warn!(
+                    "Failed to parse rubric score for {}, retrying...",
+                    rubric.id
+                );
+                let retry_prompt = format!(
+                    "{}\n\nIMPORTANT: Please respond EXACTLY in this format:\nSCORE: [1-5]\nREASONING: [your explanation]",
+                    prompt
+                );
+
+                let retry_request = crate::services::google_ai::models::AnalysisRequest {
+                    prompt: retry_prompt,
+                    max_tokens: Some(512),
+                    temperature: Some(0.3),
+                };
+
+                match ai_client.analytics(retry_request).await {
+                    Ok(retry_response) => parse_rubric_score_response(&retry_response.text),
+                    Err(_) => (None, String::new()),
+                }
+            } else {
+                (parsed_score, parsed_reasoning)
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Rubric scoring failed for {}: {}", rubric.id, e);
+            (None, format!("Scoring failed: {}", e))
+        }
+    };
+
+    // Default to middle score if parsing failed
+    let final_score = score.unwrap_or_else(|| {
+        tracing::warn!(
+            "Could not parse score for rubric {}, defaulting to 3.0",
+            rubric.id
+        );
+        3.0
+    });
+
+    let final_reasoning = if reasoning.is_empty() {
+        "Unable to parse LLM response. Default score assigned.".to_string()
+    } else {
+        reasoning
+    };
+
+    Ok(RubricScore {
+        rubric_id: rubric.id.clone(),
+        rubric_name: rubric.name.clone(),
+        score: final_score,
+        max_score: 5.0,
+        reasoning: final_reasoning,
+    })
+}
+
+/// Score a session against all rubrics
+pub async fn score_all_rubrics(
+    messages: &[Message],
+    ai_client: &GoogleAiClient,
+    rubrics: Option<&RubricList>,
+) -> Result<(Vec<RubricScore>, RubricEvaluationSummary)> {
+    // Use provided rubrics or load defaults
+    let rubric_list = match rubrics {
+        Some(r) => r.clone(),
+        None => RubricList::default_rubrics(),
+    };
+
+    // Format messages once for all rubrics
+    let formatted_session = format_messages_for_prompt(messages);
+
+    // Score against each rubric
+    let mut scores = Vec::new();
+    for rubric in &rubric_list.rubrics {
+        match score_rubric(rubric, &formatted_session, ai_client).await {
+            Ok(score) => scores.push(score),
+            Err(e) => {
+                tracing::error!("Failed to score rubric {}: {}", rubric.id, e);
+                // Add a default score on error
+                scores.push(RubricScore {
+                    rubric_id: rubric.id.clone(),
+                    rubric_name: rubric.name.clone(),
+                    score: 3.0,
+                    max_score: 5.0,
+                    reasoning: format!("Scoring error: {}", e),
+                });
+            }
+        }
+    }
+
+    // Calculate summary
+    let total_score: f64 = scores.iter().map(|s| s.score).sum();
+    let max_score: f64 = scores.iter().map(|s| s.max_score).sum();
+    let percentage = if max_score > 0.0 {
+        (total_score / max_score) * 100.0
+    } else {
+        0.0
+    };
+
+    let summary = RubricEvaluationSummary {
+        total_score,
+        max_score,
+        percentage,
+        rubrics_evaluated: scores.len(),
+        rubrics_version: rubric_list.version.clone(),
+    };
+
+    Ok((scores, summary))
+}
+
+/// Generate rubric evaluation with fallback (no AI)
+pub fn generate_rubric_evaluation_fallback() -> (Vec<RubricScore>, RubricEvaluationSummary) {
+    let rubric_list = RubricList::default_rubrics();
+
+    let scores: Vec<RubricScore> = rubric_list
+        .rubrics
+        .iter()
+        .map(|rubric| RubricScore {
+            rubric_id: rubric.id.clone(),
+            rubric_name: rubric.name.clone(),
+            score: 3.0, // Default middle score
+            max_score: 5.0,
+            reasoning: "Fallback evaluation - AI analysis unavailable".to_string(),
+        })
+        .collect();
+
+    let total_score: f64 = scores.iter().map(|s| s.score).sum();
+    let max_score: f64 = scores.iter().map(|s| s.max_score).sum();
+
+    let summary = RubricEvaluationSummary {
+        total_score,
+        max_score,
+        percentage: if max_score > 0.0 {
+            (total_score / max_score) * 100.0
+        } else {
+            0.0
+        },
+        rubrics_evaluated: scores.len(),
+        rubrics_version: rubric_list.version,
+    };
+
+    (scores, summary)
 }

@@ -1,5 +1,116 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
+
+// =============================================================================
+// Rubric Models (for LLM-as-a-judge evaluation)
+// =============================================================================
+
+/// A single evaluation rubric defining criteria for judging user behavior
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Rubric {
+    /// Unique identifier for the rubric (e.g., "rubric_001")
+    pub id: String,
+    /// Short descriptive name (2-5 words)
+    pub name: String,
+    /// What this rubric measures (1-2 sentences)
+    pub description: String,
+    /// How to score from 1 (poor) to 5 (excellent)
+    pub scoring_criteria: String,
+    /// Weight for scoring aggregation (default 1.0)
+    #[serde(default = "default_weight")]
+    pub weight: f64,
+}
+
+fn default_weight() -> f64 {
+    1.0
+}
+
+impl Rubric {
+    /// Format rubric for inclusion in LLM prompts
+    pub fn format_for_prompt(&self) -> String {
+        format!(
+            "Name: {}\nDescription: {}\nScoring Criteria:\n{}",
+            self.name, self.description, self.scoring_criteria
+        )
+    }
+}
+
+/// Container for a list of rubrics with metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RubricList {
+    /// Schema version
+    #[serde(default = "default_version")]
+    pub version: String,
+    /// List of rubrics
+    pub rubrics: Vec<Rubric>,
+}
+
+fn default_version() -> String {
+    "1.0".to_string()
+}
+
+impl RubricList {
+    /// Load rubrics from a JSON file
+    pub fn from_json_file(path: &Path) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let rubric_list: RubricList = serde_json::from_str(&content)?;
+        Ok(rubric_list)
+    }
+
+    /// Load rubrics from embedded JSON string
+    pub fn from_json_str(json: &str) -> anyhow::Result<Self> {
+        let rubric_list: RubricList = serde_json::from_str(json)?;
+        Ok(rubric_list)
+    }
+
+    /// Get default rubrics (embedded in binary)
+    pub fn default_rubrics() -> Self {
+        let json = include_str!("../../../resources/rubrics.json");
+        Self::from_json_str(json).expect("Default rubrics should be valid JSON")
+    }
+}
+
+/// Score for a single rubric evaluation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RubricScore {
+    /// ID of the rubric being scored
+    pub rubric_id: String,
+    /// Name of the rubric for display
+    pub rubric_name: String,
+    /// Score (1-5 scale)
+    pub score: f64,
+    /// Maximum possible score (typically 5.0)
+    pub max_score: f64,
+    /// LLM's reasoning for the score
+    pub reasoning: String,
+}
+
+impl RubricScore {
+    /// Calculate percentage score
+    pub fn percentage(&self) -> f64 {
+        if self.max_score > 0.0 {
+            (self.score / self.max_score) * 100.0
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Summary of all rubric evaluations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RubricEvaluationSummary {
+    /// Total score across all rubrics
+    pub total_score: f64,
+    /// Maximum possible score
+    pub max_score: f64,
+    /// Percentage (0-100)
+    pub percentage: f64,
+    /// Number of rubrics evaluated
+    pub rubrics_evaluated: usize,
+    /// Version of rubrics used
+    pub rubrics_version: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuantitativeInput {
@@ -108,6 +219,12 @@ pub struct QualitativeOutput {
     pub improvement_areas: Vec<ImprovementArea>,
     pub recommendations: Vec<Recommendation>,
     pub learning_observations: Vec<LearningObservation>,
+    /// Rubric-based evaluation scores (LLM-as-a-judge)
+    #[serde(default)]
+    pub rubric_scores: Vec<RubricScore>,
+    /// Summary of rubric evaluation
+    #[serde(default)]
+    pub rubric_summary: Option<RubricEvaluationSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

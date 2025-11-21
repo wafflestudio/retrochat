@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "rubrics": [
+    {
+      "id": "rubric_001",
+      "name": "Clear Requirements",
+      "description": "How clearly and completely the user specifies their requirements and goals",
+      "scoring_criteria": "1: Vague or missing requirements, AI must guess intent\n2: Basic requirements stated but missing important details\n3: Adequate requirements with some ambiguity\n4: Clear requirements with good context and specifics\n5: Excellent requirements with comprehensive context, constraints, and expected outcomes",
+      "weight": 1.0
+    },
+    {
+      "id": "rubric_002",
+      "name": "Effective Context Provision",
+      "description": "How well the user provides relevant context about their codebase, environment, and constraints",
+      "scoring_criteria": "1: No context provided, AI works blindly\n2: Minimal context, missing critical information\n3: Some context but incomplete or disorganized\n4: Good context with relevant details about codebase and environment\n5: Comprehensive context including architecture, constraints, and related code",
+      "weight": 1.0
+    },
+    {
+      "id": "rubric_003",
+      "name": "Iterative Refinement",
+      "description": "How effectively the user refines and clarifies requests based on AI responses",
+      "scoring_criteria": "1: No refinement, accepts first response regardless of quality\n2: Minimal feedback, unclear corrections\n3: Some refinement but could be more specific\n4: Good iterative feedback that guides AI toward better solutions\n5: Excellent refinement with specific corrections and clear direction",
+      "weight": 1.0
+    },
+    {
+      "id": "rubric_004",
+      "name": "Problem Decomposition",
+      "description": "How well the user breaks down complex problems into manageable pieces",
+      "scoring_criteria": "1: Presents overwhelming complex requests without structure\n2: Some attempt at breaking down but still too broad\n3: Reasonable decomposition with room for improvement\n4: Good problem breakdown into logical steps\n5: Excellent decomposition with clear milestones and dependencies",
+      "weight": 1.0
+    },
+    {
+      "id": "rubric_005",
+      "name": "Quality Verification",
+      "description": "How well the user verifies and tests AI-generated solutions",
+      "scoring_criteria": "1: No verification, blindly accepts all outputs\n2: Minimal checking, misses obvious issues\n3: Some verification but not systematic\n4: Good verification with testing and review\n5: Thorough verification including edge cases and integration testing",
+      "weight": 1.0
+    }
+  ]
+}
