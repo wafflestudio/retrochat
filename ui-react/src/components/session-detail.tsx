@@ -110,15 +110,15 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
 function MessageRenderer({ message }: { message: SessionWithMessages['messages'][0] }) {
   const messageType = message.message_type
 
-  if (messageType === 'Thinking') {
+  if (messageType === 'thinking') {
     return <ThinkingMessage message={message} />
   }
 
-  if (messageType === 'ToolRequest') {
+  if (messageType === 'tool_request') {
     return <ToolRequestMessage message={message} />
   }
 
-  if (messageType === 'ToolResult') {
+  if (messageType === 'tool_result') {
     return <ToolResultMessage message={message} />
   }
 
@@ -255,29 +255,29 @@ function ToolResultMessage({ message }: { message: SessionWithMessages['messages
 function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0] }) {
   console.log(message)
   return (
-    <div className={`flex gap-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-4 ${message.role === 'User' ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`flex gap-3 max-w-[80%] ${
-          message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+          message.role === 'User' ? 'flex-row-reverse' : 'flex-row'
         }`}
       >
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-            message.role === 'user'
+            message.role === 'User'
               ? 'bg-primary text-primary-foreground'
               : 'bg-secondary text-secondary-foreground'
           }`}
         >
-          {message.role === 'user' ? (
+          {message.role === 'User' ? (
             <PersonIcon className="w-4 h-4" />
           ) : (
             <Bot className="w-4 h-4" />
           )}
         </div>
-        <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+        <div className={`flex flex-col ${message.role === 'User' ? 'items-end' : 'items-start'}`}>
           <div
             className={`rounded-lg p-4 ${
-              message.role === 'user'
+              message.role === 'User'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card border border-border text-card-foreground'
             }`}
