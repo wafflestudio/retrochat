@@ -1,6 +1,5 @@
 use super::models::{
-    GoodPattern, ImprovementArea, Insight, LearningObservation, QualitativeInput,
-    QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, Rubric,
+    QualitativeInput, QualitativeOutput, QuantitativeInput, QuantitativeOutput, Rubric,
     RubricEvaluationSummary, RubricList, RubricScore,
 };
 use crate::models::message::MessageType;
@@ -25,13 +24,8 @@ pub async fn generate_quantitative_analysis_ai(
         temperature: Some(0.5),
     };
 
-    match ai_client.analytics(analysis_request).await {
-        Ok(response) => parse_quantitative_response(&response.text),
-        Err(e) => {
-            tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
-            generate_quantitative_analysis_fallback(quantitative_input)
-        }
-    }
+    let response = ai_client.analytics(analysis_request).await?;
+    parse_quantitative_response(&response.text)
 }
 
 pub async fn generate_qualitative_analysis_ai(
@@ -46,13 +40,8 @@ pub async fn generate_qualitative_analysis_ai(
         temperature: Some(0.7),
     };
 
-    match ai_client.analytics(analysis_request).await {
-        Ok(response) => parse_qualitative_response(&response.text),
-        Err(e) => {
-            tracing::warn!("AI analysis failed, falling back to rule-based: {}", e);
-            generate_qualitative_analysis_fallback(qualitative_input)
-        }
-    }
+    let response = ai_client.analytics(analysis_request).await?;
+    parse_qualitative_response(&response.text)
 }
 
 // =============================================================================
@@ -143,49 +132,27 @@ Important: Return ONLY the JSON object, no additional text or explanation."#,
 }
 
 fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
-    let file_list = input
-        .file_contexts
-        .iter()
-        .map(|f| {
-            format!(
-                "  - {} ({}): {}",
-                f.file_path, f.file_type, f.modification_type
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let tech_stack = input.project_context.technology_stack.join(", ");
-
     format!(
-        r#"Analytics the following development session and provide qualitative insights.
+        r#"Analyze the following development session and provide qualitative insights.
 
-## Session Context
+## Full Session Transcript (JSON)
 
-### Files Worked On:
+The following is a complete transcript of the user's conversation with an AI coding assistant.
+Each turn includes the message content and any tool uses (file reads, writes, edits, bash commands, etc.).
+
+```json
 {}
-
-### Chat Context:
-- Conversation Flow: {}
-- Problem-Solving Patterns: {:?}
-- AI Interaction Quality: {:.1}/1.0
-- Key Topics: {:?}
-
-### Project Context:
-- Project Type: {}
-- Technology Stack: {}
-- Project Complexity: {:.1}/1.0
-- Development Stage: {}
+```
 
 ## Task
 
-Provide a comprehensive qualitative analysis with:
+Based on the complete session transcript above, provide a comprehensive qualitative analysis with:
 
-1. **Insights**: Key observations about the development patterns (2-4 insights)
-2. **Good Patterns**: Positive habits and practices observed (1-3 patterns)
-3. **Improvement Areas**: Areas that could be enhanced (1-3 areas)
+1. **Insights**: Key observations about the development patterns, communication style, and problem-solving approach (2-4 insights)
+2. **Good Patterns**: Positive habits and practices observed in how the user interacts with the AI (1-3 patterns)
+3. **Improvement Areas**: Areas where the user could enhance their workflow or communication (1-3 areas)
 4. **Recommendations**: Actionable suggestions for improvement (2-3 recommendations)
-5. **Learning Observations**: Growth and learning indicators (1-2 observations)
+5. **Learning Observations**: Growth and learning indicators based on what the user was working on (1-2 observations)
 
 Return ONLY a valid JSON object with this exact structure:
 {{
@@ -233,15 +200,7 @@ Return ONLY a valid JSON object with this exact structure:
 }}
 
 Important: Return ONLY the JSON object, no additional text or explanation."#,
-        file_list,
-        input.chat_context.conversation_flow,
-        input.chat_context.problem_solving_patterns,
-        input.chat_context.ai_interaction_quality,
-        input.chat_context.key_topics,
-        input.project_context.project_type,
-        tech_stack,
-        input.project_context.project_complexity,
-        input.project_context.development_stage
+        input.raw_session
     )
 }
 
@@ -271,35 +230,14 @@ fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> 
     // Try to extract JSON from the response
     let json_text = extract_json_from_text(response_text);
 
-    match serde_json::from_str::<QualitativeOutput>(&json_text) {
-        Ok(output) => {
-            // Rubric fields will be populated separately by rubric evaluation
-            // if they are empty/None after parsing
-            Ok(output)
-        }
-        Err(e) => {
-            tracing::warn!(
-                "Failed to parse AI response as JSON: {}. Response: {}",
-                e,
-                response_text
-            );
-            // If JSON parsing fails, return empty structures with error message
-            Ok(QualitativeOutput {
-                insights: vec![Insight {
-                    title: "Analysis Error".to_string(),
-                    description: format!("Failed to parse AI response: {e}"),
-                    category: "System".to_string(),
-                    confidence: 0.0,
-                }],
-                good_patterns: vec![],
-                improvement_areas: vec![],
-                recommendations: vec![],
-                learning_observations: vec![],
-                rubric_scores: vec![],
-                rubric_summary: None,
-            })
-        }
-    }
+    serde_json::from_str::<QualitativeOutput>(&json_text).map_err(|e| {
+        tracing::warn!(
+            "Failed to parse AI response as JSON: {}. Response: {}",
+            e,
+            response_text
+        );
+        anyhow::anyhow!("Failed to parse AI qualitative response: {}", e)
+    })
 }
 
 fn extract_json_from_text(text: &str) -> String {
@@ -385,291 +323,6 @@ fn extract_score_after_keyword(text: &str, keyword: &str) -> f64 {
 
     // Default score if not found
     50.0
-}
-
-// =============================================================================
-// Fallback Analysis Functions (Rule-based)
-// =============================================================================
-
-pub fn generate_quantitative_analysis_fallback(
-    quantitative_input: &QuantitativeInput,
-) -> Result<QuantitativeOutput> {
-    let overall_score = calculate_overall_score(quantitative_input);
-    let code_quality_score = calculate_code_quality_score(quantitative_input);
-    let productivity_score = calculate_productivity_score(quantitative_input);
-    let efficiency_score = calculate_efficiency_score(quantitative_input);
-    let collaboration_score = calculate_collaboration_score(quantitative_input);
-    let learning_score = calculate_learning_score(quantitative_input);
-
-    Ok(QuantitativeOutput {
-        overall_score,
-        code_quality_score,
-        productivity_score,
-        efficiency_score,
-        collaboration_score,
-        learning_score,
-    })
-}
-
-pub fn generate_qualitative_analysis_fallback(
-    qualitative_input: &QualitativeInput,
-) -> Result<QualitativeOutput> {
-    let insights = generate_insights(qualitative_input);
-    let good_patterns = generate_good_patterns(qualitative_input);
-    let improvement_areas = generate_improvement_areas(qualitative_input);
-    let recommendations = generate_recommendations(qualitative_input);
-    let learning_observations = generate_learning_observations(qualitative_input);
-    let (rubric_scores, rubric_summary) = generate_rubric_evaluation_fallback();
-
-    Ok(QualitativeOutput {
-        insights,
-        good_patterns,
-        improvement_areas,
-        recommendations,
-        learning_observations,
-        rubric_scores,
-        rubric_summary: Some(rubric_summary),
-    })
-}
-
-// =============================================================================
-// Scoring Functions
-// =============================================================================
-
-fn calculate_overall_score(input: &QuantitativeInput) -> f64 {
-    let code_quality = calculate_code_quality_score(input);
-    let productivity = calculate_productivity_score(input);
-    let efficiency = calculate_efficiency_score(input);
-
-    (code_quality + productivity + efficiency) / 3.0
-}
-
-fn calculate_code_quality_score(input: &QuantitativeInput) -> f64 {
-    let refactoring_ratio = if input.file_changes.total_files_modified > 0 {
-        input.file_changes.refactoring_operations as f64
-            / input.file_changes.total_files_modified as f64
-    } else {
-        0.0
-    };
-
-    let net_growth_positive = if input.file_changes.net_code_growth > 0 {
-        1.0
-    } else {
-        0.0
-    };
-
-    // Score based on refactoring ratio and positive code growth
-    (refactoring_ratio * 50.0 + net_growth_positive * 30.0 + 20.0).min(100.0)
-}
-
-fn calculate_productivity_score(input: &QuantitativeInput) -> f64 {
-    let lines_per_hour = if input.time_metrics.total_session_time_minutes > 0.0 {
-        input.file_changes.lines_added as f64
-            / (input.time_metrics.total_session_time_minutes / 60.0)
-    } else {
-        0.0
-    };
-
-    let files_per_hour = if input.time_metrics.total_session_time_minutes > 0.0 {
-        input.file_changes.total_files_modified as f64
-            / (input.time_metrics.total_session_time_minutes / 60.0)
-    } else {
-        0.0
-    };
-
-    // Score based on lines and files per hour
-    ((lines_per_hour * 0.5 + files_per_hour * 0.5) * 2.0).min(100.0)
-}
-
-fn calculate_efficiency_score(input: &QuantitativeInput) -> f64 {
-    let token_efficiency = input.token_metrics.token_efficiency;
-    let tool_success_rate = if input.tool_usage.total_operations > 0 {
-        input.tool_usage.successful_operations as f64 / input.tool_usage.total_operations as f64
-    } else {
-        0.0
-    };
-
-    // Score based on token efficiency and tool success rate
-    (token_efficiency * 50.0 + tool_success_rate * 50.0).min(100.0)
-}
-
-fn calculate_collaboration_score(input: &QuantitativeInput) -> f64 {
-    let message_ratio = if input.token_metrics.input_tokens > 0 {
-        input.token_metrics.output_tokens as f64 / input.token_metrics.input_tokens as f64
-    } else {
-        0.0
-    };
-
-    // Score based on balanced conversation ratio
-    (message_ratio * 30.0 + 70.0).min(100.0)
-}
-
-fn calculate_learning_score(input: &QuantitativeInput) -> f64 {
-    let exploration_ratio = if input.file_changes.total_files_modified > 0 {
-        input.file_changes.total_files_read as f64 / input.file_changes.total_files_modified as f64
-    } else {
-        0.0
-    };
-
-    // Score based on file exploration vs modification
-    (exploration_ratio * 40.0 + 60.0).min(100.0)
-}
-
-// =============================================================================
-// Qualitative Analysis Functions
-// =============================================================================
-
-fn generate_insights(input: &QualitativeInput) -> Vec<Insight> {
-    let mut insights = Vec::new();
-
-    // File modification insights
-    if input.file_contexts.len() > 5 {
-        insights.push(Insight {
-            title: "High File Activity".to_string(),
-            description:
-                "You worked on many files during this session, showing good project organization."
-                    .to_string(),
-            category: "Productivity".to_string(),
-            confidence: 0.8,
-        });
-    }
-
-    // Code quality insights
-    if input.project_context.project_complexity > 0.7 {
-        insights.push(Insight {
-            title: "Complex Project Work".to_string(),
-            description:
-                "You're working on a complex project, which shows advanced development skills."
-                    .to_string(),
-            category: "Technical".to_string(),
-            confidence: 0.9,
-        });
-    }
-
-    // Learning insights
-    if !input.project_context.technology_stack.is_empty() {
-        insights.push(Insight {
-            title: "Technology Exploration".to_string(),
-            description: format!(
-                "You're working with: {}",
-                input.project_context.technology_stack.join(", ")
-            ),
-            category: "Learning".to_string(),
-            confidence: 0.7,
-        });
-    }
-
-    insights
-}
-
-fn generate_good_patterns(input: &QualitativeInput) -> Vec<GoodPattern> {
-    let mut patterns = Vec::new();
-
-    // File organization pattern
-    if input.file_contexts.len() > 3 {
-        patterns.push(GoodPattern {
-            pattern_name: "Modular Development".to_string(),
-            description:
-                "You're working across multiple files, showing good modular development practices."
-                    .to_string(),
-            frequency: input.file_contexts.len() as u64,
-            impact: "High - improves code maintainability".to_string(),
-        });
-    }
-
-    // Technology usage pattern
-    if input.project_context.technology_stack.len() > 1 {
-        patterns.push(GoodPattern {
-            pattern_name: "Technology Integration".to_string(),
-            description: "You're using multiple technologies together effectively.".to_string(),
-            frequency: 1,
-            impact: "Medium - shows technical versatility".to_string(),
-        });
-    }
-
-    patterns
-}
-
-fn generate_improvement_areas(input: &QualitativeInput) -> Vec<ImprovementArea> {
-    let mut areas = Vec::new();
-
-    // Code organization improvement
-    if input.file_contexts.len() < 2 {
-        areas.push(ImprovementArea {
-            area_name: "File Organization".to_string(),
-            current_state: "Working on single file".to_string(),
-            suggested_improvement:
-                "Consider breaking code into multiple files for better organization".to_string(),
-            expected_impact: "Improved maintainability and readability".to_string(),
-            priority: "Medium".to_string(),
-        });
-    }
-
-    // Technology stack improvement
-    if input.project_context.technology_stack.is_empty() {
-        areas.push(ImprovementArea {
-            area_name: "Technology Documentation".to_string(),
-            current_state: "No clear technology stack identified".to_string(),
-            suggested_improvement: "Document the technologies you're using for better context"
-                .to_string(),
-            expected_impact: "Better project understanding and maintenance".to_string(),
-            priority: "Low".to_string(),
-        });
-    }
-
-    areas
-}
-
-fn generate_recommendations(input: &QualitativeInput) -> Vec<Recommendation> {
-    let mut recommendations = Vec::new();
-
-    // General recommendations based on project complexity
-    if input.project_context.project_complexity > 0.8 {
-        recommendations.push(Recommendation {
-            title: "Consider Code Documentation".to_string(),
-            description: "For complex projects, consider adding more documentation to help with future maintenance.".to_string(),
-            impact_score: 0.8,
-            implementation_difficulty: "Medium".to_string(),
-        });
-    }
-
-    // Learning recommendations
-    if input.project_context.technology_stack.len() > 2 {
-        recommendations.push(Recommendation {
-            title: "Deep Dive into Technologies".to_string(),
-            description: "You're using multiple technologies. Consider focusing on mastering one or two core technologies.".to_string(),
-            impact_score: 0.7,
-            implementation_difficulty: "Low".to_string(),
-        });
-    }
-
-    recommendations
-}
-
-fn generate_learning_observations(input: &QualitativeInput) -> Vec<LearningObservation> {
-    let mut observations = Vec::new();
-
-    // Technology learning observation
-    if !input.project_context.technology_stack.is_empty() {
-        observations.push(LearningObservation {
-            observation: "Working with multiple technologies".to_string(),
-            skill_area: "Technology Integration".to_string(),
-            progress_indicator: "Active exploration".to_string(),
-            next_steps: vec!["Consider creating a technology reference guide".to_string()],
-        });
-    }
-
-    // Code organization learning observation
-    if input.file_contexts.len() > 3 {
-        observations.push(LearningObservation {
-            observation: "Good file organization practices".to_string(),
-            skill_area: "Code Architecture".to_string(),
-            progress_indicator: "Consistent application".to_string(),
-            next_steps: vec!["Continue modular development approach".to_string()],
-        });
-    }
-
-    observations
 }
 
 // =============================================================================
@@ -928,38 +581,4 @@ pub async fn score_all_rubrics(
     };
 
     Ok((scores, summary))
-}
-
-/// Generate rubric evaluation with fallback (no AI)
-pub fn generate_rubric_evaluation_fallback() -> (Vec<RubricScore>, RubricEvaluationSummary) {
-    let rubric_list = RubricList::default_rubrics();
-
-    let scores: Vec<RubricScore> = rubric_list
-        .rubrics
-        .iter()
-        .map(|rubric| RubricScore {
-            rubric_id: rubric.id.clone(),
-            rubric_name: rubric.name.clone(),
-            score: 3.0, // Default middle score
-            max_score: 5.0,
-            reasoning: "Fallback evaluation - AI analysis unavailable".to_string(),
-        })
-        .collect();
-
-    let total_score: f64 = scores.iter().map(|s| s.score).sum();
-    let max_score: f64 = scores.iter().map(|s| s.max_score).sum();
-
-    let summary = RubricEvaluationSummary {
-        total_score,
-        max_score,
-        percentage: if max_score > 0.0 {
-            (total_score / max_score) * 100.0
-        } else {
-            0.0
-        },
-        rubrics_evaluated: scores.len(),
-        rubrics_version: rubric_list.version,
-    };
-
-    (scores, summary)
 }

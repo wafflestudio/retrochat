@@ -100,32 +100,31 @@ export interface QuantitativeInput {
   tool_usage: ToolUsageMetrics
 }
 
-export interface FileContext {
-  file_path: string
-  file_type: string
-  modification_type: string
-  content_snippet: string
-  complexity_indicators: string[]
-}
-
-export interface ChatContext {
-  conversation_flow: string
-  problem_solving_patterns: string[]
-  ai_interaction_quality: number
-  key_topics: string[]
-}
-
-export interface ProjectContext {
-  project_type: string
-  technology_stack: string[]
-  project_complexity: number
-  development_stage: string
-}
-
+// QualitativeInput contains a single raw JSON string representing the full chat session
 export interface QualitativeInput {
-  file_contexts: FileContext[]
-  chat_context: ChatContext
-  project_context: ProjectContext
+  // Raw JSON string containing the full session transcript with embedded tool uses
+  raw_session: string
+}
+
+// Types for parsing the raw_session JSON (optional, for display purposes)
+export interface EmbeddedToolUse {
+  tool_name: string
+  input: string
+  result?: string
+  success?: boolean
+}
+
+export interface SessionTurn {
+  turn_number: number
+  role: string
+  content: string
+  tool_uses?: EmbeddedToolUse[]
+}
+
+export interface SessionTranscript {
+  session_id: string
+  total_turns: number
+  turns: SessionTurn[]
 }
 
 export interface QuantitativeOutput {

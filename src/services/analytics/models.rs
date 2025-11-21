@@ -162,36 +162,54 @@ pub struct ToolUsageMetrics {
 // Qualitative Input Models
 // =============================================================================
 
+/// QualitativeInput contains a single raw JSON string representing the full chat session.
+/// The JSON includes multi-turn messages with all tool uses embedded in each corresponding message.
+/// Long tool content is truncated by cutting the center portion to meet character thresholds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualitativeInput {
-    pub file_contexts: Vec<FileContext>,
-    pub chat_context: ChatContext,
-    pub project_context: ProjectContext,
+    /// Raw JSON string containing the full session transcript with embedded tool uses.
+    /// This is the primary input for qualitative analysis by LLM.
+    pub raw_session: String,
 }
 
+/// Represents a single turn in the session transcript for JSON serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileContext {
-    pub file_path: String,
-    pub file_type: String,
-    pub modification_type: String,
-    pub content_snippet: String,
-    pub complexity_indicators: Vec<String>,
+pub struct SessionTurn {
+    /// Turn number in the conversation
+    pub turn_number: u32,
+    /// Message role: "user", "assistant", or "system"
+    pub role: String,
+    /// The text content of the message
+    pub content: String,
+    /// Tool uses embedded in this message (if any)
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub tool_uses: Vec<EmbeddedToolUse>,
 }
 
+/// Represents a tool use embedded within a message
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatContext {
-    pub conversation_flow: String,
-    pub problem_solving_patterns: Vec<String>,
-    pub ai_interaction_quality: f64,
-    pub key_topics: Vec<String>,
+pub struct EmbeddedToolUse {
+    /// Tool name (e.g., "Read", "Write", "Edit", "Bash")
+    pub tool_name: String,
+    /// Tool input/request (truncated if too long)
+    pub input: String,
+    /// Tool result/response (truncated if too long)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    /// Whether the tool execution was successful
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success: Option<bool>,
 }
 
+/// Full session transcript structure for JSON serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectContext {
-    pub project_type: String,
-    pub technology_stack: Vec<String>,
-    pub project_complexity: f64,
-    pub development_stage: String,
+pub struct SessionTranscript {
+    /// Session identifier
+    pub session_id: String,
+    /// Total number of turns
+    pub total_turns: u32,
+    /// All turns in the session
+    pub turns: Vec<SessionTurn>,
 }
 
 // =============================================================================

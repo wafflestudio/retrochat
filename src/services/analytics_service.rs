@@ -10,8 +10,7 @@ use std::sync::Arc;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
-    generate_qualitative_analysis_ai, generate_qualitative_analysis_fallback,
-    generate_quantitative_analysis_ai, generate_quantitative_analysis_fallback,
+    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai,
     ProcessedQuantitativeOutput, QuantitativeInput,
 };
 use crate::models::Analytics;
@@ -70,18 +69,17 @@ impl AnalyticsService {
         let qualitative_input =
             collect_qualitative_data(&tool_operations, &messages, &session).await?;
 
-        // Generate analysis
-        let quantitative_output = if let Some(ref ai_client) = self.google_ai_client {
-            generate_quantitative_analysis_ai(&quantitative_input, ai_client).await?
-        } else {
-            generate_quantitative_analysis_fallback(&quantitative_input)?
-        };
+        // Generate analysis (requires AI client)
+        let ai_client = self
+            .google_ai_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
 
-        let qualitative_output = if let Some(ref ai_client) = self.google_ai_client {
-            generate_qualitative_analysis_ai(&qualitative_input, ai_client).await?
-        } else {
-            generate_qualitative_analysis_fallback(&qualitative_input)?
-        };
+        let quantitative_output =
+            generate_quantitative_analysis_ai(&quantitative_input, ai_client).await?;
+
+        let qualitative_output =
+            generate_qualitative_analysis_ai(&qualitative_input, ai_client).await?;
 
         // Process quantitative data
         let processed_output = self
