@@ -143,49 +143,27 @@ Important: Return ONLY the JSON object, no additional text or explanation."#,
 }
 
 fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
-    let file_list = input
-        .file_contexts
-        .iter()
-        .map(|f| {
-            format!(
-                "  - {} ({}): {}",
-                f.file_path, f.file_type, f.modification_type
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let tech_stack = input.project_context.technology_stack.join(", ");
-
     format!(
-        r#"Analytics the following development session and provide qualitative insights.
+        r#"Analyze the following development session and provide qualitative insights.
 
-## Session Context
+## Full Session Transcript (JSON)
 
-### Files Worked On:
+The following is a complete transcript of the user's conversation with an AI coding assistant.
+Each turn includes the message content and any tool uses (file reads, writes, edits, bash commands, etc.).
+
+```json
 {}
-
-### Chat Context:
-- Conversation Flow: {}
-- Problem-Solving Patterns: {:?}
-- AI Interaction Quality: {:.1}/1.0
-- Key Topics: {:?}
-
-### Project Context:
-- Project Type: {}
-- Technology Stack: {}
-- Project Complexity: {:.1}/1.0
-- Development Stage: {}
+```
 
 ## Task
 
-Provide a comprehensive qualitative analysis with:
+Based on the complete session transcript above, provide a comprehensive qualitative analysis with:
 
-1. **Insights**: Key observations about the development patterns (2-4 insights)
-2. **Good Patterns**: Positive habits and practices observed (1-3 patterns)
-3. **Improvement Areas**: Areas that could be enhanced (1-3 areas)
+1. **Insights**: Key observations about the development patterns, communication style, and problem-solving approach (2-4 insights)
+2. **Good Patterns**: Positive habits and practices observed in how the user interacts with the AI (1-3 patterns)
+3. **Improvement Areas**: Areas where the user could enhance their workflow or communication (1-3 areas)
 4. **Recommendations**: Actionable suggestions for improvement (2-3 recommendations)
-5. **Learning Observations**: Growth and learning indicators (1-2 observations)
+5. **Learning Observations**: Growth and learning indicators based on what the user was working on (1-2 observations)
 
 Return ONLY a valid JSON object with this exact structure:
 {{
@@ -233,15 +211,7 @@ Return ONLY a valid JSON object with this exact structure:
 }}
 
 Important: Return ONLY the JSON object, no additional text or explanation."#,
-        file_list,
-        input.chat_context.conversation_flow,
-        input.chat_context.problem_solving_patterns,
-        input.chat_context.ai_interaction_quality,
-        input.chat_context.key_topics,
-        input.project_context.project_type,
-        tech_stack,
-        input.project_context.project_complexity,
-        input.project_context.development_stage
+        input.raw_session
     )
 }
 
@@ -414,11 +384,14 @@ pub fn generate_quantitative_analysis_fallback(
 pub fn generate_qualitative_analysis_fallback(
     qualitative_input: &QualitativeInput,
 ) -> Result<QualitativeOutput> {
-    let insights = generate_insights(qualitative_input);
-    let good_patterns = generate_good_patterns(qualitative_input);
-    let improvement_areas = generate_improvement_areas(qualitative_input);
-    let recommendations = generate_recommendations(qualitative_input);
-    let learning_observations = generate_learning_observations(qualitative_input);
+    // Parse the raw session to extract basic stats for fallback analysis
+    let session_stats = parse_session_stats(&qualitative_input.raw_session);
+
+    let insights = generate_insights_from_stats(&session_stats);
+    let good_patterns = generate_good_patterns_from_stats(&session_stats);
+    let improvement_areas = generate_improvement_areas_from_stats(&session_stats);
+    let recommendations = generate_recommendations_from_stats(&session_stats);
+    let learning_observations = generate_learning_observations_from_stats(&session_stats);
     let (rubric_scores, rubric_summary) = generate_rubric_evaluation_fallback();
 
     Ok(QualitativeOutput {
@@ -430,6 +403,15 @@ pub fn generate_qualitative_analysis_fallback(
         rubric_scores,
         rubric_summary: Some(rubric_summary),
     })
+}
+
+/// Basic statistics extracted from a session for fallback analysis
+struct SessionStats {
+    total_turns: u32,
+    user_turns: u32,
+    assistant_turns: u32,
+    tool_uses_count: u32,
+    has_tool_uses: bool,
 }
 
 // =============================================================================
@@ -516,103 +498,145 @@ fn calculate_learning_score(input: &QuantitativeInput) -> f64 {
 }
 
 // =============================================================================
-// Qualitative Analysis Functions
+// Qualitative Analysis Functions (Fallback - based on session stats)
 // =============================================================================
 
-fn generate_insights(input: &QualitativeInput) -> Vec<Insight> {
+/// Parse basic statistics from the raw session JSON for fallback analysis
+fn parse_session_stats(raw_session: &str) -> SessionStats {
+    use super::models::SessionTranscript;
+
+    // Try to parse the JSON, fall back to defaults if parsing fails
+    match serde_json::from_str::<SessionTranscript>(raw_session) {
+        Ok(transcript) => {
+            let user_turns = transcript.turns.iter().filter(|t| t.role == "user").count() as u32;
+            let assistant_turns = transcript
+                .turns
+                .iter()
+                .filter(|t| t.role == "assistant")
+                .count() as u32;
+            let tool_uses_count: u32 = transcript
+                .turns
+                .iter()
+                .map(|t| t.tool_uses.len() as u32)
+                .sum();
+
+            SessionStats {
+                total_turns: transcript.total_turns,
+                user_turns,
+                assistant_turns,
+                tool_uses_count,
+                has_tool_uses: tool_uses_count > 0,
+            }
+        }
+        Err(_) => SessionStats {
+            total_turns: 0,
+            user_turns: 0,
+            assistant_turns: 0,
+            tool_uses_count: 0,
+            has_tool_uses: false,
+        },
+    }
+}
+
+fn generate_insights_from_stats(stats: &SessionStats) -> Vec<Insight> {
     let mut insights = Vec::new();
 
-    // File modification insights
-    if input.file_contexts.len() > 5 {
+    // Conversation activity insight
+    if stats.total_turns > 5 {
         insights.push(Insight {
-            title: "High File Activity".to_string(),
-            description:
-                "You worked on many files during this session, showing good project organization."
-                    .to_string(),
+            title: "Active Development Session".to_string(),
+            description: format!(
+                "This session had {} conversation turns, indicating an engaged development process.",
+                stats.total_turns
+            ),
             category: "Productivity".to_string(),
             confidence: 0.8,
         });
     }
 
-    // Code quality insights
-    if input.project_context.project_complexity > 0.7 {
+    // Tool usage insight
+    if stats.has_tool_uses {
         insights.push(Insight {
-            title: "Complex Project Work".to_string(),
-            description:
-                "You're working on a complex project, which shows advanced development skills."
-                    .to_string(),
+            title: "Active Tool Usage".to_string(),
+            description: format!(
+                "The session involved {} tool operations, showing hands-on development work.",
+                stats.tool_uses_count
+            ),
             category: "Technical".to_string(),
             confidence: 0.9,
         });
     }
 
-    // Learning insights
-    if !input.project_context.technology_stack.is_empty() {
-        insights.push(Insight {
-            title: "Technology Exploration".to_string(),
-            description: format!(
-                "You're working with: {}",
-                input.project_context.technology_stack.join(", ")
-            ),
-            category: "Learning".to_string(),
-            confidence: 0.7,
-        });
+    // Balanced conversation insight
+    if stats.user_turns > 0 && stats.assistant_turns > 0 {
+        let ratio = stats.assistant_turns as f64 / stats.user_turns as f64;
+        if (0.5..=2.0).contains(&ratio) {
+            insights.push(Insight {
+                title: "Balanced Collaboration".to_string(),
+                description:
+                    "The conversation shows a good balance between user requests and AI responses."
+                        .to_string(),
+                category: "Collaboration".to_string(),
+                confidence: 0.7,
+            });
+        }
     }
 
     insights
 }
 
-fn generate_good_patterns(input: &QualitativeInput) -> Vec<GoodPattern> {
+fn generate_good_patterns_from_stats(stats: &SessionStats) -> Vec<GoodPattern> {
     let mut patterns = Vec::new();
 
-    // File organization pattern
-    if input.file_contexts.len() > 3 {
+    // Consistent engagement pattern
+    if stats.total_turns > 3 {
         patterns.push(GoodPattern {
-            pattern_name: "Modular Development".to_string(),
+            pattern_name: "Iterative Development".to_string(),
             description:
-                "You're working across multiple files, showing good modular development practices."
+                "Multiple conversation turns indicate an iterative approach to problem-solving."
                     .to_string(),
-            frequency: input.file_contexts.len() as u64,
-            impact: "High - improves code maintainability".to_string(),
+            frequency: stats.total_turns as u64,
+            impact: "High - enables progressive refinement".to_string(),
         });
     }
 
-    // Technology usage pattern
-    if input.project_context.technology_stack.len() > 1 {
+    // Tool utilization pattern
+    if stats.tool_uses_count > 5 {
         patterns.push(GoodPattern {
-            pattern_name: "Technology Integration".to_string(),
-            description: "You're using multiple technologies together effectively.".to_string(),
-            frequency: 1,
-            impact: "Medium - shows technical versatility".to_string(),
+            pattern_name: "Effective Tool Utilization".to_string(),
+            description: "Good use of AI tools for file operations and code manipulation."
+                .to_string(),
+            frequency: stats.tool_uses_count as u64,
+            impact: "Medium - increases development efficiency".to_string(),
         });
     }
 
     patterns
 }
 
-fn generate_improvement_areas(input: &QualitativeInput) -> Vec<ImprovementArea> {
+fn generate_improvement_areas_from_stats(stats: &SessionStats) -> Vec<ImprovementArea> {
     let mut areas = Vec::new();
 
-    // Code organization improvement
-    if input.file_contexts.len() < 2 {
+    // Short session improvement
+    if stats.total_turns < 3 {
         areas.push(ImprovementArea {
-            area_name: "File Organization".to_string(),
-            current_state: "Working on single file".to_string(),
+            area_name: "Session Engagement".to_string(),
+            current_state: "Brief interaction session".to_string(),
             suggested_improvement:
-                "Consider breaking code into multiple files for better organization".to_string(),
-            expected_impact: "Improved maintainability and readability".to_string(),
+                "Consider more iterative conversations to explore solutions thoroughly".to_string(),
+            expected_impact: "Better problem understanding and solution quality".to_string(),
             priority: "Medium".to_string(),
         });
     }
 
-    // Technology stack improvement
-    if input.project_context.technology_stack.is_empty() {
+    // No tool usage improvement
+    if !stats.has_tool_uses {
         areas.push(ImprovementArea {
-            area_name: "Technology Documentation".to_string(),
-            current_state: "No clear technology stack identified".to_string(),
-            suggested_improvement: "Document the technologies you're using for better context"
-                .to_string(),
-            expected_impact: "Better project understanding and maintenance".to_string(),
+            area_name: "Tool Utilization".to_string(),
+            current_state: "No tool operations detected".to_string(),
+            suggested_improvement:
+                "Leverage AI tool capabilities for file operations and code editing".to_string(),
+            expected_impact: "Faster development workflow".to_string(),
             priority: "Low".to_string(),
         });
     }
@@ -620,52 +644,60 @@ fn generate_improvement_areas(input: &QualitativeInput) -> Vec<ImprovementArea> 
     areas
 }
 
-fn generate_recommendations(input: &QualitativeInput) -> Vec<Recommendation> {
+fn generate_recommendations_from_stats(stats: &SessionStats) -> Vec<Recommendation> {
     let mut recommendations = Vec::new();
 
-    // General recommendations based on project complexity
-    if input.project_context.project_complexity > 0.8 {
+    // Based on session length
+    if stats.total_turns > 10 {
         recommendations.push(Recommendation {
-            title: "Consider Code Documentation".to_string(),
-            description: "For complex projects, consider adding more documentation to help with future maintenance.".to_string(),
-            impact_score: 0.8,
+            title: "Session Organization".to_string(),
+            description: "For longer sessions, consider breaking work into smaller, focused tasks for better tracking.".to_string(),
+            impact_score: 0.7,
+            implementation_difficulty: "Easy".to_string(),
+        });
+    }
+
+    // Based on tool usage density
+    if stats.has_tool_uses && stats.tool_uses_count > stats.total_turns {
+        recommendations.push(Recommendation {
+            title: "Batch Operations".to_string(),
+            description: "Multiple tool operations per turn detected. Consider batching related operations for efficiency.".to_string(),
+            impact_score: 0.6,
             implementation_difficulty: "Medium".to_string(),
         });
     }
 
-    // Learning recommendations
-    if input.project_context.technology_stack.len() > 2 {
-        recommendations.push(Recommendation {
-            title: "Deep Dive into Technologies".to_string(),
-            description: "You're using multiple technologies. Consider focusing on mastering one or two core technologies.".to_string(),
-            impact_score: 0.7,
-            implementation_difficulty: "Low".to_string(),
-        });
-    }
+    // Default recommendation
+    recommendations.push(Recommendation {
+        title: "Continuous Learning".to_string(),
+        description:
+            "Review session outcomes to identify patterns and improve future AI interactions."
+                .to_string(),
+        impact_score: 0.8,
+        implementation_difficulty: "Low".to_string(),
+    });
 
     recommendations
 }
 
-fn generate_learning_observations(input: &QualitativeInput) -> Vec<LearningObservation> {
+fn generate_learning_observations_from_stats(stats: &SessionStats) -> Vec<LearningObservation> {
     let mut observations = Vec::new();
 
-    // Technology learning observation
-    if !input.project_context.technology_stack.is_empty() {
+    // General development observation
+    if stats.total_turns > 0 {
         observations.push(LearningObservation {
-            observation: "Working with multiple technologies".to_string(),
-            skill_area: "Technology Integration".to_string(),
-            progress_indicator: "Active exploration".to_string(),
-            next_steps: vec!["Consider creating a technology reference guide".to_string()],
-        });
-    }
-
-    // Code organization learning observation
-    if input.file_contexts.len() > 3 {
-        observations.push(LearningObservation {
-            observation: "Good file organization practices".to_string(),
-            skill_area: "Code Architecture".to_string(),
-            progress_indicator: "Consistent application".to_string(),
-            next_steps: vec!["Continue modular development approach".to_string()],
+            observation: "Active engagement with AI development assistant".to_string(),
+            skill_area: "AI-Assisted Development".to_string(),
+            progress_indicator: if stats.tool_uses_count > 5 {
+                "Advanced usage"
+            } else {
+                "Developing proficiency"
+            }
+            .to_string(),
+            next_steps: vec![
+                "Explore more tool capabilities".to_string(),
+                "Practice iterative problem-solving".to_string(),
+            ],
         });
     }
 

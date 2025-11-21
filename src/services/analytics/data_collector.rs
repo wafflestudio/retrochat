@@ -3,12 +3,18 @@ use super::metrics::{
     calculate_token_consumption_metrics, calculate_tool_usage_metrics,
 };
 use super::models::{
-    ChatContext, FileContext, ProjectContext, QualitativeInput, QuantitativeInput,
+    EmbeddedToolUse, QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn,
 };
-use crate::models::{
-    tool_operation::FileMetadata, ChatSession, Message, MessageRole, ToolOperation,
-};
+use crate::models::message::MessageType;
+use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
+use std::collections::HashMap;
+
+/// Maximum character length for a single tool input/result before truncation
+const TOOL_CONTENT_MAX_LENGTH: usize = 2000;
+
+/// Placeholder text to indicate truncated content
+const TRUNCATION_PLACEHOLDER: &str = "\n... [content truncated] ...\n";
 
 // =============================================================================
 // Data Collection Functions
@@ -32,397 +38,245 @@ pub async fn collect_quantitative_data(
     })
 }
 
+/// Collects qualitative data by building a raw JSON string representation of the chat session.
+/// The JSON includes multi-turn messages with all tool uses embedded in each corresponding message.
+/// Long tool content is truncated by cutting the center portion to meet character thresholds.
 pub async fn collect_qualitative_data(
-    tool_operations: &[ToolOperation],
+    _tool_operations: &[ToolOperation],
     messages: &[Message],
     session: &ChatSession,
 ) -> Result<QualitativeInput> {
-    let file_contexts = extract_file_contexts(tool_operations);
-    let chat_context = extract_chat_context(messages);
-    let project_context = extract_project_context(session, tool_operations);
-
-    Ok(QualitativeInput {
-        file_contexts,
-        chat_context,
-        project_context,
-    })
+    let raw_session = build_session_transcript(messages, session)?;
+    Ok(QualitativeInput { raw_session })
 }
 
 // =============================================================================
-// File Context Extraction
+// Session Transcript Building
 // =============================================================================
 
-fn extract_file_contexts(tool_operations: &[ToolOperation]) -> Vec<FileContext> {
-    let mut file_contexts = Vec::new();
-    let mut processed_files = std::collections::HashSet::new();
+/// Builds a JSON string representation of the session transcript with embedded tool uses.
+fn build_session_transcript(messages: &[Message], session: &ChatSession) -> Result<String> {
+    let mut turns: Vec<SessionTurn> = Vec::new();
+    let mut turn_number = 0u32;
 
-    for op in tool_operations {
-        if let Some(metadata) = &op.file_metadata {
-            let file_path = &metadata.file_path;
-            if !processed_files.contains(file_path) {
-                processed_files.insert(file_path.clone());
-
-                let file_type = determine_file_type(file_path);
-                let modification_type = determine_modification_type(&op.tool_name);
-                let content_snippet = extract_content_snippet_from_metadata(metadata);
-                let complexity_indicators = analytics_complexity_indicators_from_metadata(metadata);
-
-                file_contexts.push(FileContext {
-                    file_path: file_path.clone(),
-                    file_type,
-                    modification_type,
-                    content_snippet,
-                    complexity_indicators,
-                });
-            }
-        }
-    }
-
-    file_contexts
-}
-
-fn determine_file_type(file_path: &str) -> String {
-    if let Some(extension) = std::path::Path::new(file_path).extension() {
-        match extension.to_str().unwrap_or("") {
-            "rs" => "Rust".to_string(),
-            "js" | "ts" => "JavaScript/TypeScript".to_string(),
-            "py" => "Python".to_string(),
-            "java" => "Java".to_string(),
-            "go" => "Go".to_string(),
-            "cpp" | "cc" | "cxx" => "C++".to_string(),
-            "c" => "C".to_string(),
-            "html" => "HTML".to_string(),
-            "css" => "CSS".to_string(),
-            "json" => "JSON".to_string(),
-            "yaml" | "yml" => "YAML".to_string(),
-            "md" => "Markdown".to_string(),
-            "sql" => "SQL".to_string(),
-            "sh" | "bash" => "Shell".to_string(),
-            _ => "Unknown".to_string(),
-        }
-    } else {
-        "Unknown".to_string()
-    }
-}
-
-fn determine_modification_type(tool_name: &str) -> String {
-    match tool_name {
-        "search_replace" => "Text Replacement".to_string(),
-        "MultiEdit" => "Bulk Edit".to_string(),
-        "write" => "File Creation".to_string(),
-        "read_file" => "File Reading".to_string(),
-        "grep" => "Text Search".to_string(),
-        "codebase_search" => "Code Search".to_string(),
-        _ => "Other".to_string(),
-    }
-}
-
-fn extract_content_snippet_from_metadata(_metadata: &FileMetadata) -> String {
-    // TODO: Extract actual content snippet from file metadata
-    "Content snippet not available".to_string()
-}
-
-fn analytics_complexity_indicators_from_metadata(metadata: &FileMetadata) -> Vec<String> {
-    let mut indicators = Vec::new();
-
-    if let Some(lines_added) = metadata.lines_added {
-        if lines_added > 100 {
-            indicators.push("Large addition".to_string());
-        }
-    }
-
-    if let Some(is_refactoring) = metadata.is_refactoring {
-        if is_refactoring {
-            indicators.push("Refactoring operation".to_string());
-        }
-    }
-
-    indicators
-}
-
-// =============================================================================
-// Chat Context Extraction
-// =============================================================================
-
-fn extract_chat_context(messages: &[Message]) -> ChatContext {
-    let conversation_flow = analytics_conversation_flow(messages);
-    let problem_solving_patterns = identify_problem_solving_patterns(messages);
-    let ai_interaction_quality = calculate_ai_interaction_quality(messages);
-    let key_topics = extract_key_topics(messages);
-
-    ChatContext {
-        conversation_flow,
-        problem_solving_patterns,
-        ai_interaction_quality,
-        key_topics,
-    }
-}
-
-fn analytics_conversation_flow(messages: &[Message]) -> String {
-    let user_messages = messages
-        .iter()
-        .filter(|m| matches!(m.role, MessageRole::User))
-        .count();
-    let assistant_messages = messages
-        .iter()
-        .filter(|m| matches!(m.role, MessageRole::Assistant))
-        .count();
-
-    if user_messages > assistant_messages * 2 {
-        "User-driven conversation with many questions".to_string()
-    } else if assistant_messages > user_messages * 2 {
-        "AI-driven conversation with detailed responses".to_string()
-    } else {
-        "Balanced conversation between user and AI".to_string()
-    }
-}
-
-fn identify_problem_solving_patterns(messages: &[Message]) -> Vec<String> {
-    let mut patterns = Vec::new();
-
-    // Look for common problem-solving patterns in message content
-    for message in messages {
-        let content = message.content.to_lowercase();
-
-        if content.contains("error") || content.contains("bug") || content.contains("issue") {
-            patterns.push("Error debugging".to_string());
-        }
-        if content.contains("implement") || content.contains("create") || content.contains("build")
-        {
-            patterns.push("Feature implementation".to_string());
-        }
-        if content.contains("refactor")
-            || content.contains("optimize")
-            || content.contains("improve")
-        {
-            patterns.push("Code improvement".to_string());
-        }
-        if content.contains("test") || content.contains("debug") {
-            patterns.push("Testing and debugging".to_string());
-        }
-    }
-
-    // Remove duplicates
-    patterns.sort();
-    patterns.dedup();
-    patterns
-}
-
-fn calculate_ai_interaction_quality(messages: &[Message]) -> f64 {
-    let total_messages = messages.len() as f64;
-    if total_messages == 0.0 {
-        return 0.0;
-    }
-
-    let assistant_messages = messages
-        .iter()
-        .filter(|m| matches!(m.role, MessageRole::Assistant))
-        .count() as f64;
-
-    let user_messages = messages
-        .iter()
-        .filter(|m| matches!(m.role, MessageRole::User))
-        .count() as f64;
-
-    // Quality based on balanced interaction and message length
-    let balance_score = if user_messages > 0.0 {
-        (assistant_messages / user_messages).min(2.0) / 2.0
-    } else {
-        0.0
-    };
-
-    let avg_message_length =
-        messages.iter().map(|m| m.content.len() as f64).sum::<f64>() / total_messages;
-
-    let length_score = (avg_message_length / 100.0).min(1.0);
-
-    (balance_score + length_score) / 2.0
-}
-
-fn extract_key_topics(messages: &[Message]) -> Vec<String> {
-    let mut topics = Vec::new();
-
-    // Simple keyword extraction
-    let common_keywords = vec![
-        "function",
-        "class",
-        "method",
-        "variable",
-        "import",
-        "export",
-        "database",
-        "api",
-        "server",
-        "client",
-        "frontend",
-        "backend",
-        "test",
-        "debug",
-        "error",
-        "exception",
-        "validation",
-        "authentication",
-    ];
+    // Build a map of tool_use_id to tool results for quick lookup
+    let tool_results_map = build_tool_results_map(messages);
 
     for message in messages {
-        let content = message.content.to_lowercase();
-        for keyword in &common_keywords {
-            if content.contains(keyword) && !topics.contains(&keyword.to_string()) {
-                topics.push(keyword.to_string());
-            }
+        // Skip thinking messages as they don't represent actual conversation
+        if message.is_thinking() {
+            continue;
         }
-    }
 
-    topics
-}
-
-// =============================================================================
-// Project Context Extraction
-// =============================================================================
-
-fn extract_project_context(
-    _session: &ChatSession,
-    tool_operations: &[ToolOperation],
-) -> ProjectContext {
-    let project_type = infer_project_type(tool_operations);
-    let technology_stack = extract_technology_stack(tool_operations);
-    let project_complexity = calculate_project_complexity(tool_operations);
-    let development_stage = infer_development_stage(tool_operations);
-
-    ProjectContext {
-        project_type,
-        technology_stack,
-        project_complexity,
-        development_stage,
-    }
-}
-
-fn infer_project_type(tool_operations: &[ToolOperation]) -> String {
-    let mut file_types = std::collections::HashSet::new();
-
-    for op in tool_operations {
-        if let Some(metadata) = &op.file_metadata {
-            let file_path = &metadata.file_path;
-            if let Some(extension) = std::path::Path::new(file_path).extension() {
-                file_types.insert(extension.to_string_lossy().to_string());
-            }
+        // Skip tool result messages - they are embedded in tool uses
+        if message.message_type == MessageType::ToolResult {
+            continue;
         }
-    }
 
-    if file_types.contains("rs") {
-        "Rust Application".to_string()
-    } else if file_types.contains("js") || file_types.contains("ts") {
-        "Web Application".to_string()
-    } else if file_types.contains("py") {
-        "Python Application".to_string()
-    } else if file_types.contains("java") {
-        "Java Application".to_string()
-    } else if file_types.contains("go") {
-        "Go Application".to_string()
-    } else {
-        "Mixed Technology Project".to_string()
-    }
-}
-
-fn extract_technology_stack(tool_operations: &[ToolOperation]) -> Vec<String> {
-    let mut technologies = std::collections::HashSet::new();
-
-    for op in tool_operations {
-        if let Some(metadata) = &op.file_metadata {
-            let file_path = &metadata.file_path;
-            if let Some(extension) = std::path::Path::new(file_path).extension() {
-                match extension.to_str().unwrap_or("") {
-                    "rs" => {
-                        technologies.insert("Rust".to_string());
-                    }
-                    "js" => {
-                        technologies.insert("JavaScript".to_string());
-                    }
-                    "ts" => {
-                        technologies.insert("TypeScript".to_string());
-                    }
-                    "py" => {
-                        technologies.insert("Python".to_string());
-                    }
-                    "java" => {
-                        technologies.insert("Java".to_string());
-                    }
-                    "go" => {
-                        technologies.insert("Go".to_string());
-                    }
-                    "html" => {
-                        technologies.insert("HTML".to_string());
-                    }
-                    "css" => {
-                        technologies.insert("CSS".to_string());
-                    }
-                    "json" => {
-                        technologies.insert("JSON".to_string());
-                    }
-                    "sql" => {
-                        technologies.insert("SQL".to_string());
-                    }
-                    _ => {}
-                }
-            }
+        // Increment turn for user messages
+        if message.is_user_message() {
+            turn_number += 1;
         }
+
+        let role = match message.role {
+            MessageRole::User => "user".to_string(),
+            MessageRole::Assistant => "assistant".to_string(),
+            MessageRole::System => "system".to_string(),
+        };
+
+        // Truncate message content if too long
+        let content = truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2);
+
+        // Build embedded tool uses for this message
+        let tool_uses = build_embedded_tool_uses(message, &tool_results_map);
+
+        turns.push(SessionTurn {
+            turn_number,
+            role,
+            content,
+            tool_uses,
+        });
     }
 
-    technologies.into_iter().collect()
-}
-
-fn calculate_project_complexity(tool_operations: &[ToolOperation]) -> f64 {
-    let file_count = tool_operations
-        .iter()
-        .filter_map(|op| op.file_metadata.as_ref())
-        .map(|meta| &meta.file_path)
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-
-    let total_operations = tool_operations.len();
-    let refactoring_ops = tool_operations
-        .iter()
-        .filter(|op| {
-            op.file_metadata
-                .as_ref()
-                .and_then(|meta| meta.is_refactoring)
-                .unwrap_or(false)
-        })
-        .count();
-
-    // Complexity based on file count, operations, and refactoring
-    let file_complexity = (file_count as f64 / 10.0).min(1.0);
-    let operation_complexity = (total_operations as f64 / 50.0).min(1.0);
-    let refactoring_complexity = (refactoring_ops as f64 / 10.0).min(1.0);
-
-    (file_complexity + operation_complexity + refactoring_complexity) / 3.0
-}
-
-fn infer_development_stage(tool_operations: &[ToolOperation]) -> String {
-    let refactoring_ops = tool_operations
-        .iter()
-        .filter(|op| {
-            op.file_metadata
-                .as_ref()
-                .and_then(|meta| meta.is_refactoring)
-                .unwrap_or(false)
-        })
-        .count();
-
-    let total_ops = tool_operations.len();
-    let refactoring_ratio = if total_ops > 0 {
-        refactoring_ops as f64 / total_ops as f64
-    } else {
-        0.0
+    let transcript = SessionTranscript {
+        session_id: session.id.to_string(),
+        total_turns: turn_number,
+        turns,
     };
 
-    if refactoring_ratio > 0.3 {
-        "Maintenance/Refactoring".to_string()
-    } else if total_ops > 20 {
-        "Active Development".to_string()
-    } else if total_ops > 5 {
-        "Initial Development".to_string()
-    } else {
-        "Planning/Setup".to_string()
+    // Serialize to JSON string
+    let json = serde_json::to_string_pretty(&transcript)?;
+    Ok(json)
+}
+
+/// Builds a map from tool_use_id to (result_content, is_error) for quick lookup.
+fn build_tool_results_map(messages: &[Message]) -> HashMap<String, (String, bool)> {
+    let mut map = HashMap::new();
+
+    for message in messages {
+        if let Some(tool_results) = &message.tool_results {
+            for result in tool_results {
+                map.insert(
+                    result.tool_use_id.clone(),
+                    (result.content.clone(), result.is_error),
+                );
+            }
+        }
+    }
+
+    map
+}
+
+/// Builds embedded tool uses for a message by extracting tool_uses and matching with results.
+fn build_embedded_tool_uses(
+    message: &Message,
+    tool_results_map: &HashMap<String, (String, bool)>,
+) -> Vec<EmbeddedToolUse> {
+    let mut embedded = Vec::new();
+
+    if let Some(tool_uses) = &message.tool_uses {
+        for tool_use in tool_uses {
+            // Extract input as string
+            let input = format_tool_input(&tool_use.input);
+            let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
+
+            // Look up the result
+            let (result, success) =
+                if let Some((content, is_error)) = tool_results_map.get(&tool_use.id) {
+                    let truncated_result = truncate_content(content, TOOL_CONTENT_MAX_LENGTH);
+                    (Some(truncated_result), Some(!is_error))
+                } else {
+                    (None, None)
+                };
+
+            embedded.push(EmbeddedToolUse {
+                tool_name: tool_use.name.clone(),
+                input: truncated_input,
+                result,
+                success,
+            });
+        }
+    }
+
+    embedded
+}
+
+/// Formats tool input Value as a readable string.
+fn format_tool_input(input: &serde_json::Value) -> String {
+    match input {
+        serde_json::Value::Object(obj) => {
+            // For objects, format key-value pairs nicely
+            obj.iter()
+                .map(|(k, v)| {
+                    let value_str = match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => v.to_string(),
+                    };
+                    format!("{}: {}", k, value_str)
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+        serde_json::Value::String(s) => s.clone(),
+        _ => input.to_string(),
+    }
+}
+
+/// Truncates content that exceeds the maximum length by removing the center portion.
+/// This preserves the beginning and end of the content for context.
+fn truncate_content(content: &str, max_length: usize) -> String {
+    if content.len() <= max_length {
+        return content.to_string();
+    }
+
+    // Calculate how much to keep from beginning and end
+    let placeholder_len = TRUNCATION_PLACEHOLDER.len();
+    let available_length = max_length.saturating_sub(placeholder_len);
+    let half_length = available_length / 2;
+
+    // Find safe char boundaries for UTF-8
+    let start_end = find_char_boundary(content, half_length);
+    let end_start = find_char_boundary_from_end(content, half_length);
+
+    if start_end >= end_start {
+        // Content is too short to truncate meaningfully, just take the beginning
+        let end = find_char_boundary(content, max_length.saturating_sub(3));
+        return format!("{}...", &content[..end]);
+    }
+
+    format!(
+        "{}{}{}",
+        &content[..start_end],
+        TRUNCATION_PLACEHOLDER,
+        &content[end_start..]
+    )
+}
+
+/// Finds the nearest char boundary at or before the given byte position.
+fn find_char_boundary(s: &str, pos: usize) -> usize {
+    if pos >= s.len() {
+        return s.len();
+    }
+
+    let mut idx = pos;
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Finds the nearest char boundary from the end of the string.
+fn find_char_boundary_from_end(s: &str, bytes_from_end: usize) -> usize {
+    if bytes_from_end >= s.len() {
+        return 0;
+    }
+
+    let pos = s.len() - bytes_from_end;
+    let mut idx = pos;
+    while idx < s.len() && !s.is_char_boundary(idx) {
+        idx += 1;
+    }
+    idx
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_content_short() {
+        let content = "Hello, world!";
+        let result = truncate_content(content, 100);
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn test_truncate_content_long() {
+        let content = "a".repeat(5000);
+        let result = truncate_content(&content, 2000);
+        assert!(result.len() <= 2000);
+        assert!(result.contains(TRUNCATION_PLACEHOLDER));
+    }
+
+    #[test]
+    fn test_truncate_content_utf8() {
+        // Test with Korean characters (3 bytes each)
+        let content = "안녕하세요".repeat(500);
+        let result = truncate_content(&content, 500);
+        // Should not panic and should be valid UTF-8
+        assert!(result.len() <= 500 + TRUNCATION_PLACEHOLDER.len());
+        assert!(std::str::from_utf8(result.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_find_char_boundary() {
+        let s = "Hello";
+        assert_eq!(find_char_boundary(s, 3), 3);
+        assert_eq!(find_char_boundary(s, 100), 5);
+
+        let korean = "안녕";
+        // "안" is 3 bytes, "녕" is 3 bytes
+        assert_eq!(find_char_boundary(korean, 2), 0); // Middle of first char
+        assert_eq!(find_char_boundary(korean, 3), 3); // End of first char
     }
 }
