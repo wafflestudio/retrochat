@@ -5,7 +5,6 @@ use super::metrics::{
 use super::models::{
     EmbeddedToolUse, QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn,
 };
-use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -42,11 +41,11 @@ pub async fn collect_quantitative_data(
 /// The JSON includes multi-turn messages with all tool uses embedded in each corresponding message.
 /// Long tool content is truncated by cutting the center portion to meet character thresholds.
 pub async fn collect_qualitative_data(
-    _tool_operations: &[ToolOperation],
+    tool_operations: &[ToolOperation],
     messages: &[Message],
     session: &ChatSession,
 ) -> Result<QualitativeInput> {
-    let raw_session = build_session_transcript(messages, session)?;
+    let raw_session = build_session_transcript(messages, tool_operations, session)?;
     Ok(QualitativeInput { raw_session })
 }
 
@@ -55,21 +54,20 @@ pub async fn collect_qualitative_data(
 // =============================================================================
 
 /// Builds a JSON string representation of the session transcript with embedded tool uses.
-fn build_session_transcript(messages: &[Message], session: &ChatSession) -> Result<String> {
+fn build_session_transcript(
+    messages: &[Message],
+    tool_operations: &[ToolOperation],
+    session: &ChatSession,
+) -> Result<String> {
     let mut turns: Vec<SessionTurn> = Vec::new();
     let mut turn_number = 0u32;
 
-    // Build a map of tool_use_id to tool results for quick lookup
-    let tool_results_map = build_tool_results_map(messages);
+    // Build a map of tool_use_id to ToolOperation for quick lookup
+    let tool_ops_map = build_tool_operations_map(tool_operations);
 
     for message in messages {
         // Skip thinking messages as they don't represent actual conversation
         if message.is_thinking() {
-            continue;
-        }
-
-        // Skip tool result messages - they are embedded in tool uses
-        if message.message_type == MessageType::ToolResult {
             continue;
         }
 
@@ -87,8 +85,8 @@ fn build_session_transcript(messages: &[Message], session: &ChatSession) -> Resu
         // Truncate message content if too long
         let content = truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2);
 
-        // Build embedded tool uses for this message
-        let tool_uses = build_embedded_tool_uses(message, &tool_results_map);
+        // Build embedded tool uses for this message (only for messages with tool_uses)
+        let tool_uses = build_embedded_tool_uses(message, &tool_ops_map);
 
         turns.push(SessionTurn {
             turn_number,
@@ -109,52 +107,59 @@ fn build_session_transcript(messages: &[Message], session: &ChatSession) -> Resu
     Ok(json)
 }
 
-/// Builds a map from tool_use_id to (result_content, is_error) for quick lookup.
-fn build_tool_results_map(messages: &[Message]) -> HashMap<String, (String, bool)> {
+/// Builds a map from tool_use_id to ToolOperation for quick lookup.
+fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<String, &ToolOperation> {
     let mut map = HashMap::new();
 
-    for message in messages {
-        if let Some(tool_results) = &message.tool_results {
-            for result in tool_results {
-                map.insert(
-                    result.tool_use_id.clone(),
-                    (result.content.clone(), result.is_error),
-                );
-            }
-        }
+    for op in tool_operations {
+        map.insert(op.tool_use_id.clone(), op);
     }
 
     map
 }
 
-/// Builds embedded tool uses for a message by extracting tool_uses and matching with results.
+/// Builds embedded tool uses for a message by looking up tool operations.
 fn build_embedded_tool_uses(
     message: &Message,
-    tool_results_map: &HashMap<String, (String, bool)>,
+    tool_ops_map: &HashMap<String, &ToolOperation>,
 ) -> Vec<EmbeddedToolUse> {
     let mut embedded = Vec::new();
 
+    // Get tool_use_ids from message's tool_uses field
     if let Some(tool_uses) = &message.tool_uses {
         for tool_use in tool_uses {
-            // Extract input as string
-            let input = format_tool_input(&tool_use.input);
-            let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
-
-            // Look up the result
-            let (result, success) =
-                if let Some((content, is_error)) = tool_results_map.get(&tool_use.id) {
-                    let truncated_result = truncate_content(content, TOOL_CONTENT_MAX_LENGTH);
-                    (Some(truncated_result), Some(!is_error))
+            // Look up the tool operation by tool_use_id
+            if let Some(tool_op) = tool_ops_map.get(&tool_use.id) {
+                // Extract input from raw_input in ToolOperation
+                let input = if let Some(raw_input) = &tool_op.raw_input {
+                    format_tool_input(raw_input)
                 } else {
-                    (None, None)
+                    String::new()
                 };
+                let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
 
-            embedded.push(EmbeddedToolUse {
-                tool_name: tool_use.name.clone(),
-                input: truncated_input,
-                result,
-                success,
-            });
+                // Extract result from raw_result or result_summary in ToolOperation
+                let result = tool_op
+                    .raw_result
+                    .as_ref()
+                    .map(|raw_result| {
+                        let result_str = format_tool_input(raw_result);
+                        truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH)
+                    })
+                    .or_else(|| {
+                        tool_op
+                            .result_summary
+                            .as_ref()
+                            .map(|summary| truncate_content(summary, TOOL_CONTENT_MAX_LENGTH))
+                    });
+
+                embedded.push(EmbeddedToolUse {
+                    tool_name: tool_op.tool_name.clone(),
+                    input: truncated_input,
+                    result,
+                    success: tool_op.success,
+                });
+            }
         }
     }
 
