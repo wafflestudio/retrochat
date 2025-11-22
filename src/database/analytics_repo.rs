@@ -391,24 +391,22 @@ impl AnalyticsRepository {
             serde_json::to_string(&analytics.scores).context("Failed to serialize scores")?;
         let metrics_json =
             serde_json::to_string(&analytics.metrics).context("Failed to serialize metrics")?;
-        let quantitative_input_json = serde_json::to_string(&analytics.quantitative_input)
-            .context("Failed to serialize quantitative_input")?;
-        let qualitative_input_json = serde_json::to_string(&analytics.qualitative_input)
-            .context("Failed to serialize qualitative_input")?;
         let qualitative_output_json = serde_json::to_string(&analytics.qualitative_output)
             .context("Failed to serialize qualitative_output")?;
         let processed_output_json = serde_json::to_string(&analytics.processed_output)
             .context("Failed to serialize processed_output")?;
+        let ai_quantitative_output_json = serde_json::to_string(&analytics.ai_quantitative_output)
+            .context("Failed to serialize ai_quantitative_output")?;
 
         sqlx::query!(
             r#"
             INSERT INTO analytics (
                 id, analytics_request_id, session_id, generated_at,
                 scores_json, metrics_json,
-                quantitative_input_json, qualitative_input_json,
                 qualitative_output_json, processed_output_json,
+                ai_quantitative_output_json,
                 model_used, analysis_duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             analytics.id,
             analytics.analytics_request_id,
@@ -416,10 +414,9 @@ impl AnalyticsRepository {
             generated_at,
             scores_json,
             metrics_json,
-            quantitative_input_json,
-            qualitative_input_json,
             qualitative_output_json,
             processed_output_json,
+            ai_quantitative_output_json,
             analytics.model_used,
             analytics.analysis_duration_ms
         )
@@ -436,8 +433,8 @@ impl AnalyticsRepository {
             SELECT
                 id, analytics_request_id, session_id, generated_at,
                 scores_json, metrics_json,
-                quantitative_input_json, qualitative_input_json,
                 qualitative_output_json, processed_output_json,
+                ai_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
             WHERE id = ?
@@ -456,18 +453,15 @@ impl AnalyticsRepository {
                 serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
-            let quantitative_input: crate::services::analytics::QuantitativeInput =
-                serde_json::from_str(&row.quantitative_input_json)
-                    .context("Failed to deserialize quantitative_input")?;
-            let qualitative_input: crate::services::analytics::QualitativeInput =
-                serde_json::from_str(&row.qualitative_input_json)
-                    .context("Failed to deserialize qualitative_input")?;
             let qualitative_output: crate::services::analytics::QualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
             let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =
                 serde_json::from_str(&row.processed_output_json)
                     .context("Failed to deserialize processed_output")?;
+            let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
+                serde_json::from_str(&row.ai_quantitative_output_json)
+                    .context("Failed to deserialize ai_quantitative_output")?;
 
             // Get session_id from row, or fetch from analytics_requests as fallback
             let session_id = if let Some(sid) = row.session_id {
@@ -489,10 +483,9 @@ impl AnalyticsRepository {
                 generated_at,
                 scores,
                 metrics,
-                quantitative_input,
-                qualitative_input,
                 qualitative_output,
                 processed_output,
+                ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
             }))
@@ -510,8 +503,8 @@ impl AnalyticsRepository {
             SELECT
                 id, analytics_request_id, session_id, generated_at,
                 scores_json, metrics_json,
-                quantitative_input_json, qualitative_input_json,
                 qualitative_output_json, processed_output_json,
+                ai_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
             WHERE analytics_request_id = ?
@@ -532,18 +525,15 @@ impl AnalyticsRepository {
                 serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
-            let quantitative_input: crate::services::analytics::QuantitativeInput =
-                serde_json::from_str(&row.quantitative_input_json)
-                    .context("Failed to deserialize quantitative_input")?;
-            let qualitative_input: crate::services::analytics::QualitativeInput =
-                serde_json::from_str(&row.qualitative_input_json)
-                    .context("Failed to deserialize qualitative_input")?;
             let qualitative_output: crate::services::analytics::QualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
             let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =
                 serde_json::from_str(&row.processed_output_json)
                     .context("Failed to deserialize processed_output")?;
+            let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
+                serde_json::from_str(&row.ai_quantitative_output_json)
+                    .context("Failed to deserialize ai_quantitative_output")?;
 
             // Get session_id from row, or fetch from analytics_requests as fallback
             let session_id = if let Some(sid) = row.session_id {
@@ -565,10 +555,9 @@ impl AnalyticsRepository {
                 generated_at,
                 scores,
                 metrics,
-                quantitative_input,
-                qualitative_input,
                 qualitative_output,
                 processed_output,
+                ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
             }))

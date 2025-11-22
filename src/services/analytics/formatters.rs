@@ -218,91 +218,23 @@ impl AnalyticsFormatter {
         println!("\n📁 File Changes:");
         println!(
             "  Files Modified: {}",
-            analysis
-                .quantitative_input
-                .file_changes
-                .total_files_modified
+            analysis.metrics.total_files_modified
         );
-        println!(
-            "  Files Read: {}",
-            analysis.quantitative_input.file_changes.total_files_read
-        );
-        println!(
-            "  Lines Added: {}",
-            analysis.quantitative_input.file_changes.lines_added
-        );
-        println!(
-            "  Lines Removed: {}",
-            analysis.quantitative_input.file_changes.lines_removed
-        );
-        println!(
-            "  Net Code Growth: {}",
-            analysis.quantitative_input.file_changes.net_code_growth
-        );
-        println!(
-            "  Refactoring Operations: {}",
-            analysis
-                .quantitative_input
-                .file_changes
-                .refactoring_operations
-        );
+        println!("  Files Read: {}", analysis.metrics.total_files_read);
+        println!("  Lines Added: {}", analysis.metrics.lines_added);
+        println!("  Lines Removed: {}", analysis.metrics.lines_removed);
+        let net_code_growth =
+            analysis.metrics.lines_added as i64 - analysis.metrics.lines_removed as i64;
+        println!("  Net Code Growth: {}", net_code_growth);
 
         println!("\n⏱️ Time Metrics:");
         println!(
             "  Session Duration: {:.1} minutes",
-            analysis
-                .quantitative_input
-                .time_metrics
-                .total_session_time_minutes
-        );
-        println!(
-            "  Peak Hours: {:?}",
-            analysis.quantitative_input.time_metrics.peak_hours
+            analysis.metrics.session_duration_minutes
         );
 
         println!("\n🔤 Token Metrics:");
-        println!(
-            "  Total Tokens: {}",
-            analysis.quantitative_input.token_metrics.total_tokens_used
-        );
-        println!(
-            "  Input Tokens: {}",
-            analysis.quantitative_input.token_metrics.input_tokens
-        );
-        println!(
-            "  Output Tokens: {}",
-            analysis.quantitative_input.token_metrics.output_tokens
-        );
-        println!(
-            "  Token Efficiency: {:.2}",
-            analysis.quantitative_input.token_metrics.token_efficiency
-        );
-
-        println!("\n🛠️ Tool Usage:");
-        println!(
-            "  Total Operations: {}",
-            analysis.quantitative_input.tool_usage.total_operations
-        );
-        println!(
-            "  Successful: {}",
-            analysis.quantitative_input.tool_usage.successful_operations
-        );
-        println!(
-            "  Failed: {}",
-            analysis.quantitative_input.tool_usage.failed_operations
-        );
-
-        if !analysis
-            .quantitative_input
-            .tool_usage
-            .tool_distribution
-            .is_empty()
-        {
-            println!("  Tool Distribution:");
-            for (tool, count) in &analysis.quantitative_input.tool_usage.tool_distribution {
-                println!("    {tool}: {count}");
-            }
-        }
+        println!("  Total Tokens: {}", analysis.metrics.total_tokens_used);
     }
 
     fn print_quantitative_metrics_enhanced(&self, analysis: &Analytics) -> Result<()> {
@@ -326,47 +258,17 @@ impl AnalyticsFormatter {
         );
         self.print_metric(
             "Files Modified",
-            &analysis
-                .quantitative_input
-                .file_changes
-                .total_files_modified
-                .to_string(),
+            &analysis.metrics.total_files_modified.to_string(),
         );
-        self.print_metric(
-            "Files Read",
-            &analysis
-                .quantitative_input
-                .file_changes
-                .total_files_read
-                .to_string(),
-        );
-        self.print_metric(
-            "Lines Added",
-            &format!("+{}", analysis.quantitative_input.file_changes.lines_added),
-        );
+        self.print_metric("Files Read", &analysis.metrics.total_files_read.to_string());
+        self.print_metric("Lines Added", &format!("+{}", analysis.metrics.lines_added));
         self.print_metric(
             "Lines Removed",
-            &format!(
-                "-{}",
-                analysis.quantitative_input.file_changes.lines_removed
-            ),
+            &format!("-{}", analysis.metrics.lines_removed),
         );
-        self.print_metric(
-            "Net Code Growth",
-            &analysis
-                .quantitative_input
-                .file_changes
-                .net_code_growth
-                .to_string(),
-        );
-        self.print_metric(
-            "Refactoring Ops",
-            &analysis
-                .quantitative_input
-                .file_changes
-                .refactoring_operations
-                .to_string(),
-        );
+        let net_code_growth =
+            analysis.metrics.lines_added as i64 - analysis.metrics.lines_removed as i64;
+        self.print_metric("Net Code Growth", &net_code_growth.to_string());
 
         println!("{}", style(self.box_separator(width)).magenta());
 
@@ -378,17 +280,7 @@ impl AnalyticsFormatter {
         );
         self.print_metric(
             "Session Duration",
-            &format!(
-                "{:.1} minutes",
-                analysis
-                    .quantitative_input
-                    .time_metrics
-                    .total_session_time_minutes
-            ),
-        );
-        self.print_metric(
-            "Peak Hours",
-            &format!("{:?}", analysis.quantitative_input.time_metrics.peak_hours),
+            &format!("{:.1} minutes", analysis.metrics.session_duration_minutes),
         );
 
         println!("{}", style(self.box_separator(width)).magenta());
@@ -401,98 +293,8 @@ impl AnalyticsFormatter {
         );
         self.print_metric(
             "Total Tokens",
-            &analysis
-                .quantitative_input
-                .token_metrics
-                .total_tokens_used
-                .to_string(),
+            &analysis.metrics.total_tokens_used.to_string(),
         );
-        self.print_metric(
-            "Input Tokens",
-            &analysis
-                .quantitative_input
-                .token_metrics
-                .input_tokens
-                .to_string(),
-        );
-        self.print_metric(
-            "Output Tokens",
-            &analysis
-                .quantitative_input
-                .token_metrics
-                .output_tokens
-                .to_string(),
-        );
-        self.print_metric(
-            "Token Efficiency",
-            &format!(
-                "{:.2}",
-                analysis.quantitative_input.token_metrics.token_efficiency
-            ),
-        );
-
-        println!("{}", style(self.box_separator(width)).magenta());
-
-        // Tool Usage
-        println!(
-            "{} {}",
-            style("│").magenta(),
-            style("🛠️  Tool Usage:").bold()
-        );
-        self.print_metric(
-            "Total Operations",
-            &analysis
-                .quantitative_input
-                .tool_usage
-                .total_operations
-                .to_string(),
-        );
-        self.print_metric(
-            "Successful",
-            &format!(
-                "{} ({:.1}%)",
-                analysis.quantitative_input.tool_usage.successful_operations,
-                (analysis.quantitative_input.tool_usage.successful_operations as f64
-                    / analysis.quantitative_input.tool_usage.total_operations as f64)
-                    * 100.0
-            ),
-        );
-        self.print_metric(
-            "Failed",
-            &analysis
-                .quantitative_input
-                .tool_usage
-                .failed_operations
-                .to_string(),
-        );
-
-        if !analysis
-            .quantitative_input
-            .tool_usage
-            .tool_distribution
-            .is_empty()
-        {
-            println!(
-                "{} {}",
-                style("│").magenta(),
-                style("  Tool Distribution:").dim()
-            );
-            let mut tools: Vec<_> = analysis
-                .quantitative_input
-                .tool_usage
-                .tool_distribution
-                .iter()
-                .collect();
-            tools.sort_by(|a, b| b.1.cmp(a.1));
-            for (tool, count) in tools.iter().take(10) {
-                println!(
-                    "{}   {} {}",
-                    style("│").magenta(),
-                    style(format!("• {tool}")).cyan(),
-                    style(format!("({count})")).dim()
-                );
-            }
-        }
 
         println!("{}", style(self.box_bottom(width)).magenta());
 
