@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO analytics (\n                id, analytics_request_id, session_id, generated_at,\n                qualitative_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "81e1c42c1828a7f223fa86f3195c7c3c81e05caebdb763de78e28bc41856ce20"
+}

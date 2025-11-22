@@ -10,7 +10,7 @@ use super::analytics::{
     collect_qualitative_data, collect_quantitative_data, generate_qualitative_analysis_ai,
     generate_quantitative_analysis_ai,
 };
-use crate::models::{Analytics, Metrics};
+use crate::models::Analytics;
 
 pub struct AnalyticsService {
     db_manager: Arc<DatabaseManager>,
@@ -61,7 +61,8 @@ impl AnalyticsService {
         let tool_operations = tool_op_repo.get_by_session(&session_uuid).await?;
 
         // Collect quantitative and qualitative data
-        let quantitative_input =
+        // FIXME: 고쳐야징
+        let _quantitative_input =
             collect_quantitative_data(&session, &messages, &tool_operations).await?;
         let qualitative_input =
             collect_qualitative_data(&tool_operations, &messages, &session).await?;
@@ -78,23 +79,12 @@ impl AnalyticsService {
         let ai_quantitative_output =
             generate_quantitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
-        // Build metrics from quantitative_input
-        let metrics = Metrics {
-            total_files_modified: quantitative_input.file_changes.total_files_modified,
-            total_files_read: quantitative_input.file_changes.total_files_read,
-            lines_added: quantitative_input.file_changes.lines_added,
-            lines_removed: quantitative_input.file_changes.lines_removed,
-            total_tokens_used: quantitative_input.token_metrics.total_tokens_used,
-            session_duration_minutes: quantitative_input.time_metrics.total_session_time_minutes,
-        };
-
         // Create Analytics directly
         Ok(Analytics::new(
             analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
             session_id.to_string(),
             ai_qualitative_output,
             ai_quantitative_output,
-            metrics,
             None, // model_used - will be set later if available
             None, // analysis_duration_ms - will be set later
         ))

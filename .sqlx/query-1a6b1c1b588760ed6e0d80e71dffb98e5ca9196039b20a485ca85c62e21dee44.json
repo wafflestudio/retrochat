@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                metrics_json,\n                qualitative_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE id = ?\n            ",
+  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                qualitative_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -24,28 +24,23 @@
         "type_info": "Text"
       },
       {
-        "name": "metrics_json",
+        "name": "qualitative_output_json",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "qualitative_output_json",
+        "name": "ai_quantitative_output_json",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "ai_quantitative_output_json",
+        "name": "model_used",
         "ordinal": 6,
         "type_info": "Text"
       },
       {
-        "name": "model_used",
-        "ordinal": 7,
-        "type_info": "Text"
-      },
-      {
         "name": "analysis_duration_ms",
-        "ordinal": 8,
+        "ordinal": 7,
         "type_info": "Int64"
       }
     ],
@@ -59,10 +54,9 @@
       false,
       false,
       false,
-      false,
       true,
       true
     ]
   },
-  "hash": "0be4969126dce80121da5d413019cbc360356f1b8bc4e427ea237c27c0200156"
+  "hash": "1a6b1c1b588760ed6e0d80e71dffb98e5ca9196039b20a485ca85c62e21dee44"
 }

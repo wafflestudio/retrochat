@@ -43,7 +43,7 @@ async fn test_single_session_analysis_workflow() {
             match service.get_analysis_result(request.id.clone()).await {
                 Ok(Some(analytics)) => {
                     // Verify analysis result was stored
-                    assert!(!analytics.qualitative_output.insights().is_empty());
+                    assert!(!analytics.ai_qualitative_output.insights().is_empty());
                     println!("Analysis completed successfully");
                 }
                 Ok(None) => {

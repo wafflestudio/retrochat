@@ -7,7 +7,7 @@ pub mod project;
 pub mod provider;
 pub mod tool_operation;
 
-pub use analytics::{Analytics, Metrics};
+pub use analytics::Analytics;
 pub use analytics_request::{AnalyticsRequest, OperationStatus};
 pub use bash_metadata::BashMetadata;
 pub use chat_session::{ChatSession, SessionState};

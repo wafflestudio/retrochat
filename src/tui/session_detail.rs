@@ -565,11 +565,8 @@ impl SessionDetailWidget {
                 // Scores section: header + blank + 6 scores + blank
                 line_count += 9;
 
-                // Metrics section: header + blank + 6 metrics + blank
-                line_count += 9;
-
                 // Insights section
-                let insights = analytics.qualitative_output.insights();
+                let insights = analytics.ai_qualitative_output.insights();
                 if !insights.is_empty() {
                     line_count += 2; // Header + blank
                                      // Estimate 3-5 lines per insight (title + wrapped description)
@@ -645,44 +642,8 @@ impl SessionDetailWidget {
             )]));
             lines.push(Line::from(""));
 
-            // Metrics section
-            lines.push(Line::from(vec![Span::styled(
-                "📈 Metrics",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            )]));
-            lines.push(Line::from(""));
-
-            let metrics = &analytics.metrics;
-            lines.push(Line::from(format!(
-                "  Files Modified:     {}",
-                metrics.total_files_modified
-            )));
-            lines.push(Line::from(format!(
-                "  Files Read:         {}",
-                metrics.total_files_read
-            )));
-            lines.push(Line::from(format!(
-                "  Lines Added:        {}",
-                metrics.lines_added
-            )));
-            lines.push(Line::from(format!(
-                "  Lines Removed:      {}",
-                metrics.lines_removed
-            )));
-            lines.push(Line::from(format!(
-                "  Tokens Used:        {}",
-                metrics.total_tokens_used
-            )));
-            lines.push(Line::from(format!(
-                "  Duration:           {:.1} min",
-                metrics.session_duration_minutes
-            )));
-            lines.push(Line::from(""));
-
             // Key insights from qualitative output
-            let insights = analytics.qualitative_output.insights();
+            let insights = analytics.ai_qualitative_output.insights();
             if !insights.is_empty() {
                 lines.push(Line::from(vec![Span::styled(
                     "💡 Key Insights",

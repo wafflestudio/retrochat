@@ -10,24 +10,13 @@ use crate::services::analytics::{AIQualitativeOutput, AIQuantitativeOutput};
 // =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Metrics {
-    pub total_files_modified: u64,
-    pub total_files_read: u64,
-    pub lines_added: u64,
-    pub lines_removed: u64,
-    pub total_tokens_used: u64,
-    pub session_duration_minutes: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Analytics {
     pub id: String,
     pub analytics_request_id: String,
     pub session_id: String,
     pub generated_at: DateTime<Utc>,
 
-    pub metrics: Metrics,
-    pub qualitative_output: AIQualitativeOutput,
+    pub ai_qualitative_output: AIQualitativeOutput,
     pub ai_quantitative_output: AIQuantitativeOutput,
 
     // Metadata
@@ -42,7 +31,6 @@ impl Analytics {
         session_id: String,
         qualitative_output: AIQualitativeOutput,
         ai_quantitative_output: AIQuantitativeOutput,
-        metrics: Metrics,
         model_used: Option<String>,
         analysis_duration_ms: Option<i64>,
     ) -> Self {
@@ -51,8 +39,7 @@ impl Analytics {
             analytics_request_id,
             session_id,
             generated_at: Utc::now(),
-            metrics,
-            qualitative_output,
+            ai_qualitative_output: qualitative_output,
             ai_quantitative_output,
             model_used,
             analysis_duration_ms,

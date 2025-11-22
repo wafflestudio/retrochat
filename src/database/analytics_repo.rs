@@ -20,9 +20,7 @@ impl AnalyticsRepository {
         let generated_at = analytics.generated_at.to_rfc3339();
 
         // Serialize JSON fields
-        let metrics_json =
-            serde_json::to_string(&analytics.metrics).context("Failed to serialize metrics")?;
-        let qualitative_output_json = serde_json::to_string(&analytics.qualitative_output)
+        let ai_qualitative_output_json = serde_json::to_string(&analytics.ai_qualitative_output)
             .context("Failed to serialize qualitative_output")?;
         let ai_quantitative_output_json = serde_json::to_string(&analytics.ai_quantitative_output)
             .context("Failed to serialize ai_quantitative_output")?;
@@ -31,18 +29,16 @@ impl AnalyticsRepository {
             r#"
             INSERT INTO analytics (
                 id, analytics_request_id, session_id, generated_at,
-                metrics_json,
                 qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             analytics.id,
             analytics.analytics_request_id,
             analytics.session_id,
             generated_at,
-            metrics_json,
-            qualitative_output_json,
+            ai_qualitative_output_json,
             ai_quantitative_output_json,
             analytics.model_used,
             analytics.analysis_duration_ms
@@ -59,7 +55,6 @@ impl AnalyticsRepository {
             r#"
             SELECT
                 id, analytics_request_id, session_id, generated_at,
-                metrics_json,
                 qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
@@ -76,8 +71,6 @@ impl AnalyticsRepository {
             let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let metrics: crate::models::Metrics =
-                serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
@@ -103,8 +96,7 @@ impl AnalyticsRepository {
                 analytics_request_id: row.analytics_request_id,
                 session_id,
                 generated_at,
-                metrics,
-                qualitative_output,
+                ai_qualitative_output: qualitative_output,
                 ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
@@ -122,7 +114,6 @@ impl AnalyticsRepository {
             r#"
             SELECT
                 id, analytics_request_id, session_id, generated_at,
-                metrics_json,
                 qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
@@ -141,8 +132,6 @@ impl AnalyticsRepository {
             let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let metrics: crate::models::Metrics =
-                serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
@@ -168,8 +157,7 @@ impl AnalyticsRepository {
                 analytics_request_id: row.analytics_request_id,
                 session_id,
                 generated_at,
-                metrics,
-                qualitative_output,
+                ai_qualitative_output: qualitative_output,
                 ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
