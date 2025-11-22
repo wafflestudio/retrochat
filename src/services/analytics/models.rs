@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -85,8 +84,6 @@ pub struct QualitativeEntry {
     pub title: String,
     /// What this entry measures (1-2 sentences for LLM prompt)
     pub description: String,
-    /// JSON schema describing the structure of each item
-    pub item_schema: HashMap<String, String>,
     /// Minimum number of items to generate
     #[serde(default = "default_min_items")]
     pub min_items: u32,
@@ -106,43 +103,9 @@ fn default_max_items() -> u32 {
 impl QualitativeEntry {
     /// Format entry for inclusion in LLM prompts
     pub fn format_for_prompt(&self) -> String {
-        let schema_lines: Vec<String> = self
-            .item_schema
-            .iter()
-            .map(|(k, v)| format!("      \"{}\": \"{}\"", k, v))
-            .collect();
-
         format!(
-            r#"**{}**: {} ({}-{} items)
-  [
-    {{
-{}
-    }}
-  ]"#,
-            self.title,
-            self.description,
-            self.min_items,
-            self.max_items,
-            schema_lines.join(",\n")
-        )
-    }
-
-    /// Format JSON schema for the entry
-    pub fn format_json_schema(&self) -> String {
-        let schema_lines: Vec<String> = self
-            .item_schema
-            .iter()
-            .map(|(k, v)| format!("        \"{}\": {}", k, v))
-            .collect();
-
-        format!(
-            r#"  "{}": [
-    {{
-{}
-    }}
-  ]"#,
-            self.key,
-            schema_lines.join(",\n")
+            "**{}**: {} (provide {}-{} items, each as a single concise markdown line)",
+            self.title, self.description, self.min_items, self.max_items
         )
     }
 }
@@ -175,26 +138,6 @@ impl QualitativeEntryList {
     pub fn default_entries() -> Self {
         let json = include_str!("../../../resources/qualitative_entries.json");
         Self::from_json_str(json).expect("Default qualitative entries should be valid JSON")
-    }
-
-    /// Format all entries for inclusion in LLM prompt
-    pub fn format_for_prompt(&self) -> String {
-        self.entries
-            .iter()
-            .enumerate()
-            .map(|(i, e)| format!("{}. {}", i + 1, e.format_for_prompt()))
-            .collect::<Vec<_>>()
-            .join("\n\n")
-    }
-
-    /// Format expected JSON schema for LLM output
-    pub fn format_json_schema(&self) -> String {
-        let schemas: Vec<String> = self
-            .entries
-            .iter()
-            .map(|e| e.format_json_schema())
-            .collect();
-        format!("{{\n{}\n}}", schemas.join(",\n"))
     }
 }
 
@@ -358,12 +301,13 @@ pub struct QuantitativeOutput {
 // =============================================================================
 
 /// AI-generated qualitative output from configurable entry-based analysis
+/// Each entry contains a list of markdown strings (one insight/observation per line)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AIQualitativeOutput {
     /// Dynamic entries based on qualitative_entries.json configuration
-    /// Key is the entry key (e.g., "insights"), value is an array of items
+    /// Key is the entry key (e.g., "insights"), value is an array of markdown strings
     #[serde(default)]
-    pub entries: HashMap<String, Vec<JsonValue>>,
+    pub entries: HashMap<String, Vec<String>>,
     /// Summary of qualitative evaluation
     #[serde(default)]
     pub summary: Option<QualitativeEvaluationSummary>,
@@ -385,7 +329,7 @@ pub struct QualitativeEvaluationSummary {
 
 impl AIQualitativeOutput {
     /// Create a new AIQualitativeOutput with the given entries
-    pub fn new(entries: HashMap<String, Vec<JsonValue>>, entries_version: String) -> Self {
+    pub fn new(entries: HashMap<String, Vec<String>>, entries_version: String) -> Self {
         let total_entries: usize = entries.values().map(|v| v.len()).sum();
         let categories_evaluated = entries.len();
 
@@ -401,67 +345,40 @@ impl AIQualitativeOutput {
     }
 
     /// Get entries by key
-    pub fn get_entries(&self, key: &str) -> Option<&Vec<JsonValue>> {
+    pub fn get_entries(&self, key: &str) -> Option<&Vec<String>> {
         self.entries.get(key)
     }
 
-    /// Get insights (convenience method for backward compatibility)
-    pub fn insights(&self) -> Vec<Insight> {
-        self.get_entries("insights")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+    /// Get insights as markdown strings
+    pub fn insights(&self) -> Vec<String> {
+        self.get_entries("insights").cloned().unwrap_or_default()
     }
 
-    /// Get good patterns (convenience method for backward compatibility)
-    pub fn good_patterns(&self) -> Vec<GoodPattern> {
+    /// Get good patterns as markdown strings
+    pub fn good_patterns(&self) -> Vec<String> {
         self.get_entries("good_patterns")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default()
     }
 
-    /// Get improvement areas (convenience method for backward compatibility)
-    pub fn improvement_areas(&self) -> Vec<ImprovementArea> {
+    /// Get improvement areas as markdown strings
+    pub fn improvement_areas(&self) -> Vec<String> {
         self.get_entries("improvement_areas")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default()
     }
 
-    /// Get recommendations (convenience method for backward compatibility)
-    pub fn recommendations(&self) -> Vec<Recommendation> {
+    /// Get recommendations as markdown strings
+    pub fn recommendations(&self) -> Vec<String> {
         self.get_entries("recommendations")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default()
     }
 
-    /// Get learning observations (convenience method for backward compatibility)
-    pub fn learning_observations(&self) -> Vec<LearningObservation> {
+    /// Get learning observations as markdown strings
+    pub fn learning_observations(&self) -> Vec<String> {
         self.get_entries("learning_observations")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default()
     }
 }
@@ -479,51 +396,6 @@ pub struct AIQuantitativeOutput {
     /// Summary of rubric evaluation
     #[serde(default)]
     pub rubric_summary: Option<RubricEvaluationSummary>,
-}
-
-// =============================================================================
-// Qualitative Entry Item Types (for backward compatibility and typed access)
-// =============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Insight {
-    pub title: String,
-    pub description: String,
-    pub category: String,
-    pub confidence: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GoodPattern {
-    pub pattern_name: String,
-    pub description: String,
-    pub frequency: u64,
-    pub impact: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImprovementArea {
-    pub area_name: String,
-    pub current_state: String,
-    pub suggested_improvement: String,
-    pub expected_impact: String,
-    pub priority: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Recommendation {
-    pub title: String,
-    pub description: String,
-    pub impact_score: f64,
-    pub implementation_difficulty: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LearningObservation {
-    pub observation: String,
-    pub skill_area: String,
-    pub progress_indicator: String,
-    pub next_steps: Vec<String>,
 }
 
 // =============================================================================

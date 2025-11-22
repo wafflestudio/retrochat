@@ -739,20 +739,19 @@ impl SessionDetailWidget {
                 )]));
                 lines.push(Line::from(""));
 
-                // Show first few insights
+                // Show first few insights (each is a markdown string)
                 for (idx, insight) in insights.iter().take(3).enumerate() {
-                    lines.push(Line::from(vec![Span::styled(
-                        format!("  {}. {}", idx + 1, insight.title),
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    )]));
-
-                    // Wrap the insight description
-                    let wrapped_desc =
-                        wrap_text(&insight.description, area.width.saturating_sub(6) as usize);
-                    for line in wrapped_desc {
-                        lines.push(Line::from(format!("     {line}")));
+                    // Wrap the insight text
+                    let wrapped = wrap_text(insight, area.width.saturating_sub(6) as usize);
+                    for (i, line) in wrapped.iter().enumerate() {
+                        if i == 0 {
+                            lines.push(Line::from(vec![Span::styled(
+                                format!("  {}. {}", idx + 1, line),
+                                Style::default().fg(Color::Yellow),
+                            )]));
+                        } else {
+                            lines.push(Line::from(format!("     {line}")));
+                        }
                     }
                     lines.push(Line::from(""));
                 }

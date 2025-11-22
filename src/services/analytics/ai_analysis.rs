@@ -1,6 +1,7 @@
 use super::models::{
-    AIQualitativeOutput, QualitativeEntryList, QualitativeInput, QuantitativeInput,
-    QuantitativeOutput, Rubric, RubricEvaluationSummary, RubricList, RubricScore,
+    AIQualitativeOutput, QualitativeEntry, QualitativeEntryList, QualitativeInput,
+    QuantitativeInput, QuantitativeOutput, Rubric, RubricEvaluationSummary, RubricList,
+    RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
@@ -40,16 +41,44 @@ pub async fn generate_qualitative_analysis_ai(
         None => QualitativeEntryList::default_entries(),
     };
 
-    let prompt = build_qualitative_analysis_prompt(qualitative_input, &entry_list);
+    // Process each entry type with a separate LLM request for better quality
+    let mut all_entries: HashMap<String, Vec<String>> = HashMap::new();
+
+    for entry in &entry_list.entries {
+        match generate_single_entry(qualitative_input, entry, ai_client).await {
+            Ok(items) => {
+                all_entries.insert(entry.key.clone(), items);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to generate entry {}: {}", entry.key, e);
+                // Add empty entry on error
+                all_entries.insert(entry.key.clone(), Vec::new());
+            }
+        }
+    }
+
+    Ok(AIQualitativeOutput::new(
+        all_entries,
+        entry_list.version.clone(),
+    ))
+}
+
+/// Generate a single qualitative entry type with its own LLM request
+async fn generate_single_entry(
+    qualitative_input: &QualitativeInput,
+    entry: &QualitativeEntry,
+    ai_client: &GoogleAiClient,
+) -> Result<Vec<String>> {
+    let prompt = build_single_entry_prompt(qualitative_input, entry);
 
     let analysis_request = crate::services::google_ai::models::AnalysisRequest {
         prompt,
-        max_tokens: Some(3072),
+        max_tokens: Some(1024),
         temperature: Some(0.7),
     };
 
     let response = ai_client.analytics(analysis_request).await?;
-    parse_qualitative_response(&response.text, &entry_list)
+    parse_entry_response(&response.text, entry)
 }
 
 // =============================================================================
@@ -139,15 +168,10 @@ Important: Return ONLY the JSON object, no additional text or explanation."#,
     )
 }
 
-fn build_qualitative_analysis_prompt(
-    input: &QualitativeInput,
-    entry_list: &QualitativeEntryList,
-) -> String {
-    let entries_description = entry_list.format_for_prompt();
-    let json_schema = entry_list.format_json_schema();
-
+/// Build a prompt for a single qualitative entry type
+fn build_single_entry_prompt(input: &QualitativeInput, entry: &QualitativeEntry) -> String {
     format!(
-        r#"Analyze the following development session and provide qualitative insights.
+        r#"Analyze the following development session and provide {title}.
 
 ## Full Session Transcript (JSON)
 
@@ -160,17 +184,27 @@ Each turn includes the message content and any tool uses (file reads, writes, ed
 
 ## Task
 
-Based on the complete session transcript above, provide a comprehensive qualitative analysis with the following categories:
+{entry_description}
 
-{entries_description}
+Provide {min_items} to {max_items} items. Each item should be a single, concise markdown line that captures one specific observation.
 
-Return ONLY a valid JSON object with this exact structure:
-{json_schema}
+## Required Output Format
 
-Important: Return ONLY the JSON object, no additional text or explanation."#,
+Return ONLY a numbered list of items, one per line. Each line should be a complete, self-contained observation.
+
+Example format:
+1. **Observation title**: Brief description of the observation with specific details.
+2. **Another observation**: Another specific point with supporting evidence.
+
+Important:
+- Return ONLY the numbered list, no additional text, headers, or explanation.
+- Each item must be a single line of markdown text.
+- Focus on specific, actionable observations from the session."#,
+        title = entry.title.to_lowercase(),
         session = input.raw_session,
-        entries_description = entries_description,
-        json_schema = json_schema
+        entry_description = entry.format_for_prompt(),
+        min_items = entry.min_items,
+        max_items = entry.max_items
     )
 }
 
@@ -196,40 +230,53 @@ fn parse_quantitative_response(response_text: &str) -> Result<QuantitativeOutput
     }
 }
 
-fn parse_qualitative_response(
-    response_text: &str,
-    entry_list: &QualitativeEntryList,
-) -> Result<AIQualitativeOutput> {
-    // Try to extract JSON from the response
-    let json_text = extract_json_from_text(response_text);
+/// Parse the LLM response for a single entry type
+/// Expects a numbered list of markdown lines
+fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result<Vec<String>> {
+    let mut items = Vec::new();
 
-    // Parse the response as a dynamic JSON object
-    let parsed: serde_json::Value = serde_json::from_str(&json_text).map_err(|e| {
-        tracing::warn!(
-            "Failed to parse AI response as JSON: {}. Response: {}",
-            e,
-            response_text
-        );
-        anyhow::anyhow!("Failed to parse AI qualitative response: {}", e)
-    })?;
+    // Parse numbered list items (e.g., "1. ...", "2. ...")
+    let numbered_re = Regex::new(r"^\s*\d+\.\s*(.+)$").unwrap();
 
-    // Extract entries based on the entry list configuration
-    let mut entries: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for line in response_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
 
-    if let Some(obj) = parsed.as_object() {
-        for entry_def in &entry_list.entries {
-            if let Some(value) = obj.get(&entry_def.key) {
-                if let Some(arr) = value.as_array() {
-                    entries.insert(entry_def.key.clone(), arr.clone());
+        // Check if it's a numbered list item
+        if let Some(caps) = numbered_re.captures(trimmed) {
+            if let Some(content) = caps.get(1) {
+                let item = content.as_str().trim().to_string();
+                if !item.is_empty() {
+                    items.push(item);
                 }
             }
+        } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+            // Also handle bullet points
+            let item = trimmed[2..].trim().to_string();
+            if !item.is_empty() {
+                items.push(item);
+            }
+        } else if trimmed.starts_with("**") && items.len() < entry.max_items as usize {
+            // Handle lines that start with bold text (common in markdown)
+            items.push(trimmed.to_string());
         }
     }
 
-    Ok(AIQualitativeOutput::new(
-        entries,
-        entry_list.version.clone(),
-    ))
+    // Ensure we have at least min_items
+    if items.is_empty() {
+        tracing::warn!(
+            "No items parsed for entry {}, response: {}",
+            entry.key,
+            response_text
+        );
+    }
+
+    // Limit to max_items
+    items.truncate(entry.max_items as usize);
+
+    Ok(items)
 }
 
 fn extract_json_from_text(text: &str) -> String {

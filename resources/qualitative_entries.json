@@ -4,66 +4,35 @@
     {
       "key": "insights",
       "title": "Insights",
-      "description": "Key observations about the development patterns, communication style, and problem-solving approach (2-4 insights)",
-      "item_schema": {
-        "title": "string",
-        "description": "string",
-        "category": "string (Productivity/Technical/Learning/Collaboration)",
-        "confidence": "0.0-1.0 confidence score"
-      },
+      "description": "Key observations about the development patterns, communication style, and problem-solving approach",
       "min_items": 2,
       "max_items": 4
     },
     {
       "key": "good_patterns",
       "title": "Good Patterns",
-      "description": "Positive habits and practices observed in how the user interacts with the AI (1-3 patterns)",
-      "item_schema": {
-        "pattern_name": "string",
-        "description": "string",
-        "frequency": "integer count",
-        "impact": "string (High/Medium/Low - description)"
-      },
+      "description": "Positive habits and practices observed in how the user interacts with the AI",
       "min_items": 1,
       "max_items": 3
     },
     {
       "key": "improvement_areas",
       "title": "Improvement Areas",
-      "description": "Areas where the user could enhance their workflow or communication (1-3 areas)",
-      "item_schema": {
-        "area_name": "string",
-        "current_state": "string",
-        "suggested_improvement": "string",
-        "expected_impact": "string",
-        "priority": "string (High/Medium/Low)"
-      },
+      "description": "Areas where the user could enhance their workflow or communication",
       "min_items": 1,
       "max_items": 3
     },
     {
       "key": "recommendations",
       "title": "Recommendations",
-      "description": "Actionable suggestions for improvement (2-3 recommendations)",
-      "item_schema": {
-        "title": "string",
-        "description": "string",
-        "impact_score": "0.0-10.0 impact score",
-        "implementation_difficulty": "string (Easy/Medium/Hard)"
-      },
+      "description": "Actionable suggestions for improvement with specific steps",
       "min_items": 2,
       "max_items": 3
     },
     {
       "key": "learning_observations",
       "title": "Learning Observations",
-      "description": "Growth and learning indicators based on what the user was working on (1-2 observations)",
-      "item_schema": {
-        "observation": "string",
-        "skill_area": "string",
-        "progress_indicator": "string",
-        "next_steps": "array of strings"
-      },
+      "description": "Growth and learning indicators based on what the user was working on",
       "min_items": 1,
       "max_items": 2
     }

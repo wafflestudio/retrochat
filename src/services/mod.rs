@@ -9,11 +9,10 @@ pub mod query_service;
 pub mod watch_service;
 
 pub use analytics::{
-    AIQualitativeOutput, AIQuantitativeOutput, EmbeddedToolUse, FileChangeMetrics, GoodPattern,
-    ImprovementArea, Insight, LearningObservation, ProcessedCodeMetrics,
-    ProcessedQuantitativeOutput, ProcessedTokenMetrics, QualitativeEntry, QualitativeEntryList,
-    QualitativeEvaluationSummary, QualitativeInput, QuantitativeInput, QuantitativeOutput,
-    Recommendation, SessionMetrics, SessionTranscript, SessionTurn, TimeConsumptionMetrics,
+    AIQualitativeOutput, AIQuantitativeOutput, EmbeddedToolUse, FileChangeMetrics,
+    ProcessedCodeMetrics, ProcessedQuantitativeOutput, ProcessedTokenMetrics, QualitativeEntry,
+    QualitativeEntryList, QualitativeEvaluationSummary, QualitativeInput, QuantitativeInput,
+    QuantitativeOutput, SessionMetrics, SessionTranscript, SessionTurn, TimeConsumptionMetrics,
     TimeEfficiencyMetrics, TokenConsumptionMetrics, ToolUsageMetrics,
 };
 pub use analytics_request_service::{AnalyticsRequestCleanupHandler, AnalyticsRequestService};
