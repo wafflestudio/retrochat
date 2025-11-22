@@ -78,6 +78,15 @@ pub enum Commands {
         session_id: String,
     },
 
+    /// Export a session transcript to JSON file
+    ExportSession {
+        /// Session ID to export
+        session_id: String,
+        /// Output file path (prints to stdout if not specified)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
     /// Search messages by content
     Search {
         /// Search query
@@ -298,6 +307,10 @@ impl Cli {
 
                 Commands::Show { session_id } => {
                     query::handle_session_detail_command(session_id).await
+                }
+
+                Commands::ExportSession { session_id, output } => {
+                    query::handle_export_session_command(session_id, output).await
                 }
 
                 Commands::Search {

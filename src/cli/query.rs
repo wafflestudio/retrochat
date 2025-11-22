@@ -1,5 +1,8 @@
-use crate::database::DatabaseManager;
+use crate::database::{
+    ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
+};
 use crate::models::Message;
+use crate::services::analytics::build_session_transcript;
 use crate::services::{QueryService, SearchRequest, SessionDetailRequest, SessionsQueryRequest};
 use crate::utils::time_parser;
 use anyhow::Result;
@@ -304,6 +307,47 @@ fn is_tool_message(content: &str) -> bool {
         || content.starts_with("[Tool Result]")
         || content.trim().starts_with("[Tool Use:")
         || content.trim().starts_with("[Tool Result]")
+}
+
+/// Export a session transcript to JSON
+pub async fn handle_export_session_command(
+    session_id: String,
+    output: Option<String>,
+) -> Result<()> {
+    let db_path = crate::database::config::get_default_db_path()?;
+    let db_manager = DatabaseManager::new(&db_path).await?;
+
+    // Get repositories
+    let session_repo = ChatSessionRepository::new(&db_manager);
+    let message_repo = MessageRepository::new(&db_manager);
+    let tool_op_repo = ToolOperationRepository::new(&db_manager);
+
+    // Parse session_id to UUID
+    let session_uuid = uuid::Uuid::parse_str(&session_id)
+        .map_err(|e| anyhow::anyhow!("Invalid session ID format: {e}"))?;
+
+    // Get session data
+    let session = session_repo
+        .get_by_id(&session_uuid)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Session not found: {session_id}"))?;
+
+    // Get messages and tool operations
+    let messages = message_repo.get_by_session(&session_uuid).await?;
+    let tool_operations = tool_op_repo.get_by_session(&session_uuid).await?;
+
+    // Build the session transcript
+    let transcript = build_session_transcript(&messages, &tool_operations, &session)?;
+
+    // Output to file or stdout
+    if let Some(output_path) = output {
+        std::fs::write(&output_path, &transcript)?;
+        println!("Session exported to: {output_path}");
+    } else {
+        println!("{transcript}");
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
