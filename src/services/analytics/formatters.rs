@@ -657,59 +657,56 @@ impl AnalyticsFormatter {
         println!("\n💭 QUALITATIVE INSIGHTS");
         println!("─────────────────────");
 
-        println!("\n💡 Key Insights:");
-        for insight in &analysis.qualitative_output.insights {
-            println!(
-                "  [{}] {}: {}",
-                insight.category, insight.title, insight.description
-            );
-            println!("    Confidence: {:.1}%", insight.confidence * 100.0);
+        let insights = analysis.qualitative_output.insights();
+        let good_patterns = analysis.qualitative_output.good_patterns();
+        let improvement_areas = analysis.qualitative_output.improvement_areas();
+        let recommendations = analysis.qualitative_output.recommendations();
+        let learning_observations = analysis.qualitative_output.learning_observations();
+
+        if !insights.is_empty() {
+            println!("\n💡 Key Insights:");
+            for item in &insights {
+                println!("  • {}", item);
+            }
         }
 
-        if !analysis.qualitative_output.good_patterns.is_empty() {
+        if !good_patterns.is_empty() {
             println!("\n✅ Good Patterns:");
-            for pattern in &analysis.qualitative_output.good_patterns {
-                println!(
-                    "  • {} ({} times): {}",
-                    pattern.pattern_name, pattern.frequency, pattern.description
-                );
-                println!("    Impact: {}", pattern.impact);
+            for item in &good_patterns {
+                println!("  • {}", item);
             }
         }
 
-        if !analysis.qualitative_output.improvement_areas.is_empty() {
+        if !improvement_areas.is_empty() {
             println!("\n🔧 Improvement Areas:");
-            for area in &analysis.qualitative_output.improvement_areas {
-                println!("  • {} [{}]", area.area_name, area.priority);
-                println!("    Current: {}", area.current_state);
-                println!("    Suggestion: {}", area.suggested_improvement);
-                println!("    Expected Impact: {}", area.expected_impact);
+            for item in &improvement_areas {
+                println!("  • {}", item);
             }
         }
 
-        if !analysis.qualitative_output.recommendations.is_empty() {
+        if !recommendations.is_empty() {
             println!("\n🎯 Recommendations:");
-            for rec in &analysis.qualitative_output.recommendations {
-                println!("  • {}: {}", rec.title, rec.description);
-                println!("    Impact Score: {:.1}/10", rec.impact_score * 10.0);
-                println!("    Difficulty: {}", rec.implementation_difficulty);
+            for item in &recommendations {
+                println!("  • {}", item);
             }
         }
 
-        if !analysis.qualitative_output.learning_observations.is_empty() {
+        if !learning_observations.is_empty() {
             println!("\n📚 Learning Observations:");
-            for obs in &analysis.qualitative_output.learning_observations {
-                println!("  • {} ({})", obs.observation, obs.skill_area);
-                println!("    Progress: {}", obs.progress_indicator);
-                if !obs.next_steps.is_empty() {
-                    println!("    Next Steps: {}", obs.next_steps.join(", "));
-                }
+            for item in &learning_observations {
+                println!("  • {}", item);
             }
         }
     }
 
     fn print_qualitative_insights_enhanced(&self, analysis: &Analytics) -> Result<()> {
         let width = self.terminal_width;
+
+        let insights = analysis.qualitative_output.insights();
+        let good_patterns = analysis.qualitative_output.good_patterns();
+        let improvement_areas = analysis.qualitative_output.improvement_areas();
+        let recommendations = analysis.qualitative_output.recommendations();
+        let learning_observations = analysis.qualitative_output.learning_observations();
 
         println!();
         println!("{}", style(self.box_top(width)).green());
@@ -721,39 +718,21 @@ impl AnalyticsFormatter {
         );
         println!("{}", style(self.box_separator(width)).green());
 
-        // Key Insights with markdown-style rendering
-        if !analysis.qualitative_output.insights.is_empty() {
+        // Key Insights
+        if !insights.is_empty() {
             println!("{} {}", style("│").green(), style("💡 Key Insights").bold());
             println!("{}", style("│").green());
 
-            for insight in &analysis.qualitative_output.insights {
-                let confidence_color = if insight.confidence >= 0.8 {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).green()
-                } else if insight.confidence >= 0.6 {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).yellow()
-                } else {
-                    style(format!("{:.0}%", insight.confidence * 100.0)).red()
-                };
-
-                println!(
-                    "{} {} {} {} {}",
-                    style("│").green(),
-                    style("  •").cyan(),
-                    style(&insight.title).bold(),
-                    style(format!("[{}]", insight.category)).dim(),
-                    confidence_color
-                );
-
-                // Wrap description text
-                for line in self.wrap_text(&insight.description, width - 8) {
-                    println!("{}     {}", style("│").green(), style(line).dim());
+            for item in &insights {
+                for line in self.wrap_text(item, width - 8) {
+                    println!("{} {} {}", style("│").green(), style("  •").cyan(), line);
                 }
-                println!("{}", style("│").green());
             }
+            println!("{}", style("│").green());
         }
 
         // Good Patterns
-        if !analysis.qualitative_output.good_patterns.is_empty() {
+        if !good_patterns.is_empty() {
             println!("{}", style(self.box_separator(width)).green());
             println!(
                 "{} {}",
@@ -762,31 +741,16 @@ impl AnalyticsFormatter {
             );
             println!("{}", style("│").green());
 
-            for pattern in &analysis.qualitative_output.good_patterns {
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").green(),
-                    style(&pattern.pattern_name).bold(),
-                    style(format!("({} times)", pattern.frequency)).dim()
-                );
-
-                for line in self.wrap_text(&pattern.description, width - 8) {
-                    println!("{}     {}", style("│").green(), line);
+            for item in &good_patterns {
+                for line in self.wrap_text(item, width - 8) {
+                    println!("{} {} {}", style("│").green(), style("  •").green(), line);
                 }
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    style(&pattern.impact).cyan()
-                );
-                println!("{}", style("│").green());
             }
+            println!("{}", style("│").green());
         }
 
         // Improvement Areas
-        if !analysis.qualitative_output.improvement_areas.is_empty() {
+        if !improvement_areas.is_empty() {
             println!("{}", style(self.box_separator(width)).green());
             println!(
                 "{} {}",
@@ -795,47 +759,16 @@ impl AnalyticsFormatter {
             );
             println!("{}", style("│").green());
 
-            for area in &analysis.qualitative_output.improvement_areas {
-                let priority_style = match area.priority.to_lowercase().as_str() {
-                    "high" | "critical" => style(&area.priority).red(),
-                    "medium" => style(&area.priority).yellow(),
-                    _ => style(&area.priority).blue(),
-                };
-
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").yellow(),
-                    style(&area.area_name).bold(),
-                    priority_style
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Current:").dim(),
-                    &area.current_state
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Suggestion:").dim(),
-                    style(&area.suggested_improvement).cyan()
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    &area.expected_impact
-                );
-                println!("{}", style("│").green());
+            for item in &improvement_areas {
+                for line in self.wrap_text(item, width - 8) {
+                    println!("{} {} {}", style("│").green(), style("  •").yellow(), line);
+                }
             }
+            println!("{}", style("│").green());
         }
 
         // Recommendations
-        if !analysis.qualitative_output.recommendations.is_empty() {
+        if !recommendations.is_empty() {
             println!("{}", style(self.box_separator(width)).green());
             println!(
                 "{} {}",
@@ -844,37 +777,17 @@ impl AnalyticsFormatter {
             );
             println!("{}", style("│").green());
 
-            for (idx, rec) in analysis
-                .qualitative_output
-                .recommendations
-                .iter()
-                .enumerate()
-            {
-                println!(
-                    "{} {} {}",
-                    style("│").green(),
-                    style(format!("  {}.", idx + 1)).cyan(),
-                    style(&rec.title).bold()
-                );
-
-                for line in self.wrap_text(&rec.description, width - 8) {
-                    println!("{}     {}", style("│").green(), line);
+            for (idx, item) in recommendations.iter().enumerate() {
+                let first_line = format!("{}. {}", idx + 1, item);
+                for line in self.wrap_text(&first_line, width - 8) {
+                    println!("{} {}", style("│").green(), style(line).cyan());
                 }
-
-                println!(
-                    "{}     {} {} | {} {}",
-                    style("│").green(),
-                    style("Impact:").dim(),
-                    self.impact_visualization(rec.impact_score),
-                    style("Difficulty:").dim(),
-                    style(&rec.implementation_difficulty).yellow()
-                );
-                println!("{}", style("│").green());
             }
+            println!("{}", style("│").green());
         }
 
         // Learning Observations
-        if !analysis.qualitative_output.learning_observations.is_empty() {
+        if !learning_observations.is_empty() {
             println!("{}", style(self.box_separator(width)).green());
             println!(
                 "{} {}",
@@ -883,35 +796,12 @@ impl AnalyticsFormatter {
             );
             println!("{}", style("│").green());
 
-            for obs in &analysis.qualitative_output.learning_observations {
-                println!(
-                    "{} {} {} {}",
-                    style("│").green(),
-                    style("  •").blue(),
-                    style(&obs.observation).bold(),
-                    style(format!("[{}]", obs.skill_area)).dim()
-                );
-
-                println!(
-                    "{}     {} {}",
-                    style("│").green(),
-                    style("Progress:").dim(),
-                    style(&obs.progress_indicator).cyan()
-                );
-
-                if !obs.next_steps.is_empty() {
-                    println!("{}     {}", style("│").green(), style("Next Steps:").dim());
-                    for step in &obs.next_steps {
-                        println!(
-                            "{}       {} {}",
-                            style("│").green(),
-                            style("→").cyan(),
-                            step
-                        );
-                    }
+            for item in &learning_observations {
+                for line in self.wrap_text(item, width - 8) {
+                    println!("{} {} {}", style("│").green(), style("  •").blue(), line);
                 }
-                println!("{}", style("│").green());
             }
+            println!("{}", style("│").green());
         }
 
         println!("{}", style(self.box_bottom(width)).green());
@@ -956,19 +846,5 @@ impl AnalyticsFormatter {
         }
 
         lines
-    }
-
-    fn impact_visualization(&self, impact: f64) -> console::StyledObject<String> {
-        let score = (impact * 10.0) as usize;
-        let filled = "●".repeat(score.min(10));
-        let empty = "○".repeat((10 - score).max(0));
-
-        if score >= 8 {
-            style(format!("{filled}{empty}")).green()
-        } else if score >= 5 {
-            style(format!("{filled}{empty}")).yellow()
-        } else {
-            style(format!("{filled}{empty}")).red()
-        }
     }
 }

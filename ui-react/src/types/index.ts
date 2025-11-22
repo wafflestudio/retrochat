@@ -172,12 +172,23 @@ export interface LearningObservation {
   next_steps: string[]
 }
 
-export interface QualitativeOutput {
-  insights: Insight[]
-  good_patterns: GoodPattern[]
-  improvement_areas: ImprovementArea[]
-  recommendations: Recommendation[]
-  learning_observations: LearningObservation[]
+// Summary of qualitative evaluation
+export interface QualitativeEvaluationSummary {
+  total_entries: number
+  categories_evaluated: number
+  entries_version: string
+}
+
+// AI-generated qualitative output from configurable entry-based analysis
+// Each entry is a list of markdown strings (one observation per item)
+export interface AIQualitativeOutput {
+  // Dynamic entries based on qualitative_entries.json configuration
+  // Key is the entry key (e.g., "insights"), value is an array of markdown strings
+  entries: Record<string, string[]>
+  // Summary of qualitative evaluation
+  summary: QualitativeEvaluationSummary | null
+  // Version of qualitative entries configuration used
+  entries_version: string | null
 }
 
 // Rubric-based evaluation types (LLM-as-a-judge)
@@ -266,7 +277,7 @@ export interface Analytics {
   metrics: Metrics
   // Note: quantitative_input and qualitative_input are not stored here
   // as they can be reconstructed from session_id
-  qualitative_output: QualitativeOutput
+  qualitative_output: AIQualitativeOutput
   processed_output: ProcessedQuantitativeOutput
   // AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
   ai_quantitative_output: AIQuantitativeOutput

@@ -71,6 +71,59 @@ impl RubricList {
     }
 }
 
+// =============================================================================
+// Qualitative Entry Models (for configurable qualitative analysis)
+// =============================================================================
+
+/// A single qualitative entry definition for configurable analysis output
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeEntry {
+    /// Unique key for the entry (e.g., "insights", "good_patterns")
+    pub key: String,
+    /// Display title (e.g., "Insights", "Good Patterns")
+    pub title: String,
+    /// What this entry measures (1-2 sentences for LLM prompt)
+    pub description: String,
+}
+
+impl QualitativeEntry {
+    /// Format entry for inclusion in LLM prompts
+    pub fn format_for_prompt(&self) -> String {
+        format!("**{}**: {}", self.title, self.description)
+    }
+}
+
+/// Container for a list of qualitative entries with metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeEntryList {
+    /// Schema version
+    #[serde(default = "default_version")]
+    pub version: String,
+    /// List of qualitative entries
+    pub entries: Vec<QualitativeEntry>,
+}
+
+impl QualitativeEntryList {
+    /// Load entries from a JSON file
+    pub fn from_json_file(path: &Path) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let entry_list: QualitativeEntryList = serde_json::from_str(&content)?;
+        Ok(entry_list)
+    }
+
+    /// Load entries from embedded JSON string
+    pub fn from_json_str(json: &str) -> anyhow::Result<Self> {
+        let entry_list: QualitativeEntryList = serde_json::from_str(json)?;
+        Ok(entry_list)
+    }
+
+    /// Get default entries (embedded in binary)
+    pub fn default_entries() -> Self {
+        let json = include_str!("../../../resources/qualitative_entries.json");
+        Self::from_json_str(json).expect("Default qualitative entries should be valid JSON")
+    }
+}
+
 /// Score for a single rubric evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RubricScore {
@@ -209,16 +262,90 @@ pub struct QuantitativeOutput {
 }
 
 // =============================================================================
-// Qualitative Output Models
+// AI Qualitative Output Models (configurable LLM-based qualitative analysis)
 // =============================================================================
 
+/// AI-generated qualitative output from configurable entry-based analysis
+/// Each entry contains a list of markdown strings (one insight/observation per line)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AIQualitativeOutput {
+    /// Dynamic entries based on qualitative_entries.json configuration
+    /// Key is the entry key (e.g., "insights"), value is an array of markdown strings
+    #[serde(default)]
+    pub entries: HashMap<String, Vec<String>>,
+    /// Summary of qualitative evaluation
+    #[serde(default)]
+    pub summary: Option<QualitativeEvaluationSummary>,
+    /// Version of qualitative entries configuration used
+    #[serde(default)]
+    pub entries_version: Option<String>,
+}
+
+/// Summary of qualitative evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QualitativeOutput {
-    pub insights: Vec<Insight>,
-    pub good_patterns: Vec<GoodPattern>,
-    pub improvement_areas: Vec<ImprovementArea>,
-    pub recommendations: Vec<Recommendation>,
-    pub learning_observations: Vec<LearningObservation>,
+pub struct QualitativeEvaluationSummary {
+    /// Total number of entries generated
+    pub total_entries: usize,
+    /// Number of entry categories evaluated
+    pub categories_evaluated: usize,
+    /// Version of entries configuration used
+    pub entries_version: String,
+}
+
+impl AIQualitativeOutput {
+    /// Create a new AIQualitativeOutput with the given entries
+    pub fn new(entries: HashMap<String, Vec<String>>, entries_version: String) -> Self {
+        let total_entries: usize = entries.values().map(|v| v.len()).sum();
+        let categories_evaluated = entries.len();
+
+        Self {
+            entries,
+            summary: Some(QualitativeEvaluationSummary {
+                total_entries,
+                categories_evaluated,
+                entries_version: entries_version.clone(),
+            }),
+            entries_version: Some(entries_version),
+        }
+    }
+
+    /// Get entries by key
+    pub fn get_entries(&self, key: &str) -> Option<&Vec<String>> {
+        self.entries.get(key)
+    }
+
+    /// Get insights as markdown strings
+    pub fn insights(&self) -> Vec<String> {
+        self.get_entries("insights").cloned().unwrap_or_default()
+    }
+
+    /// Get good patterns as markdown strings
+    pub fn good_patterns(&self) -> Vec<String> {
+        self.get_entries("good_patterns")
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Get improvement areas as markdown strings
+    pub fn improvement_areas(&self) -> Vec<String> {
+        self.get_entries("improvement_areas")
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Get recommendations as markdown strings
+    pub fn recommendations(&self) -> Vec<String> {
+        self.get_entries("recommendations")
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Get learning observations as markdown strings
+    pub fn learning_observations(&self) -> Vec<String> {
+        self.get_entries("learning_observations")
+            .cloned()
+            .unwrap_or_default()
+    }
 }
 
 // =============================================================================
@@ -234,47 +361,6 @@ pub struct AIQuantitativeOutput {
     /// Summary of rubric evaluation
     #[serde(default)]
     pub rubric_summary: Option<RubricEvaluationSummary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Insight {
-    pub title: String,
-    pub description: String,
-    pub category: String,
-    pub confidence: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GoodPattern {
-    pub pattern_name: String,
-    pub description: String,
-    pub frequency: u64,
-    pub impact: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImprovementArea {
-    pub area_name: String,
-    pub current_state: String,
-    pub suggested_improvement: String,
-    pub expected_impact: String,
-    pub priority: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Recommendation {
-    pub title: String,
-    pub description: String,
-    pub impact_score: f64,
-    pub implementation_difficulty: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LearningObservation {
-    pub observation: String,
-    pub skill_area: String,
-    pub progress_indicator: String,
-    pub next_steps: Vec<String>,
 }
 
 // =============================================================================
