@@ -42,12 +42,8 @@ pub struct Analytics {
     pub scores: Scores,
     pub metrics: Metrics,
 
-    // Complex data structures (stored as JSON strings in DB, deserialized here)
-    // Note: quantitative_input and qualitative_input are not stored here
-    // as they can be reconstructed from session_id
     pub qualitative_output: QualitativeOutput,
     pub processed_output: ProcessedQuantitativeOutput,
-    /// AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
     pub ai_quantitative_output: AIQuantitativeOutput,
 
     // Metadata
