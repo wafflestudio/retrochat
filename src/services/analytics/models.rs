@@ -219,6 +219,15 @@ pub struct QualitativeOutput {
     pub improvement_areas: Vec<ImprovementArea>,
     pub recommendations: Vec<Recommendation>,
     pub learning_observations: Vec<LearningObservation>,
+}
+
+// =============================================================================
+// AI Quantitative Output Models (LLM-as-a-judge rubric evaluation)
+// =============================================================================
+
+/// AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AIQuantitativeOutput {
     /// Rubric-based evaluation scores (LLM-as-a-judge)
     #[serde(default)]
     pub rubric_scores: Vec<RubricScore>,

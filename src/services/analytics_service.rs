@@ -10,10 +10,10 @@ use std::sync::Arc;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
-    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai,
-    ProcessedQuantitativeOutput, QuantitativeInput,
+    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai, score_all_rubrics,
+    AIQuantitativeOutput, ProcessedQuantitativeOutput, QuantitativeInput,
 };
-use crate::models::Analytics;
+use crate::models::{Analytics, Metrics};
 
 pub struct AnalyticsService {
     db_manager: Arc<DatabaseManager>,
@@ -81,20 +81,42 @@ impl AnalyticsService {
         let qualitative_output =
             generate_qualitative_analysis_ai(&qualitative_input, ai_client).await?;
 
+        // Generate rubric-based evaluation (LLM-as-a-judge)
+        let ai_quantitative_output = match score_all_rubrics(&messages, ai_client, None).await {
+            Ok((rubric_scores, rubric_summary)) => AIQuantitativeOutput {
+                rubric_scores,
+                rubric_summary: Some(rubric_summary),
+            },
+            Err(e) => {
+                tracing::warn!("Failed to generate rubric scores: {}", e);
+                AIQuantitativeOutput::default()
+            }
+        };
+
         // Process quantitative data
         let processed_output = self
             .process_quantitative_data(&quantitative_input, &session)
             .await?;
 
+        // Build metrics from quantitative_input
+        let metrics = Metrics {
+            total_files_modified: quantitative_input.file_changes.total_files_modified,
+            total_files_read: quantitative_input.file_changes.total_files_read,
+            lines_added: quantitative_input.file_changes.lines_added,
+            lines_removed: quantitative_input.file_changes.lines_removed,
+            total_tokens_used: quantitative_input.token_metrics.total_tokens_used,
+            session_duration_minutes: quantitative_input.time_metrics.total_session_time_minutes,
+        };
+
         // Create Analytics directly
         Ok(Analytics::new(
             analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
             session_id.to_string(),
-            quantitative_input,
-            qualitative_input,
             quantitative_output,
             qualitative_output,
             processed_output,
+            ai_quantitative_output,
+            metrics,
             None, // model_used - will be set later if available
             None, // analysis_duration_ms - will be set later
         ))

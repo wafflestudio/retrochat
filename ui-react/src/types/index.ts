@@ -180,6 +180,29 @@ export interface QualitativeOutput {
   learning_observations: LearningObservation[]
 }
 
+// Rubric-based evaluation types (LLM-as-a-judge)
+export interface RubricScore {
+  rubric_id: string
+  rubric_name: string
+  score: number
+  max_score: number
+  reasoning: string
+}
+
+export interface RubricEvaluationSummary {
+  total_score: number
+  max_score: number
+  percentage: number
+  rubrics_evaluated: number
+  rubrics_version: string
+}
+
+// AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
+export interface AIQuantitativeOutput {
+  rubric_scores: RubricScore[]
+  rubric_summary: RubricEvaluationSummary | null
+}
+
 export interface SessionMetrics {
   total_sessions: number
   average_session_duration_minutes: number
@@ -241,10 +264,12 @@ export interface Analytics {
   generated_at: string
   scores: Scores
   metrics: Metrics
-  quantitative_input: QuantitativeInput
-  qualitative_input: QualitativeInput
+  // Note: quantitative_input and qualitative_input are not stored here
+  // as they can be reconstructed from session_id
   qualitative_output: QualitativeOutput
   processed_output: ProcessedQuantitativeOutput
+  // AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
+  ai_quantitative_output: AIQuantitativeOutput
   model_used: string | null
   analysis_duration_ms: number | null
 }
