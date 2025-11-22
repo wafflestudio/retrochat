@@ -4,37 +4,27 @@
     {
       "key": "insights",
       "title": "Insights",
-      "description": "Key observations about the development patterns, communication style, and problem-solving approach",
-      "min_items": 2,
-      "max_items": 4
+      "description": "Key observations about the development patterns, communication style, and problem-solving approach"
     },
     {
       "key": "good_patterns",
       "title": "Good Patterns",
-      "description": "Positive habits and practices observed in how the user interacts with the AI",
-      "min_items": 1,
-      "max_items": 3
+      "description": "Positive habits and practices observed in how the user interacts with the AI"
     },
     {
       "key": "improvement_areas",
       "title": "Improvement Areas",
-      "description": "Areas where the user could enhance their workflow or communication",
-      "min_items": 1,
-      "max_items": 3
+      "description": "Areas where the user could enhance their workflow or communication"
     },
     {
       "key": "recommendations",
       "title": "Recommendations",
-      "description": "Actionable suggestions for improvement with specific steps",
-      "min_items": 2,
-      "max_items": 3
+      "description": "Actionable suggestions for improvement with specific steps"
     },
     {
       "key": "learning_observations",
       "title": "Learning Observations",
-      "description": "Growth and learning indicators based on what the user was working on",
-      "min_items": 1,
-      "max_items": 2
+      "description": "Growth and learning indicators based on what the user was working on"
     }
   ]
 }

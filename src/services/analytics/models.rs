@@ -84,29 +84,12 @@ pub struct QualitativeEntry {
     pub title: String,
     /// What this entry measures (1-2 sentences for LLM prompt)
     pub description: String,
-    /// Minimum number of items to generate
-    #[serde(default = "default_min_items")]
-    pub min_items: u32,
-    /// Maximum number of items to generate
-    #[serde(default = "default_max_items")]
-    pub max_items: u32,
-}
-
-fn default_min_items() -> u32 {
-    1
-}
-
-fn default_max_items() -> u32 {
-    3
 }
 
 impl QualitativeEntry {
     /// Format entry for inclusion in LLM prompts
     pub fn format_for_prompt(&self) -> String {
-        format!(
-            "**{}**: {} (provide {}-{} items, each as a single concise markdown line)",
-            self.title, self.description, self.min_items, self.max_items
-        )
+        format!("**{}**: {}", self.title, self.description)
     }
 }
 

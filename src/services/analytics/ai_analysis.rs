@@ -186,7 +186,7 @@ Each turn includes the message content and any tool uses (file reads, writes, ed
 
 {entry_description}
 
-Provide {min_items} to {max_items} items. Each item should be a single, concise markdown line that captures one specific observation.
+Each item should be a single, concise markdown line that captures one specific observation.
 
 ## Required Output Format
 
@@ -203,8 +203,6 @@ Important:
         title = entry.title.to_lowercase(),
         session = input.raw_session,
         entry_description = entry.format_for_prompt(),
-        min_items = entry.min_items,
-        max_items = entry.max_items
     )
 }
 
@@ -258,13 +256,12 @@ fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result
             if !item.is_empty() {
                 items.push(item);
             }
-        } else if trimmed.starts_with("**") && items.len() < entry.max_items as usize {
+        } else if trimmed.starts_with("**") {
             // Handle lines that start with bold text (common in markdown)
             items.push(trimmed.to_string());
         }
     }
 
-    // Ensure we have at least min_items
     if items.is_empty() {
         tracing::warn!(
             "No items parsed for entry {}, response: {}",
@@ -272,9 +269,6 @@ fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result
             response_text
         );
     }
-
-    // Limit to max_items
-    items.truncate(entry.max_items as usize);
 
     Ok(items)
 }
