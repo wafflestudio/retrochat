@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                scores_json, metrics_json,\n                quantitative_input_json, qualitative_input_json,\n                qualitative_output_json, processed_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE analytics_request_id = ?\n            ORDER BY generated_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                scores_json, metrics_json,\n                qualitative_output_json, processed_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -34,33 +34,28 @@
         "type_info": "Text"
       },
       {
-        "name": "quantitative_input_json",
+        "name": "qualitative_output_json",
         "ordinal": 6,
         "type_info": "Text"
       },
       {
-        "name": "qualitative_input_json",
+        "name": "processed_output_json",
         "ordinal": 7,
         "type_info": "Text"
       },
       {
-        "name": "qualitative_output_json",
+        "name": "ai_quantitative_output_json",
         "ordinal": 8,
         "type_info": "Text"
       },
       {
-        "name": "processed_output_json",
+        "name": "model_used",
         "ordinal": 9,
         "type_info": "Text"
       },
       {
-        "name": "model_used",
-        "ordinal": 10,
-        "type_info": "Text"
-      },
-      {
         "name": "analysis_duration_ms",
-        "ordinal": 11,
+        "ordinal": 10,
         "type_info": "Int64"
       }
     ],
@@ -77,10 +72,9 @@
       false,
       false,
       false,
-      false,
       true,
       true
     ]
   },
-  "hash": "d46e2ca1d29a8b793a70a4af7cca1262f80c2581504e807667436a65701311da"
+  "hash": "d8afba9d2c421e71f3ec567212228c7962f50fd9fee31e53b8d0cef48d2e6faf"
 }
