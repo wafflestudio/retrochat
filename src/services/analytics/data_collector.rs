@@ -2,7 +2,7 @@ use super::metrics::{
     calculate_file_change_metrics, calculate_time_consumption_metrics,
     calculate_token_consumption_metrics, calculate_tool_usage_metrics,
 };
-use super::models::{QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn};
+use super::models::{MetricQuantitativeOutput, QualitativeInput, SessionTranscript, SessionTurn};
 use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
@@ -23,13 +23,13 @@ pub async fn collect_quantitative_data(
     session: &ChatSession,
     messages: &[Message],
     tool_operations: &[ToolOperation],
-) -> Result<QuantitativeInput> {
+) -> Result<MetricQuantitativeOutput> {
     let file_changes = calculate_file_change_metrics(tool_operations);
     let time_metrics = calculate_time_consumption_metrics(session, messages);
     let token_metrics = calculate_token_consumption_metrics(messages);
     let tool_usage = calculate_tool_usage_metrics(tool_operations);
 
-    Ok(QuantitativeInput {
+    Ok(MetricQuantitativeOutput {
         file_changes,
         time_metrics,
         token_metrics,

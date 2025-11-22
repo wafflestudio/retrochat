@@ -11,8 +11,6 @@ async fn test_analytics_execute_command_structure() {
         None,                            // custom_prompt
         false,                           // all
         false,                           // background
-        "enhanced".to_string(),          // format
-        false,                           // plain
     )
     .await;
 
@@ -46,8 +44,6 @@ async fn test_analytics_execute_all_sessions() {
         None,                   // custom_prompt
         true,                   // all
         true,                   // background
-        "enhanced".to_string(), // format
-        false,                  // plain
     )
     .await;
 
@@ -81,8 +77,6 @@ async fn test_analytics_execute_custom_analysis() {
         Some(custom_prompt),             // custom_prompt
         false,                           // all
         false,                           // background
-        "enhanced".to_string(),          // format
-        false,                           // plain
     )
     .await;
 
@@ -115,8 +109,6 @@ async fn test_analytics_execute_validation() {
         None,                   // custom_prompt
         false,                  // all
         false,                  // background
-        "enhanced".to_string(), // format
-        false,                  // plain
     )
     .await;
 
@@ -150,8 +142,6 @@ async fn test_analytics_execute_validation() {
         None, // No custom prompt provided
         false,
         false,
-        "enhanced".to_string(), // format
-        false,                  // plain
     )
     .await;
 

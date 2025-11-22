@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // Re-export types from services that will be stored as JSON
-use crate::services::analytics::{AIQualitativeOutput, AIQuantitativeOutput};
+use crate::services::analytics::{
+    AIQualitativeOutput, AIQuantitativeOutput, MetricQuantitativeOutput,
+};
 
 // =============================================================================
 // Analytics Model (DB representation)
@@ -18,6 +20,7 @@ pub struct Analytics {
 
     pub ai_qualitative_output: AIQualitativeOutput,
     pub ai_quantitative_output: AIQuantitativeOutput,
+    pub metric_quantitative_output: MetricQuantitativeOutput,
 
     // Metadata
     pub model_used: Option<String>,
@@ -31,6 +34,7 @@ impl Analytics {
         session_id: String,
         qualitative_output: AIQualitativeOutput,
         ai_quantitative_output: AIQuantitativeOutput,
+        metric_quantitative_output: MetricQuantitativeOutput,
         model_used: Option<String>,
         analysis_duration_ms: Option<i64>,
     ) -> Self {
@@ -41,6 +45,7 @@ impl Analytics {
             generated_at: Utc::now(),
             ai_qualitative_output: qualitative_output,
             ai_quantitative_output,
+            metric_quantitative_output,
             model_used,
             analysis_duration_ms,
         }

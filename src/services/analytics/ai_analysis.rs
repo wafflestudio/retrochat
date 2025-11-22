@@ -364,7 +364,7 @@ pub async fn generate_quantitative_analysis_ai(
     ai_client: &GoogleAiClient,
     rubrics: Option<&RubricList>,
 ) -> Result<AIQuantitativeOutput> {
-    return match score_all_rubrics(&qualitative_input, ai_client, rubrics).await {
+    return match score_all_rubrics(qualitative_input, ai_client, rubrics).await {
         Ok((rubric_scores, rubric_summary)) => Ok(AIQuantitativeOutput {
             rubric_scores,
             rubric_summary: Some(rubric_summary),
@@ -394,7 +394,7 @@ async fn score_all_rubrics(
     // Score against each rubric
     let mut scores = Vec::new();
     for rubric in &rubric_list.rubrics {
-        match score_rubric(rubric, &formatted_session, ai_client).await {
+        match score_rubric(rubric, formatted_session, ai_client).await {
             Ok(score) => scores.push(score),
             Err(e) => {
                 tracing::error!("Failed to score rubric {}: {}", rubric.id, e);

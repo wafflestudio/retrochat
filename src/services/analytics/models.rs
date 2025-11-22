@@ -166,7 +166,7 @@ pub struct RubricEvaluationSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuantitativeInput {
+pub struct MetricQuantitativeOutput {
     pub file_changes: FileChangeMetrics,
     pub time_metrics: TimeConsumptionMetrics,
     pub token_metrics: TokenConsumptionMetrics,

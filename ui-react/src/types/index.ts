@@ -65,16 +65,11 @@ export interface FileChangeMetrics {
   lines_added: number
   lines_removed: number
   net_code_growth: number
-  refactoring_operations: number
-  bulk_edit_operations: number
 }
 
 export interface TimeConsumptionMetrics {
   total_session_time_minutes: number
-  average_session_length_minutes: number
   peak_hours: number[]
-  break_duration_minutes: number
-  context_switching_time_minutes: number
 }
 
 export interface TokenConsumptionMetrics {
@@ -82,7 +77,6 @@ export interface TokenConsumptionMetrics {
   input_tokens: number
   output_tokens: number
   token_efficiency: number
-  tokens_per_hour: number
 }
 
 export interface ToolUsageMetrics {
@@ -93,7 +87,7 @@ export interface ToolUsageMetrics {
   average_execution_time_ms: number
 }
 
-export interface QuantitativeInput {
+export interface MetricQuantitativeOutput {
   file_changes: FileChangeMetrics
   time_metrics: TimeConsumptionMetrics
   token_metrics: TokenConsumptionMetrics
@@ -273,14 +267,12 @@ export interface Analytics {
   analytics_request_id: string
   session_id: string
   generated_at: string
-  scores: Scores
-  metrics: Metrics
-  // Note: quantitative_input and qualitative_input are not stored here
-  // as they can be reconstructed from session_id
-  qualitative_output: AIQualitativeOutput
-  processed_output: ProcessedQuantitativeOutput
+  // AI-generated qualitative output from configurable entry-based analysis
+  ai_qualitative_output: AIQualitativeOutput
   // AI-generated quantitative output from rubric-based LLM-as-a-judge evaluation
   ai_quantitative_output: AIQuantitativeOutput
+  // Metric-based quantitative output (file changes, time metrics, token metrics, tool usage)
+  metric_quantitative_output: MetricQuantitativeOutput
   model_used: string | null
   analysis_duration_ms: number | null
 }

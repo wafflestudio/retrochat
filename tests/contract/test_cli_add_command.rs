@@ -207,8 +207,6 @@ fn test_analysis_run_command_structure() {
             custom_prompt: None,
             all: false,
             background: false,
-            format: "enhanced".to_string(),
-            plain: false,
         },
     };
 

@@ -8,7 +8,6 @@ async fn test_analytics_show_command_structure() {
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id
         false,                           // all
-        "text".to_string(),              // format
     )
     .await;
 
@@ -41,7 +40,6 @@ async fn test_analytics_show_all_formats() {
         let result = handle_show_command(
             None,               // session_id (None when using --all)
             true,               // all
-            format.to_string(), // format
         )
         .await;
 
@@ -74,7 +72,6 @@ async fn test_analytics_show_filtering() {
     let result = handle_show_command(
         None,               // session_id
         true,               // all
-        "text".to_string(), // format
     )
     .await;
 
@@ -106,7 +103,6 @@ async fn test_analytics_show_specific_session() {
     let result = handle_show_command(
         Some("session-123".to_string()), // session_id
         false,                           // all
-        "text".to_string(),              // format
     )
     .await;
 

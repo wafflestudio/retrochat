@@ -9,8 +9,8 @@ pub mod query_service;
 pub mod watch_service;
 
 pub use analytics::{
-    AIQualitativeOutput, FileChangeMetrics, QualitativeEntry, QualitativeEntryList,
-    QualitativeEvaluationSummary, QualitativeInput, QuantitativeInput, SessionTranscript,
+    AIQualitativeOutput, FileChangeMetrics, MetricQuantitativeOutput, QualitativeEntry,
+    QualitativeEntryList, QualitativeEvaluationSummary, QualitativeInput, SessionTranscript,
     SessionTurn, TimeConsumptionMetrics, TokenConsumptionMetrics, ToolUsageMetrics,
 };
 pub use analytics_request_service::{AnalyticsRequestCleanupHandler, AnalyticsRequestService};

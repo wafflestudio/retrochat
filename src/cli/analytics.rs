@@ -86,13 +86,7 @@ pub async fn handle_execute_command(
     if all {
         execute_analysis_for_all_sessions(&service, custom_prompt, background).await
     } else if let Some(session_id) = session_id {
-        execute_analysis_for_session(
-            &service,
-            session_id,
-            custom_prompt,
-            background,
-        )
-        .await
+        execute_analysis_for_session(&service, session_id, custom_prompt, background).await
     } else {
         anyhow::bail!("Either provide a session ID or use --all flag");
     }
@@ -215,10 +209,7 @@ async fn execute_analysis_for_all_sessions(
     Ok(())
 }
 
-pub async fn handle_show_command(
-    session_id: Option<String>,
-    all: bool,
-) -> Result<()> {
+pub async fn handle_show_command(session_id: Option<String>, all: bool) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
@@ -502,9 +493,7 @@ async fn list_cancellable_requests(service: &AnalyticsRequestService) -> Result<
 // Print Functions
 // =============================================================================
 
-async fn print_unified_analysis(
-    _analysis: &crate::models::Analytics,
-) -> Result<()> {
+async fn print_unified_analysis(_analysis: &crate::models::Analytics) -> Result<()> {
     println!("Good!");
     Ok(())
 }

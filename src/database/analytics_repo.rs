@@ -24,6 +24,9 @@ impl AnalyticsRepository {
             .context("Failed to serialize qualitative_output")?;
         let ai_quantitative_output_json = serde_json::to_string(&analytics.ai_quantitative_output)
             .context("Failed to serialize ai_quantitative_output")?;
+        let metric_quantitative_output_json =
+            serde_json::to_string(&analytics.metric_quantitative_output)
+                .context("Failed to serialize metric_quantitative_output")?;
 
         sqlx::query!(
             r#"
@@ -31,8 +34,9 @@ impl AnalyticsRepository {
                 id, analytics_request_id, session_id, generated_at,
                 qualitative_output_json,
                 ai_quantitative_output_json,
+                metric_quantitative_output_json,
                 model_used, analysis_duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             analytics.id,
             analytics.analytics_request_id,
@@ -40,6 +44,7 @@ impl AnalyticsRepository {
             generated_at,
             ai_qualitative_output_json,
             ai_quantitative_output_json,
+            metric_quantitative_output_json,
             analytics.model_used,
             analytics.analysis_duration_ms
         )
@@ -57,6 +62,7 @@ impl AnalyticsRepository {
                 id, analytics_request_id, session_id, generated_at,
                 qualitative_output_json,
                 ai_quantitative_output_json,
+                metric_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
             WHERE id = ?
@@ -77,6 +83,9 @@ impl AnalyticsRepository {
             let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
                 serde_json::from_str(&row.ai_quantitative_output_json)
                     .context("Failed to deserialize ai_quantitative_output")?;
+            let metric_quantitative_output: crate::services::analytics::MetricQuantitativeOutput =
+                serde_json::from_str(&row.metric_quantitative_output_json)
+                    .context("Failed to deserialize metric_quantitative_output")?;
 
             // Get session_id from row, or fetch from analytics_requests as fallback
             let session_id = if let Some(sid) = row.session_id {
@@ -98,6 +107,7 @@ impl AnalyticsRepository {
                 generated_at,
                 ai_qualitative_output: qualitative_output,
                 ai_quantitative_output,
+                metric_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
             }))
@@ -116,6 +126,7 @@ impl AnalyticsRepository {
                 id, analytics_request_id, session_id, generated_at,
                 qualitative_output_json,
                 ai_quantitative_output_json,
+                metric_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
             WHERE analytics_request_id = ?
@@ -138,6 +149,9 @@ impl AnalyticsRepository {
             let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
                 serde_json::from_str(&row.ai_quantitative_output_json)
                     .context("Failed to deserialize ai_quantitative_output")?;
+            let metric_quantitative_output: crate::services::analytics::MetricQuantitativeOutput =
+                serde_json::from_str(&row.metric_quantitative_output_json)
+                    .context("Failed to deserialize metric_quantitative_output")?;
 
             // Get session_id from row, or fetch from analytics_requests as fallback
             let session_id = if let Some(sid) = row.session_id {
@@ -159,6 +173,7 @@ impl AnalyticsRepository {
                 generated_at,
                 ai_qualitative_output: qualitative_output,
                 ai_quantitative_output,
+                metric_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
             }))

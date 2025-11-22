@@ -61,8 +61,7 @@ impl AnalyticsService {
         let tool_operations = tool_op_repo.get_by_session(&session_uuid).await?;
 
         // Collect quantitative and qualitative data
-        // FIXME: 고쳐야징
-        let _quantitative_input =
+        let metric_quantitative_output =
             collect_quantitative_data(&session, &messages, &tool_operations).await?;
         let qualitative_input =
             collect_qualitative_data(&tool_operations, &messages, &session).await?;
@@ -85,6 +84,7 @@ impl AnalyticsService {
             session_id.to_string(),
             ai_qualitative_output,
             ai_quantitative_output,
+            metric_quantitative_output,
             None, // model_used - will be set later if available
             None, // analysis_duration_ms - will be set later
         ))
