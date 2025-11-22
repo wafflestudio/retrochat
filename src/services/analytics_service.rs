@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
-    generate_qualitative_analysis_ai, score_all_rubrics, AIQuantitativeOutput,
+    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai,
     ProcessedQuantitativeOutput, QuantitativeInput,
 };
 use crate::models::{Analytics, Metrics};
@@ -78,17 +78,8 @@ impl AnalyticsService {
         let qualitative_output =
             generate_qualitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
-        // Generate rubric-based evaluation (LLM-as-a-judge)
-        let ai_quantitative_output = match score_all_rubrics(&messages, ai_client, None).await {
-            Ok((rubric_scores, rubric_summary)) => AIQuantitativeOutput {
-                rubric_scores,
-                rubric_summary: Some(rubric_summary),
-            },
-            Err(e) => {
-                tracing::warn!("Failed to generate rubric scores: {}", e);
-                AIQuantitativeOutput::default()
-            }
-        };
+        let ai_quantitative_output =
+            generate_quantitative_analysis_ai(&messages, ai_client, None).await?;
 
         // Process quantitative data
         let processed_output = self

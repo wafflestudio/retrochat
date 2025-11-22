@@ -1,6 +1,6 @@
 use super::models::{
-    AIQualitativeOutput, QualitativeEntry, QualitativeEntryList, QualitativeInput, Rubric,
-    RubricEvaluationSummary, RubricList, RubricScore,
+    AIQualitativeOutput, AIQuantitativeOutput, QualitativeEntry, QualitativeEntryList,
+    QualitativeInput, Rubric, RubricEvaluationSummary, RubricList, RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
@@ -287,7 +287,7 @@ fn parse_rubric_score_response(response: &str) -> (Option<f64>, String) {
 }
 
 /// Score a session against a single rubric
-pub async fn score_rubric(
+async fn score_rubric(
     rubric: &Rubric,
     formatted_session: &str,
     ai_client: &GoogleAiClient,
@@ -359,8 +359,25 @@ pub async fn score_rubric(
     })
 }
 
+pub async fn generate_quantitative_analysis_ai(
+    messages: &[Message],
+    ai_client: &GoogleAiClient,
+    rubrics: Option<&RubricList>,
+) -> Result<AIQuantitativeOutput> {
+    return match score_all_rubrics(&messages, ai_client, rubrics).await {
+        Ok((rubric_scores, rubric_summary)) => Ok(AIQuantitativeOutput {
+            rubric_scores,
+            rubric_summary: Some(rubric_summary),
+        }),
+        Err(e) => {
+            tracing::warn!("Failed to generate rubric scores: {}", e);
+            Err(anyhow::anyhow!("Failed to generate rubric scores: {}", e))
+        }
+    };
+}
+
 /// Score a session against all rubrics
-pub async fn score_all_rubrics(
+async fn score_all_rubrics(
     messages: &[Message],
     ai_client: &GoogleAiClient,
     rubrics: Option<&RubricList>,
