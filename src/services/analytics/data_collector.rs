@@ -2,9 +2,7 @@ use super::metrics::{
     calculate_file_change_metrics, calculate_time_consumption_metrics,
     calculate_token_consumption_metrics, calculate_tool_usage_metrics,
 };
-use super::models::{
-    EmbeddedToolUse, QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn,
-};
+use super::models::{QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn};
 use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
@@ -100,14 +98,11 @@ fn build_session_transcript(
             }
         };
 
-        // Build embedded tool uses for this message (only for messages with tool_uses)
-        let tool_uses = build_embedded_tool_uses(message, &tool_ops_map);
-
         turns.push(SessionTurn {
             turn_number,
             role,
             content,
-            tool_uses,
+            tool_uses: Vec::new(),
         });
     }
 
@@ -171,51 +166,6 @@ fn get_tool_result_content(
     }
     // Fallback to message content if no raw_result found
     truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2)
-}
-
-/// Builds embedded tool uses for a message by looking up tool operations.
-fn build_embedded_tool_uses(
-    message: &Message,
-    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
-) -> Vec<EmbeddedToolUse> {
-    let mut embedded = Vec::new();
-
-    // Look up tool operation using message.tool_operation_id
-    if let Some(tool_op_id) = message.tool_operation_id {
-        if let Some(tool_op) = tool_ops_map.get(&tool_op_id) {
-            // Extract input from raw_input in ToolOperation
-            let input = tool_op
-                .raw_input
-                .as_ref()
-                .map(format_tool_input)
-                .unwrap_or_default();
-            let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
-
-            // Extract result from raw_result or result_summary in ToolOperation
-            let result = tool_op
-                .raw_result
-                .as_ref()
-                .map(|raw_result| {
-                    let result_str = format_tool_input(raw_result);
-                    truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH)
-                })
-                .or_else(|| {
-                    tool_op
-                        .result_summary
-                        .as_ref()
-                        .map(|summary| truncate_content(summary, TOOL_CONTENT_MAX_LENGTH))
-                });
-
-            embedded.push(EmbeddedToolUse {
-                tool_name: tool_op.tool_name.clone(),
-                input: truncated_input,
-                result,
-                success: tool_op.success,
-            });
-        }
-    }
-
-    embedded
 }
 
 /// Formats tool input Value as a readable string.
