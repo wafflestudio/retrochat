@@ -54,7 +54,8 @@ pub async fn collect_qualitative_data(
 // =============================================================================
 
 /// Builds a JSON string representation of the session transcript with embedded tool uses.
-fn build_session_transcript(
+/// This is the public API for exporting session transcripts.
+pub fn build_session_transcript(
     messages: &[Message],
     tool_operations: &[ToolOperation],
     session: &ChatSession,
