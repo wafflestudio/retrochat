@@ -10,10 +10,7 @@ pub mod schema;
 pub mod tool_operation_repo;
 
 // Main repositories (now using SQLx)
-pub use analytics_repo::{
-    AnalyticsRepository, DailyPoint, DailyUsageStats, HourlyActivity, ProviderTrend,
-    SessionLengthDistribution,
-};
+pub use analytics_repo::AnalyticsRepository;
 pub use analytics_request_repo::AnalyticsRequestRepository;
 pub use chat_session_repo::ChatSessionRepository;
 pub use connection::DatabaseManager;

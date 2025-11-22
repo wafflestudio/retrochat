@@ -1,4 +1,3 @@
-pub mod analytics;
 pub mod parsers;
 pub mod types;
 
