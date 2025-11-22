@@ -10,8 +10,8 @@ use std::sync::Arc;
 use super::analytics::{
     calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
     calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
-    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai, score_all_rubrics,
-    AIQuantitativeOutput, ProcessedQuantitativeOutput, QuantitativeInput,
+    generate_qualitative_analysis_ai, score_all_rubrics, AIQuantitativeOutput,
+    ProcessedQuantitativeOutput, QuantitativeInput,
 };
 use crate::models::{Analytics, Metrics};
 
@@ -75,9 +75,6 @@ impl AnalyticsService {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
 
-        let quantitative_output =
-            generate_quantitative_analysis_ai(&quantitative_input, ai_client).await?;
-
         let qualitative_output =
             generate_qualitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
@@ -112,7 +109,6 @@ impl AnalyticsService {
         Ok(Analytics::new(
             analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
             session_id.to_string(),
-            quantitative_output,
             qualitative_output,
             processed_output,
             ai_quantitative_output,

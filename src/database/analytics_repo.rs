@@ -20,8 +20,6 @@ impl AnalyticsRepository {
         let generated_at = analytics.generated_at.to_rfc3339();
 
         // Serialize JSON fields
-        let scores_json =
-            serde_json::to_string(&analytics.scores).context("Failed to serialize scores")?;
         let metrics_json =
             serde_json::to_string(&analytics.metrics).context("Failed to serialize metrics")?;
         let qualitative_output_json = serde_json::to_string(&analytics.qualitative_output)
@@ -35,17 +33,16 @@ impl AnalyticsRepository {
             r#"
             INSERT INTO analytics (
                 id, analytics_request_id, session_id, generated_at,
-                scores_json, metrics_json,
+                metrics_json,
                 qualitative_output_json, processed_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             analytics.id,
             analytics.analytics_request_id,
             analytics.session_id,
             generated_at,
-            scores_json,
             metrics_json,
             qualitative_output_json,
             processed_output_json,
@@ -65,7 +62,7 @@ impl AnalyticsRepository {
             r#"
             SELECT
                 id, analytics_request_id, session_id, generated_at,
-                scores_json, metrics_json,
+                metrics_json,
                 qualitative_output_json, processed_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
@@ -82,8 +79,6 @@ impl AnalyticsRepository {
             let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let scores: crate::models::Scores =
-                serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
@@ -114,7 +109,6 @@ impl AnalyticsRepository {
                 analytics_request_id: row.analytics_request_id,
                 session_id,
                 generated_at,
-                scores,
                 metrics,
                 qualitative_output,
                 processed_output,
@@ -135,7 +129,7 @@ impl AnalyticsRepository {
             r#"
             SELECT
                 id, analytics_request_id, session_id, generated_at,
-                scores_json, metrics_json,
+                metrics_json,
                 qualitative_output_json, processed_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
@@ -154,8 +148,6 @@ impl AnalyticsRepository {
             let generated_at = DateTime::parse_from_rfc3339(&row.generated_at)?.with_timezone(&Utc);
 
             // Deserialize JSON fields
-            let scores: crate::models::Scores =
-                serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
@@ -186,7 +178,6 @@ impl AnalyticsRepository {
                 analytics_request_id: row.analytics_request_id,
                 session_id,
                 generated_at,
-                scores,
                 metrics,
                 qualitative_output,
                 processed_output,

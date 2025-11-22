@@ -248,20 +248,6 @@ pub struct SessionTranscript {
 }
 
 // =============================================================================
-// Quantitative Output Models
-// =============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuantitativeOutput {
-    pub overall_score: f64,
-    pub code_quality_score: f64,
-    pub productivity_score: f64,
-    pub efficiency_score: f64,
-    pub collaboration_score: f64,
-    pub learning_score: f64,
-}
-
-// =============================================================================
 // AI Qualitative Output Models (configurable LLM-based qualitative analysis)
 // =============================================================================
 

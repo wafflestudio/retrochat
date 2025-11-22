@@ -11,9 +11,8 @@ pub mod watch_service;
 pub use analytics::{
     AIQualitativeOutput, FileChangeMetrics, ProcessedCodeMetrics, ProcessedQuantitativeOutput,
     ProcessedTokenMetrics, QualitativeEntry, QualitativeEntryList, QualitativeEvaluationSummary,
-    QualitativeInput, QuantitativeInput, QuantitativeOutput, SessionMetrics, SessionTranscript,
-    SessionTurn, TimeConsumptionMetrics, TimeEfficiencyMetrics, TokenConsumptionMetrics,
-    ToolUsageMetrics,
+    QualitativeInput, QuantitativeInput, SessionMetrics, SessionTranscript, SessionTurn,
+    TimeConsumptionMetrics, TimeEfficiencyMetrics, TokenConsumptionMetrics, ToolUsageMetrics,
 };
 pub use analytics_request_service::{AnalyticsRequestCleanupHandler, AnalyticsRequestService};
 pub use analytics_service::AnalyticsService;

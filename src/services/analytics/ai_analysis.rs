@@ -1,7 +1,6 @@
 use super::models::{
-    AIQualitativeOutput, QualitativeEntry, QualitativeEntryList, QualitativeInput,
-    QuantitativeInput, QuantitativeOutput, Rubric, RubricEvaluationSummary, RubricList,
-    RubricScore,
+    AIQualitativeOutput, QualitativeEntry, QualitativeEntryList, QualitativeInput, Rubric,
+    RubricEvaluationSummary, RubricList, RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
@@ -13,22 +12,6 @@ use std::collections::HashMap;
 // =============================================================================
 // AI Analysis Functions
 // =============================================================================
-
-pub async fn generate_quantitative_analysis_ai(
-    quantitative_input: &QuantitativeInput,
-    ai_client: &GoogleAiClient,
-) -> Result<QuantitativeOutput> {
-    let prompt = build_quantitative_analysis_prompt(quantitative_input);
-
-    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-        prompt,
-        max_tokens: Some(2048),
-        temperature: Some(0.5),
-    };
-
-    let response = ai_client.analytics(analysis_request).await?;
-    parse_quantitative_response(&response.text)
-}
 
 pub async fn generate_qualitative_analysis_ai(
     qualitative_input: &QualitativeInput,
@@ -85,89 +68,6 @@ async fn generate_single_entry(
 // Prompt Building Functions
 // =============================================================================
 
-fn build_quantitative_analysis_prompt(input: &QuantitativeInput) -> String {
-    format!(
-        r#"Analytics the following development session metrics and provide quantitative scores.
-
-## Session Metrics
-
-### File Changes:
-- Files Modified: {}
-- Files Read: {}
-- Lines Added: {}
-- Lines Removed: {}
-- Net Code Growth: {}
-- Refactoring Operations: {}
-- Bulk Edit Operations: {}
-
-### Time Metrics:
-- Session Duration: {:.1} minutes
-- Average Session Length: {:.1} minutes
-- Peak Hours: {:?}
-
-### Token Metrics:
-- Total Tokens: {}
-- Input Tokens: {}
-- Output Tokens: {}
-- Token Efficiency: {:.2}
-- Tokens per Hour: {:.1}
-
-### Tool Usage:
-- Total Operations: {}
-- Successful: {}
-- Failed: {}
-- Success Rate: {:.1}%
-
-## Task
-
-Provide scores (0-100) for the following dimensions based on the metrics above:
-
-1. **Overall Score**: General assessment of the development session
-2. **Code Quality Score**: Based on refactoring ratio, code organization, and edit patterns
-3. **Productivity Score**: Based on lines per hour, files modified, and time efficiency
-4. **Efficiency Score**: Based on token usage, tool success rate, and resource utilization
-5. **Collaboration Score**: Based on AI interaction patterns and query quality
-6. **Learning Score**: Based on exploration vs modification ratio and problem-solving approach
-
-Return ONLY a valid JSON object with this exact structure:
-{{
-  "overall_score": 0.0,
-  "code_quality_score": 0.0,
-  "productivity_score": 0.0,
-  "efficiency_score": 0.0,
-  "collaboration_score": 0.0,
-  "learning_score": 0.0
-}}
-
-Important: Return ONLY the JSON object, no additional text or explanation."#,
-        input.file_changes.total_files_modified,
-        input.file_changes.total_files_read,
-        input.file_changes.lines_added,
-        input.file_changes.lines_removed,
-        input.file_changes.net_code_growth,
-        input.file_changes.refactoring_operations,
-        input.file_changes.bulk_edit_operations,
-        input.time_metrics.total_session_time_minutes,
-        input.time_metrics.average_session_length_minutes,
-        input.time_metrics.peak_hours,
-        input.token_metrics.total_tokens_used,
-        input.token_metrics.input_tokens,
-        input.token_metrics.output_tokens,
-        input.token_metrics.token_efficiency,
-        input.token_metrics.tokens_per_hour,
-        input.tool_usage.total_operations,
-        input.tool_usage.successful_operations,
-        input.tool_usage.failed_operations,
-        if input.tool_usage.total_operations > 0 {
-            (input.tool_usage.successful_operations as f64
-                / input.tool_usage.total_operations as f64)
-                * 100.0
-        } else {
-            0.0
-        }
-    )
-}
-
 /// Build a prompt for a single qualitative entry type
 fn build_single_entry_prompt(input: &QualitativeInput, entry: &QualitativeEntry) -> String {
     format!(
@@ -209,24 +109,6 @@ Important:
 // =============================================================================
 // Response Parsing Functions
 // =============================================================================
-
-fn parse_quantitative_response(response_text: &str) -> Result<QuantitativeOutput> {
-    // Try to extract JSON from the response
-    let json_text = extract_json_from_text(response_text);
-
-    match serde_json::from_str::<QuantitativeOutput>(&json_text) {
-        Ok(output) => Ok(output),
-        Err(e) => {
-            tracing::warn!(
-                "Failed to parse AI response as JSON: {}. Response: {}",
-                e,
-                response_text
-            );
-            // If JSON parsing fails, try to extract numbers from the text
-            parse_quantitative_from_natural_text(response_text)
-        }
-    }
-}
 
 /// Parse the LLM response for a single entry type
 /// Expects a numbered list of markdown lines
@@ -271,91 +153,6 @@ fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result
     }
 
     Ok(items)
-}
-
-fn extract_json_from_text(text: &str) -> String {
-    // Try to find JSON block between ```json and ``` (or ````json and ````)
-    // Handle both ```json and ````json cases
-    let json_marker = if text.contains("````json") {
-        "````json"
-    } else if text.contains("```json") {
-        "```json"
-    } else {
-        ""
-    };
-
-    if !json_marker.is_empty() {
-        if let Some(start) = text.find(json_marker) {
-            let content_start = start + json_marker.len();
-            let remaining = &text[content_start..];
-
-            // Find the closing backticks
-            let closing_marker = if json_marker.starts_with("````") {
-                "````"
-            } else {
-                "```"
-            };
-            if let Some(end) = remaining.find(closing_marker) {
-                return remaining[..end].trim().to_string();
-            }
-        }
-    }
-
-    // Try to find standalone JSON object
-    if let Some(start) = text.find('{') {
-        if let Some(end) = text.rfind('}') {
-            return text[start..=end].trim().to_string();
-        }
-    }
-
-    // If no JSON markers found, return as-is
-    text.trim().to_string()
-}
-
-fn parse_quantitative_from_natural_text(text: &str) -> Result<QuantitativeOutput> {
-    // Simple heuristic parsing as fallback
-    // Extract numbers that appear after keywords
-    let overall_score = extract_score_after_keyword(text, "overall");
-    let code_quality_score = extract_score_after_keyword(text, "code quality");
-    let productivity_score = extract_score_after_keyword(text, "productivity");
-    let efficiency_score = extract_score_after_keyword(text, "efficiency");
-    let collaboration_score = extract_score_after_keyword(text, "collaboration");
-    let learning_score = extract_score_after_keyword(text, "learning");
-
-    Ok(QuantitativeOutput {
-        overall_score,
-        code_quality_score,
-        productivity_score,
-        efficiency_score,
-        collaboration_score,
-        learning_score,
-    })
-}
-
-fn extract_score_after_keyword(text: &str, keyword: &str) -> f64 {
-    let text_lower = text.to_lowercase();
-    let keyword_lower = keyword.to_lowercase();
-
-    if let Some(pos) = text_lower.find(&keyword_lower) {
-        let after_keyword = &text[pos..];
-        // Look for a number in the next 50 characters
-        let search_range = &after_keyword[..after_keyword.len().min(50)];
-
-        // Find first number that could be a score (0-100)
-        for word in search_range.split_whitespace() {
-            if let Ok(num) = word
-                .trim_matches(|c: char| !c.is_numeric() && c != '.')
-                .parse::<f64>()
-            {
-                if (0.0..=100.0).contains(&num) {
-                    return num;
-                }
-            }
-        }
-    }
-
-    // Default score if not found
-    50.0
 }
 
 // =============================================================================

@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::database::DatabaseManager;
 use crate::env::apis as env_vars;
 use crate::models::OperationStatus;
-use crate::services::analytics::formatters::{AnalyticsFormatter, OutputFormat};
 use crate::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
     AnalyticsRequestService,
@@ -71,8 +70,6 @@ pub async fn handle_execute_command(
     custom_prompt: Option<String>,
     all: bool,
     background: bool,
-    format: String,
-    plain: bool,
 ) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
@@ -94,8 +91,6 @@ pub async fn handle_execute_command(
             session_id,
             custom_prompt,
             background,
-            format,
-            plain,
         )
         .await
     } else {
@@ -108,8 +103,6 @@ async fn execute_analysis_for_session(
     session_id: String,
     custom_prompt: Option<String>,
     background: bool,
-    format: String,
-    plain: bool,
 ) -> Result<()> {
     println!("Starting analysis for session: {session_id}");
 
@@ -141,20 +134,13 @@ async fn execute_analysis_for_session(
                     .filter(|r| matches!(r.status, OperationStatus::Completed))
                     .max_by_key(|r| r.completed_at.as_ref())
                 {
-                    // Determine output format
-                    let output_format = if plain {
-                        OutputFormat::Plain
-                    } else {
-                        OutputFormat::parse(&format)
-                    };
-
                     // Get and display cached results
                     if let Some(analysis) = service
                         .get_analysis_result(latest_request.id.clone())
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to get cached analysis: {e}"))?
                     {
-                        print_unified_analysis(&analysis, output_format).await?;
+                        print_unified_analysis(&analysis).await?;
                         println!(
                             "\n✓ Showing cached results from: {}",
                             latest_request
@@ -189,20 +175,13 @@ async fn execute_analysis_for_session(
         Ok(_) => {
             println!("✓ Analysis completed successfully");
 
-            // Determine output format
-            let output_format = if plain {
-                OutputFormat::Plain
-            } else {
-                OutputFormat::parse(&format)
-            };
-
             // Get and display results
             if let Some(analysis) = service
                 .get_analysis_result(request.id.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to get analysis result: {e}"))?
             {
-                print_unified_analysis(&analysis, output_format).await?;
+                print_unified_analysis(&analysis).await?;
             }
         }
         Err(e) => {
@@ -239,7 +218,6 @@ async fn execute_analysis_for_all_sessions(
 pub async fn handle_show_command(
     session_id: Option<String>,
     all: bool,
-    _format: String,
 ) -> Result<()> {
     let db_path = crate::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
@@ -525,9 +503,8 @@ async fn list_cancellable_requests(service: &AnalyticsRequestService) -> Result<
 // =============================================================================
 
 async fn print_unified_analysis(
-    analysis: &crate::models::Analytics,
-    output_format: OutputFormat,
+    _analysis: &crate::models::Analytics,
 ) -> Result<()> {
-    let formatter = AnalyticsFormatter::new(output_format);
-    formatter.print_analysis(analysis)
+    println!("Good!");
+    Ok(())
 }

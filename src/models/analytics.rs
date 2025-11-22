@@ -4,22 +4,12 @@ use uuid::Uuid;
 
 // Re-export types from services that will be stored as JSON
 use crate::services::analytics::{
-    AIQualitativeOutput, AIQuantitativeOutput, ProcessedQuantitativeOutput, QuantitativeOutput,
+    AIQualitativeOutput, AIQuantitativeOutput, ProcessedQuantitativeOutput,
 };
 
 // =============================================================================
 // Analytics Model (DB representation)
 // =============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Scores {
-    pub overall: f64,
-    pub code_quality: f64,
-    pub productivity: f64,
-    pub efficiency: f64,
-    pub collaboration: f64,
-    pub learning: f64,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metrics {
@@ -39,7 +29,6 @@ pub struct Analytics {
     pub generated_at: DateTime<Utc>,
 
     // Consolidated JSON groups
-    pub scores: Scores,
     pub metrics: Metrics,
 
     pub qualitative_output: AIQualitativeOutput,
@@ -56,7 +45,6 @@ impl Analytics {
     pub fn new(
         analytics_request_id: String,
         session_id: String,
-        quantitative_output: QuantitativeOutput,
         qualitative_output: AIQualitativeOutput,
         processed_output: ProcessedQuantitativeOutput,
         ai_quantitative_output: AIQuantitativeOutput,
@@ -69,14 +57,6 @@ impl Analytics {
             analytics_request_id,
             session_id,
             generated_at: Utc::now(),
-            scores: Scores {
-                overall: quantitative_output.overall_score,
-                code_quality: quantitative_output.code_quality_score,
-                productivity: quantitative_output.productivity_score,
-                efficiency: quantitative_output.efficiency_score,
-                collaboration: quantitative_output.collaboration_score,
-                learning: quantitative_output.learning_score,
-            },
             metrics,
             qualitative_output,
             processed_output,

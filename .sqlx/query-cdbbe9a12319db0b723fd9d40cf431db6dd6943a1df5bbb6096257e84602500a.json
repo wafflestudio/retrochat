@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                scores_json, metrics_json,\n                qualitative_output_json, processed_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE analytics_request_id = ?\n            ORDER BY generated_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, analytics_request_id, session_id, generated_at,\n                metrics_json,\n                qualitative_output_json, processed_output_json,\n                ai_quantitative_output_json,\n                model_used, analysis_duration_ms\n            FROM analytics\n            WHERE analytics_request_id = ?\n            ORDER BY generated_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -24,38 +24,33 @@
         "type_info": "Text"
       },
       {
-        "name": "scores_json",
+        "name": "metrics_json",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "metrics_json",
+        "name": "qualitative_output_json",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "qualitative_output_json",
+        "name": "processed_output_json",
         "ordinal": 6,
         "type_info": "Text"
       },
       {
-        "name": "processed_output_json",
+        "name": "ai_quantitative_output_json",
         "ordinal": 7,
         "type_info": "Text"
       },
       {
-        "name": "ai_quantitative_output_json",
+        "name": "model_used",
         "ordinal": 8,
         "type_info": "Text"
       },
       {
-        "name": "model_used",
-        "ordinal": 9,
-        "type_info": "Text"
-      },
-      {
         "name": "analysis_duration_ms",
-        "ordinal": 10,
+        "ordinal": 9,
         "type_info": "Int64"
       }
     ],
@@ -71,10 +66,9 @@
       false,
       false,
       false,
-      false,
       true,
       true
     ]
   },
-  "hash": "e6df29ab91df154a77f022b2bbd7814145ed9c7aab397815843eab3612462953"
+  "hash": "cdbbe9a12319db0b723fd9d40cf431db6dd6943a1df5bbb6096257e84602500a"
 }

@@ -645,53 +645,6 @@ impl SessionDetailWidget {
             )]));
             lines.push(Line::from(""));
 
-            let scores = &analytics.scores;
-            lines.push(Line::from(vec![
-                Span::raw("  Overall:        "),
-                Span::styled(
-                    format!("{:.1}/10", scores.overall),
-                    Style::default()
-                        .fg(Self::score_color(scores.overall))
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("  Code Quality:   "),
-                Span::styled(
-                    format!("{:.1}/10", scores.code_quality),
-                    Style::default().fg(Self::score_color(scores.code_quality)),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("  Productivity:   "),
-                Span::styled(
-                    format!("{:.1}/10", scores.productivity),
-                    Style::default().fg(Self::score_color(scores.productivity)),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("  Efficiency:     "),
-                Span::styled(
-                    format!("{:.1}/10", scores.efficiency),
-                    Style::default().fg(Self::score_color(scores.efficiency)),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("  Collaboration:  "),
-                Span::styled(
-                    format!("{:.1}/10", scores.collaboration),
-                    Style::default().fg(Self::score_color(scores.collaboration)),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("  Learning:       "),
-                Span::styled(
-                    format!("{:.1}/10", scores.learning),
-                    Style::default().fg(Self::score_color(scores.learning)),
-                ),
-            ]));
-            lines.push(Line::from(""));
-
             // Metrics section
             lines.push(Line::from(vec![Span::styled(
                 "📈 Metrics",
@@ -813,18 +766,6 @@ impl SessionDetailWidget {
                 scrollbar_area,
                 &mut self.state.analytics_scroll_state,
             );
-        }
-    }
-
-    fn score_color(score: f64) -> Color {
-        if score >= 8.0 {
-            Color::Green
-        } else if score >= 6.0 {
-            Color::Yellow
-        } else if score >= 4.0 {
-            Color::Rgb(255, 165, 0) // Orange
-        } else {
-            Color::Red
         }
     }
 }

@@ -173,12 +173,6 @@ pub enum AnalysisCommands {
         /// Process in background (simplified - just shows progress)
         #[arg(long)]
         background: bool,
-        /// Output format: enhanced (default), markdown, json, or plain
-        #[arg(long, short = 'f', default_value = "enhanced")]
-        format: String,
-        /// Use plain text format (alias for --format=plain)
-        #[arg(long)]
-        plain: bool,
     },
 
     /// Show analysis results
@@ -188,9 +182,6 @@ pub enum AnalysisCommands {
         /// Show all results
         #[arg(long)]
         all: bool,
-        /// Output format
-        #[arg(short, long, default_value = "text")]
-        format: String,
     },
 
     /// Show analysis request status
@@ -329,16 +320,12 @@ impl Cli {
                         custom_prompt,
                         all,
                         background,
-                        format,
-                        plain,
                     } => {
                         analytics::handle_execute_command(
                             session_id,
                             custom_prompt,
                             all,
                             background,
-                            format,
-                            plain,
                         )
                         .await
                     }
@@ -346,8 +333,7 @@ impl Cli {
                     AnalysisCommands::Show {
                         session_id,
                         all,
-                        format,
-                    } => analytics::handle_show_command(session_id, all, format).await,
+                    } => analytics::handle_show_command(session_id, all).await,
 
                     AnalysisCommands::Status {
                         all,
