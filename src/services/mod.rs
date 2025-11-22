@@ -9,7 +9,7 @@ pub mod query_service;
 pub mod watch_service;
 
 pub use analytics::{
-    EmbeddedToolUse, FileChangeMetrics, GoodPattern, ImprovementArea, Insight, LearningObservation,
+    FileChangeMetrics, GoodPattern, ImprovementArea, Insight, LearningObservation,
     ProcessedCodeMetrics, ProcessedQuantitativeOutput, ProcessedTokenMetrics, QualitativeInput,
     QualitativeOutput, QuantitativeInput, QuantitativeOutput, Recommendation, SessionMetrics,
     SessionTranscript, SessionTurn, TimeConsumptionMetrics, TimeEfficiencyMetrics,

@@ -102,7 +102,6 @@ fn build_session_transcript(
             turn_number,
             role,
             content,
-            tool_uses: Vec::new(),
         });
     }
 
