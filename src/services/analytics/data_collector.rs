@@ -5,6 +5,7 @@ use super::metrics::{
 use super::models::{
     EmbeddedToolUse, QualitativeInput, QuantitativeInput, SessionTranscript, SessionTurn,
 };
+use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -82,8 +83,21 @@ fn build_session_transcript(
             MessageRole::System => "system".to_string(),
         };
 
-        // Truncate message content if too long
-        let content = truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2);
+        // Determine content based on message type
+        let content = match message.message_type {
+            MessageType::ToolRequest => {
+                // For tool request messages, use raw_input from tool operation
+                get_tool_request_content(message, &tool_ops_map)
+            }
+            MessageType::ToolResult => {
+                // For tool result messages, use raw_result from tool operation
+                get_tool_result_content(message, &tool_ops_map)
+            }
+            _ => {
+                // For other messages, use the message content
+                truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2)
+            }
+        };
 
         // Build embedded tool uses for this message (only for messages with tool_uses)
         let tool_uses = build_embedded_tool_uses(message, &tool_ops_map);
@@ -116,6 +130,50 @@ fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<Strin
     }
 
     map
+}
+
+/// Gets content for a ToolRequest message by extracting raw_input from the tool operation.
+fn get_tool_request_content(
+    message: &Message,
+    tool_ops_map: &HashMap<String, &ToolOperation>,
+) -> String {
+    // Get tool_use_id from message's tool_uses field
+    if let Some(tool_uses) = &message.tool_uses {
+        for tool_use in tool_uses {
+            if let Some(tool_op) = tool_ops_map.get(&tool_use.id) {
+                if let Some(raw_input) = &tool_op.raw_input {
+                    let input_str = format_tool_input(raw_input);
+                    return truncate_content(&input_str, TOOL_CONTENT_MAX_LENGTH * 2);
+                }
+            }
+        }
+    }
+    // Fallback to message content if no raw_input found
+    truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2)
+}
+
+/// Gets content for a ToolResult message by extracting raw_result from the tool operation.
+fn get_tool_result_content(
+    message: &Message,
+    tool_ops_map: &HashMap<String, &ToolOperation>,
+) -> String {
+    // Get tool_use_id from message's tool_results field
+    if let Some(tool_results) = &message.tool_results {
+        for tool_result in tool_results {
+            if let Some(tool_op) = tool_ops_map.get(&tool_result.tool_use_id) {
+                if let Some(raw_result) = &tool_op.raw_result {
+                    let result_str = format_tool_input(raw_result);
+                    return truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH * 2);
+                }
+                // Fall back to result_summary if raw_result is not available
+                if let Some(summary) = &tool_op.result_summary {
+                    return truncate_content(summary, TOOL_CONTENT_MAX_LENGTH * 2);
+                }
+            }
+        }
+    }
+    // Fallback to message content if no raw_result found
+    truncate_content(&message.content, TOOL_CONTENT_MAX_LENGTH * 2)
 }
 
 /// Builds embedded tool uses for a message by looking up tool operations.
