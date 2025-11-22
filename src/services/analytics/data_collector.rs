@@ -9,6 +9,7 @@ use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolOperation};
 use anyhow::Result;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Maximum character length for a single tool input/result before truncation
 const TOOL_CONTENT_MAX_LENGTH: usize = 2000;
@@ -121,12 +122,12 @@ fn build_session_transcript(
     Ok(json)
 }
 
-/// Builds a map from tool_use_id to ToolOperation for quick lookup.
-fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<String, &ToolOperation> {
+/// Builds a map from ToolOperation.id (Uuid) to ToolOperation for quick lookup.
+fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<Uuid, &ToolOperation> {
     let mut map = HashMap::new();
 
     for op in tool_operations {
-        map.insert(op.tool_use_id.clone(), op);
+        map.insert(op.id, op);
     }
 
     map
@@ -135,16 +136,14 @@ fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<Strin
 /// Gets content for a ToolRequest message by extracting raw_input from the tool operation.
 fn get_tool_request_content(
     message: &Message,
-    tool_ops_map: &HashMap<String, &ToolOperation>,
+    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
 ) -> String {
-    // Get tool_use_id from message's tool_uses field
-    if let Some(tool_uses) = &message.tool_uses {
-        for tool_use in tool_uses {
-            if let Some(tool_op) = tool_ops_map.get(&tool_use.id) {
-                if let Some(raw_input) = &tool_op.raw_input {
-                    let input_str = format_tool_input(raw_input);
-                    return truncate_content(&input_str, TOOL_CONTENT_MAX_LENGTH * 2);
-                }
+    // Look up tool operation using message.tool_operation_id
+    if let Some(tool_op_id) = message.tool_operation_id {
+        if let Some(tool_op) = tool_ops_map.get(&tool_op_id) {
+            if let Some(raw_input) = &tool_op.raw_input {
+                let input_str = format_tool_input(raw_input);
+                return truncate_content(&input_str, TOOL_CONTENT_MAX_LENGTH * 2);
             }
         }
     }
@@ -155,20 +154,18 @@ fn get_tool_request_content(
 /// Gets content for a ToolResult message by extracting raw_result from the tool operation.
 fn get_tool_result_content(
     message: &Message,
-    tool_ops_map: &HashMap<String, &ToolOperation>,
+    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
 ) -> String {
-    // Get tool_use_id from message's tool_results field
-    if let Some(tool_results) = &message.tool_results {
-        for tool_result in tool_results {
-            if let Some(tool_op) = tool_ops_map.get(&tool_result.tool_use_id) {
-                if let Some(raw_result) = &tool_op.raw_result {
-                    let result_str = format_tool_input(raw_result);
-                    return truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH * 2);
-                }
-                // Fall back to result_summary if raw_result is not available
-                if let Some(summary) = &tool_op.result_summary {
-                    return truncate_content(summary, TOOL_CONTENT_MAX_LENGTH * 2);
-                }
+    // Look up tool operation using message.tool_operation_id
+    if let Some(tool_op_id) = message.tool_operation_id {
+        if let Some(tool_op) = tool_ops_map.get(&tool_op_id) {
+            if let Some(raw_result) = &tool_op.raw_result {
+                let result_str = format_tool_input(raw_result);
+                return truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH * 2);
+            }
+            // Fall back to result_summary if raw_result is not available
+            if let Some(summary) = &tool_op.result_summary {
+                return truncate_content(summary, TOOL_CONTENT_MAX_LENGTH * 2);
             }
         }
     }
@@ -179,45 +176,42 @@ fn get_tool_result_content(
 /// Builds embedded tool uses for a message by looking up tool operations.
 fn build_embedded_tool_uses(
     message: &Message,
-    tool_ops_map: &HashMap<String, &ToolOperation>,
+    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
 ) -> Vec<EmbeddedToolUse> {
     let mut embedded = Vec::new();
 
-    // Get tool_use_ids from message's tool_uses field
-    if let Some(tool_uses) = &message.tool_uses {
-        for tool_use in tool_uses {
-            // Look up the tool operation by tool_use_id
-            if let Some(tool_op) = tool_ops_map.get(&tool_use.id) {
-                // Extract input from raw_input in ToolOperation
-                let input = if let Some(raw_input) = &tool_op.raw_input {
-                    format_tool_input(raw_input)
-                } else {
-                    String::new()
-                };
-                let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
+    // Look up tool operation using message.tool_operation_id
+    if let Some(tool_op_id) = message.tool_operation_id {
+        if let Some(tool_op) = tool_ops_map.get(&tool_op_id) {
+            // Extract input from raw_input in ToolOperation
+            let input = tool_op
+                .raw_input
+                .as_ref()
+                .map(format_tool_input)
+                .unwrap_or_default();
+            let truncated_input = truncate_content(&input, TOOL_CONTENT_MAX_LENGTH);
 
-                // Extract result from raw_result or result_summary in ToolOperation
-                let result = tool_op
-                    .raw_result
-                    .as_ref()
-                    .map(|raw_result| {
-                        let result_str = format_tool_input(raw_result);
-                        truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH)
-                    })
-                    .or_else(|| {
-                        tool_op
-                            .result_summary
-                            .as_ref()
-                            .map(|summary| truncate_content(summary, TOOL_CONTENT_MAX_LENGTH))
-                    });
-
-                embedded.push(EmbeddedToolUse {
-                    tool_name: tool_op.tool_name.clone(),
-                    input: truncated_input,
-                    result,
-                    success: tool_op.success,
+            // Extract result from raw_result or result_summary in ToolOperation
+            let result = tool_op
+                .raw_result
+                .as_ref()
+                .map(|raw_result| {
+                    let result_str = format_tool_input(raw_result);
+                    truncate_content(&result_str, TOOL_CONTENT_MAX_LENGTH)
+                })
+                .or_else(|| {
+                    tool_op
+                        .result_summary
+                        .as_ref()
+                        .map(|summary| truncate_content(summary, TOOL_CONTENT_MAX_LENGTH))
                 });
-            }
+
+            embedded.push(EmbeddedToolUse {
+                tool_name: tool_op.tool_name.clone(),
+                input: truncated_input,
+                result,
+                success: tool_op.success,
+            });
         }
     }
 
