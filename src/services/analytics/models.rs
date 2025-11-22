@@ -181,24 +181,6 @@ pub struct SessionTurn {
     pub role: String,
     /// The text content of the message
     pub content: String,
-    /// Tool uses embedded in this message (if any)
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub tool_uses: Vec<EmbeddedToolUse>,
-}
-
-/// Represents a tool use embedded within a message
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddedToolUse {
-    /// Tool name (e.g., "Read", "Write", "Edit", "Bash")
-    pub tool_name: String,
-    /// Tool input/request (truncated if too long)
-    pub input: String,
-    /// Tool result/response (truncated if too long)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<String>,
-    /// Whether the tool execution was successful
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub success: Option<bool>,
 }
 
 /// Full session transcript structure for JSON serialization
