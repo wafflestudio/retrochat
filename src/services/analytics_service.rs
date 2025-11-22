@@ -2,16 +2,13 @@ use super::google_ai::GoogleAiClient;
 use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
 };
-use crate::models::ChatSession;
 use anyhow::Result;
 use std::sync::Arc;
 
 // Import from analytics module
 use super::analytics::{
-    calculate_processed_code_metrics, calculate_processed_token_metrics, calculate_session_metrics,
-    calculate_time_efficiency_metrics, collect_qualitative_data, collect_quantitative_data,
-    generate_qualitative_analysis_ai, generate_quantitative_analysis_ai,
-    ProcessedQuantitativeOutput, QuantitativeInput,
+    collect_qualitative_data, collect_quantitative_data, generate_qualitative_analysis_ai,
+    generate_quantitative_analysis_ai,
 };
 use crate::models::{Analytics, Metrics};
 
@@ -75,16 +72,11 @@ impl AnalyticsService {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
 
-        let qualitative_output =
+        let ai_qualitative_output =
             generate_qualitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
         let ai_quantitative_output =
-            generate_quantitative_analysis_ai(&messages, ai_client, None).await?;
-
-        // Process quantitative data
-        let processed_output = self
-            .process_quantitative_data(&quantitative_input, &session)
-            .await?;
+            generate_quantitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
         // Build metrics from quantitative_input
         let metrics = Metrics {
@@ -100,55 +92,11 @@ impl AnalyticsService {
         Ok(Analytics::new(
             analytics_request_id.unwrap_or_else(|| "temp-request".to_string()),
             session_id.to_string(),
-            qualitative_output,
-            processed_output,
+            ai_qualitative_output,
             ai_quantitative_output,
             metrics,
             None, // model_used - will be set later if available
             None, // analysis_duration_ms - will be set later
         ))
-    }
-
-    async fn process_quantitative_data(
-        &self,
-        quantitative_input: &QuantitativeInput,
-        _session: &ChatSession,
-    ) -> Result<ProcessedQuantitativeOutput> {
-        let session_duration_hours =
-            quantitative_input.time_metrics.total_session_time_minutes / 60.0;
-
-        // Calculate processed metrics
-        let token_metrics = calculate_processed_token_metrics(
-            quantitative_input.token_metrics.total_tokens_used,
-            session_duration_hours,
-            quantitative_input.token_metrics.input_tokens,
-            quantitative_input.token_metrics.output_tokens,
-        );
-
-        let code_change_metrics = calculate_processed_code_metrics(
-            quantitative_input.file_changes.net_code_growth,
-            quantitative_input.file_changes.total_files_modified,
-            session_duration_hours,
-            quantitative_input.file_changes.refactoring_operations,
-            quantitative_input.tool_usage.total_operations,
-        );
-
-        let time_efficiency_metrics = calculate_time_efficiency_metrics(
-            session_duration_hours,
-            session_duration_hours * 0.8, // Assume 80% productive time
-            0,                            // TODO: Calculate context switches
-        );
-
-        let session_metrics = calculate_session_metrics(
-            1,
-            quantitative_input.time_metrics.total_session_time_minutes,
-        );
-
-        Ok(ProcessedQuantitativeOutput {
-            session_metrics,
-            token_metrics,
-            code_change_metrics,
-            time_efficiency_metrics,
-        })
     }
 }

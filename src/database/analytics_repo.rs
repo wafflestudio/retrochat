@@ -24,8 +24,6 @@ impl AnalyticsRepository {
             serde_json::to_string(&analytics.metrics).context("Failed to serialize metrics")?;
         let qualitative_output_json = serde_json::to_string(&analytics.qualitative_output)
             .context("Failed to serialize qualitative_output")?;
-        let processed_output_json = serde_json::to_string(&analytics.processed_output)
-            .context("Failed to serialize processed_output")?;
         let ai_quantitative_output_json = serde_json::to_string(&analytics.ai_quantitative_output)
             .context("Failed to serialize ai_quantitative_output")?;
 
@@ -34,10 +32,10 @@ impl AnalyticsRepository {
             INSERT INTO analytics (
                 id, analytics_request_id, session_id, generated_at,
                 metrics_json,
-                qualitative_output_json, processed_output_json,
+                qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             analytics.id,
             analytics.analytics_request_id,
@@ -45,7 +43,6 @@ impl AnalyticsRepository {
             generated_at,
             metrics_json,
             qualitative_output_json,
-            processed_output_json,
             ai_quantitative_output_json,
             analytics.model_used,
             analytics.analysis_duration_ms
@@ -63,7 +60,7 @@ impl AnalyticsRepository {
             SELECT
                 id, analytics_request_id, session_id, generated_at,
                 metrics_json,
-                qualitative_output_json, processed_output_json,
+                qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
@@ -84,9 +81,6 @@ impl AnalyticsRepository {
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
-            let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =
-                serde_json::from_str(&row.processed_output_json)
-                    .context("Failed to deserialize processed_output")?;
             let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
                 serde_json::from_str(&row.ai_quantitative_output_json)
                     .context("Failed to deserialize ai_quantitative_output")?;
@@ -111,7 +105,6 @@ impl AnalyticsRepository {
                 generated_at,
                 metrics,
                 qualitative_output,
-                processed_output,
                 ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,
@@ -130,7 +123,7 @@ impl AnalyticsRepository {
             SELECT
                 id, analytics_request_id, session_id, generated_at,
                 metrics_json,
-                qualitative_output_json, processed_output_json,
+                qualitative_output_json,
                 ai_quantitative_output_json,
                 model_used, analysis_duration_ms
             FROM analytics
@@ -153,9 +146,6 @@ impl AnalyticsRepository {
             let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
-            let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =
-                serde_json::from_str(&row.processed_output_json)
-                    .context("Failed to deserialize processed_output")?;
             let ai_quantitative_output: crate::services::analytics::AIQuantitativeOutput =
                 serde_json::from_str(&row.ai_quantitative_output_json)
                     .context("Failed to deserialize ai_quantitative_output")?;
@@ -180,7 +170,6 @@ impl AnalyticsRepository {
                 generated_at,
                 metrics,
                 qualitative_output,
-                processed_output,
                 ai_quantitative_output,
                 model_used: row.model_used,
                 analysis_duration_ms: row.analysis_duration_ms,

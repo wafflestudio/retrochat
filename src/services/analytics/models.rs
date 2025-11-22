@@ -180,17 +180,12 @@ pub struct FileChangeMetrics {
     pub lines_added: u64,
     pub lines_removed: u64,
     pub net_code_growth: i64,
-    pub refactoring_operations: u64,
-    pub bulk_edit_operations: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeConsumptionMetrics {
     pub total_session_time_minutes: f64,
-    pub average_session_length_minutes: f64,
     pub peak_hours: Vec<u32>,
-    pub break_duration_minutes: f64,
-    pub context_switching_time_minutes: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,7 +194,6 @@ pub struct TokenConsumptionMetrics {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub token_efficiency: f64,
-    pub tokens_per_hour: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -347,49 +341,4 @@ pub struct AIQuantitativeOutput {
     /// Summary of rubric evaluation
     #[serde(default)]
     pub rubric_summary: Option<RubricEvaluationSummary>,
-}
-
-// =============================================================================
-// Processed Quantitative Output Models
-// =============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessedQuantitativeOutput {
-    pub session_metrics: SessionMetrics,
-    pub token_metrics: ProcessedTokenMetrics,
-    pub code_change_metrics: ProcessedCodeMetrics,
-    pub time_efficiency_metrics: TimeEfficiencyMetrics,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionMetrics {
-    pub total_sessions: u64,
-    pub average_session_duration_minutes: f64,
-    pub session_consistency_score: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessedTokenMetrics {
-    pub total_tokens: u64,
-    pub tokens_per_hour: f64,
-    pub input_output_ratio: f64,
-    pub token_efficiency_score: f64,
-    pub cost_estimate: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessedCodeMetrics {
-    pub net_lines_changed: i64,
-    pub files_per_session: f64,
-    pub lines_per_hour: f64,
-    pub refactoring_ratio: f64,
-    pub code_velocity: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TimeEfficiencyMetrics {
-    pub productivity_score: f64,
-    pub context_switching_cost: f64,
-    pub deep_work_ratio: f64,
-    pub time_utilization: f64,
 }

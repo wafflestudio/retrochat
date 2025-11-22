@@ -360,11 +360,11 @@ async fn score_rubric(
 }
 
 pub async fn generate_quantitative_analysis_ai(
-    messages: &[Message],
+    qualitative_input: &QualitativeInput,
     ai_client: &GoogleAiClient,
     rubrics: Option<&RubricList>,
 ) -> Result<AIQuantitativeOutput> {
-    return match score_all_rubrics(&messages, ai_client, rubrics).await {
+    return match score_all_rubrics(&qualitative_input, ai_client, rubrics).await {
         Ok((rubric_scores, rubric_summary)) => Ok(AIQuantitativeOutput {
             rubric_scores,
             rubric_summary: Some(rubric_summary),
@@ -378,7 +378,7 @@ pub async fn generate_quantitative_analysis_ai(
 
 /// Score a session against all rubrics
 async fn score_all_rubrics(
-    messages: &[Message],
+    qualitative_input: &QualitativeInput,
     ai_client: &GoogleAiClient,
     rubrics: Option<&RubricList>,
 ) -> Result<(Vec<RubricScore>, RubricEvaluationSummary)> {
@@ -389,7 +389,7 @@ async fn score_all_rubrics(
     };
 
     // Format messages once for all rubrics
-    let formatted_session = format_messages_for_prompt(messages);
+    let formatted_session = &qualitative_input.raw_session;
 
     // Score against each rubric
     let mut scores = Vec::new();
