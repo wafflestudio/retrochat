@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -68,6 +69,132 @@ impl RubricList {
     pub fn default_rubrics() -> Self {
         let json = include_str!("../../../resources/rubrics.json");
         Self::from_json_str(json).expect("Default rubrics should be valid JSON")
+    }
+}
+
+// =============================================================================
+// Qualitative Entry Models (for configurable qualitative analysis)
+// =============================================================================
+
+/// A single qualitative entry definition for configurable analysis output
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeEntry {
+    /// Unique key for the entry (e.g., "insights", "good_patterns")
+    pub key: String,
+    /// Display title (e.g., "Insights", "Good Patterns")
+    pub title: String,
+    /// What this entry measures (1-2 sentences for LLM prompt)
+    pub description: String,
+    /// JSON schema describing the structure of each item
+    pub item_schema: HashMap<String, String>,
+    /// Minimum number of items to generate
+    #[serde(default = "default_min_items")]
+    pub min_items: u32,
+    /// Maximum number of items to generate
+    #[serde(default = "default_max_items")]
+    pub max_items: u32,
+}
+
+fn default_min_items() -> u32 {
+    1
+}
+
+fn default_max_items() -> u32 {
+    3
+}
+
+impl QualitativeEntry {
+    /// Format entry for inclusion in LLM prompts
+    pub fn format_for_prompt(&self) -> String {
+        let schema_lines: Vec<String> = self
+            .item_schema
+            .iter()
+            .map(|(k, v)| format!("      \"{}\": \"{}\"", k, v))
+            .collect();
+
+        format!(
+            r#"**{}**: {} ({}-{} items)
+  [
+    {{
+{}
+    }}
+  ]"#,
+            self.title,
+            self.description,
+            self.min_items,
+            self.max_items,
+            schema_lines.join(",\n")
+        )
+    }
+
+    /// Format JSON schema for the entry
+    pub fn format_json_schema(&self) -> String {
+        let schema_lines: Vec<String> = self
+            .item_schema
+            .iter()
+            .map(|(k, v)| format!("        \"{}\": {}", k, v))
+            .collect();
+
+        format!(
+            r#"  "{}": [
+    {{
+{}
+    }}
+  ]"#,
+            self.key,
+            schema_lines.join(",\n")
+        )
+    }
+}
+
+/// Container for a list of qualitative entries with metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeEntryList {
+    /// Schema version
+    #[serde(default = "default_version")]
+    pub version: String,
+    /// List of qualitative entries
+    pub entries: Vec<QualitativeEntry>,
+}
+
+impl QualitativeEntryList {
+    /// Load entries from a JSON file
+    pub fn from_json_file(path: &Path) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let entry_list: QualitativeEntryList = serde_json::from_str(&content)?;
+        Ok(entry_list)
+    }
+
+    /// Load entries from embedded JSON string
+    pub fn from_json_str(json: &str) -> anyhow::Result<Self> {
+        let entry_list: QualitativeEntryList = serde_json::from_str(json)?;
+        Ok(entry_list)
+    }
+
+    /// Get default entries (embedded in binary)
+    pub fn default_entries() -> Self {
+        let json = include_str!("../../../resources/qualitative_entries.json");
+        Self::from_json_str(json).expect("Default qualitative entries should be valid JSON")
+    }
+
+    /// Format all entries for inclusion in LLM prompt
+    pub fn format_for_prompt(&self) -> String {
+        self.entries
+            .iter()
+            .enumerate()
+            .map(|(i, e)| format!("{}. {}", i + 1, e.format_for_prompt()))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    /// Format expected JSON schema for LLM output
+    pub fn format_json_schema(&self) -> String {
+        let schemas: Vec<String> = self
+            .entries
+            .iter()
+            .map(|e| e.format_json_schema())
+            .collect();
+        format!("{{\n{}\n}}", schemas.join(",\n"))
     }
 }
 
@@ -227,16 +354,116 @@ pub struct QuantitativeOutput {
 }
 
 // =============================================================================
-// Qualitative Output Models
+// AI Qualitative Output Models (configurable LLM-based qualitative analysis)
 // =============================================================================
 
+/// AI-generated qualitative output from configurable entry-based analysis
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AIQualitativeOutput {
+    /// Dynamic entries based on qualitative_entries.json configuration
+    /// Key is the entry key (e.g., "insights"), value is an array of items
+    #[serde(default)]
+    pub entries: HashMap<String, Vec<JsonValue>>,
+    /// Summary of qualitative evaluation
+    #[serde(default)]
+    pub summary: Option<QualitativeEvaluationSummary>,
+    /// Version of qualitative entries configuration used
+    #[serde(default)]
+    pub entries_version: Option<String>,
+}
+
+/// Summary of qualitative evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QualitativeOutput {
-    pub insights: Vec<Insight>,
-    pub good_patterns: Vec<GoodPattern>,
-    pub improvement_areas: Vec<ImprovementArea>,
-    pub recommendations: Vec<Recommendation>,
-    pub learning_observations: Vec<LearningObservation>,
+pub struct QualitativeEvaluationSummary {
+    /// Total number of entries generated
+    pub total_entries: usize,
+    /// Number of entry categories evaluated
+    pub categories_evaluated: usize,
+    /// Version of entries configuration used
+    pub entries_version: String,
+}
+
+impl AIQualitativeOutput {
+    /// Create a new AIQualitativeOutput with the given entries
+    pub fn new(entries: HashMap<String, Vec<JsonValue>>, entries_version: String) -> Self {
+        let total_entries: usize = entries.values().map(|v| v.len()).sum();
+        let categories_evaluated = entries.len();
+
+        Self {
+            entries,
+            summary: Some(QualitativeEvaluationSummary {
+                total_entries,
+                categories_evaluated,
+                entries_version: entries_version.clone(),
+            }),
+            entries_version: Some(entries_version),
+        }
+    }
+
+    /// Get entries by key
+    pub fn get_entries(&self, key: &str) -> Option<&Vec<JsonValue>> {
+        self.entries.get(key)
+    }
+
+    /// Get insights (convenience method for backward compatibility)
+    pub fn insights(&self) -> Vec<Insight> {
+        self.get_entries("insights")
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get good patterns (convenience method for backward compatibility)
+    pub fn good_patterns(&self) -> Vec<GoodPattern> {
+        self.get_entries("good_patterns")
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get improvement areas (convenience method for backward compatibility)
+    pub fn improvement_areas(&self) -> Vec<ImprovementArea> {
+        self.get_entries("improvement_areas")
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get recommendations (convenience method for backward compatibility)
+    pub fn recommendations(&self) -> Vec<Recommendation> {
+        self.get_entries("recommendations")
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get learning observations (convenience method for backward compatibility)
+    pub fn learning_observations(&self) -> Vec<LearningObservation> {
+        self.get_entries("learning_observations")
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 // =============================================================================
@@ -253,6 +480,10 @@ pub struct AIQuantitativeOutput {
     #[serde(default)]
     pub rubric_summary: Option<RubricEvaluationSummary>,
 }
+
+// =============================================================================
+// Qualitative Entry Item Types (for backward compatibility and typed access)
+// =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Insight {

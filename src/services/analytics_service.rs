@@ -79,7 +79,7 @@ impl AnalyticsService {
             generate_quantitative_analysis_ai(&quantitative_input, ai_client).await?;
 
         let qualitative_output =
-            generate_qualitative_analysis_ai(&qualitative_input, ai_client).await?;
+            generate_qualitative_analysis_ai(&qualitative_input, ai_client, None).await?;
 
         // Generate rubric-based evaluation (LLM-as-a-judge)
         let ai_quantitative_output = match score_all_rubrics(&messages, ai_client, None).await {

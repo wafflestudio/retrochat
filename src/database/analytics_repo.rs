@@ -453,7 +453,7 @@ impl AnalyticsRepository {
                 serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
-            let qualitative_output: crate::services::analytics::QualitativeOutput =
+            let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
             let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =
@@ -525,7 +525,7 @@ impl AnalyticsRepository {
                 serde_json::from_str(&row.scores_json).context("Failed to deserialize scores")?;
             let metrics: crate::models::Metrics =
                 serde_json::from_str(&row.metrics_json).context("Failed to deserialize metrics")?;
-            let qualitative_output: crate::services::analytics::QualitativeOutput =
+            let qualitative_output: crate::services::analytics::AIQualitativeOutput =
                 serde_json::from_str(&row.qualitative_output_json)
                     .context("Failed to deserialize qualitative_output")?;
             let processed_output: crate::services::analytics::ProcessedQuantitativeOutput =

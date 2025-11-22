@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 // Re-export types from services that will be stored as JSON
 use crate::services::analytics::{
-    AIQuantitativeOutput, ProcessedQuantitativeOutput, QualitativeOutput, QuantitativeOutput,
+    AIQualitativeOutput, AIQuantitativeOutput, ProcessedQuantitativeOutput, QuantitativeOutput,
 };
 
 // =============================================================================
@@ -42,7 +42,7 @@ pub struct Analytics {
     pub scores: Scores,
     pub metrics: Metrics,
 
-    pub qualitative_output: QualitativeOutput,
+    pub qualitative_output: AIQualitativeOutput,
     pub processed_output: ProcessedQuantitativeOutput,
     pub ai_quantitative_output: AIQuantitativeOutput,
 
@@ -57,7 +57,7 @@ impl Analytics {
         analytics_request_id: String,
         session_id: String,
         quantitative_output: QuantitativeOutput,
-        qualitative_output: QualitativeOutput,
+        qualitative_output: AIQualitativeOutput,
         processed_output: ProcessedQuantitativeOutput,
         ai_quantitative_output: AIQuantitativeOutput,
         metrics: Metrics,

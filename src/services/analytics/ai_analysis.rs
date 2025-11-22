@@ -1,12 +1,13 @@
 use super::models::{
-    QualitativeInput, QualitativeOutput, QuantitativeInput, QuantitativeOutput, Rubric,
-    RubricEvaluationSummary, RubricList, RubricScore,
+    AIQualitativeOutput, QualitativeEntryList, QualitativeInput, QuantitativeInput,
+    QuantitativeOutput, Rubric, RubricEvaluationSummary, RubricList, RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
 use crate::services::google_ai::GoogleAiClient;
 use anyhow::Result;
 use regex::Regex;
+use std::collections::HashMap;
 
 // =============================================================================
 // AI Analysis Functions
@@ -31,8 +32,15 @@ pub async fn generate_quantitative_analysis_ai(
 pub async fn generate_qualitative_analysis_ai(
     qualitative_input: &QualitativeInput,
     ai_client: &GoogleAiClient,
-) -> Result<QualitativeOutput> {
-    let prompt = build_qualitative_analysis_prompt(qualitative_input);
+    entries: Option<&QualitativeEntryList>,
+) -> Result<AIQualitativeOutput> {
+    // Use provided entries or load defaults
+    let entry_list = match entries {
+        Some(e) => e.clone(),
+        None => QualitativeEntryList::default_entries(),
+    };
+
+    let prompt = build_qualitative_analysis_prompt(qualitative_input, &entry_list);
 
     let analysis_request = crate::services::google_ai::models::AnalysisRequest {
         prompt,
@@ -41,7 +49,7 @@ pub async fn generate_qualitative_analysis_ai(
     };
 
     let response = ai_client.analytics(analysis_request).await?;
-    parse_qualitative_response(&response.text)
+    parse_qualitative_response(&response.text, &entry_list)
 }
 
 // =============================================================================
@@ -131,7 +139,13 @@ Important: Return ONLY the JSON object, no additional text or explanation."#,
     )
 }
 
-fn build_qualitative_analysis_prompt(input: &QualitativeInput) -> String {
+fn build_qualitative_analysis_prompt(
+    input: &QualitativeInput,
+    entry_list: &QualitativeEntryList,
+) -> String {
+    let entries_description = entry_list.format_for_prompt();
+    let json_schema = entry_list.format_json_schema();
+
     format!(
         r#"Analyze the following development session and provide qualitative insights.
 
@@ -141,66 +155,22 @@ The following is a complete transcript of the user's conversation with an AI cod
 Each turn includes the message content and any tool uses (file reads, writes, edits, bash commands, etc.).
 
 ```json
-{}
+{session}
 ```
 
 ## Task
 
-Based on the complete session transcript above, provide a comprehensive qualitative analysis with:
+Based on the complete session transcript above, provide a comprehensive qualitative analysis with the following categories:
 
-1. **Insights**: Key observations about the development patterns, communication style, and problem-solving approach (2-4 insights)
-2. **Good Patterns**: Positive habits and practices observed in how the user interacts with the AI (1-3 patterns)
-3. **Improvement Areas**: Areas where the user could enhance their workflow or communication (1-3 areas)
-4. **Recommendations**: Actionable suggestions for improvement (2-3 recommendations)
-5. **Learning Observations**: Growth and learning indicators based on what the user was working on (1-2 observations)
+{entries_description}
 
 Return ONLY a valid JSON object with this exact structure:
-{{
-  "insights": [
-    {{
-      "title": "string",
-      "description": "string",
-      "category": "string (Productivity/Technical/Learning/Collaboration)",
-      "confidence": 0.0
-    }}
-  ],
-  "good_patterns": [
-    {{
-      "pattern_name": "string",
-      "description": "string",
-      "frequency": 1,
-      "impact": "string (High/Medium/Low - description)"
-    }}
-  ],
-  "improvement_areas": [
-    {{
-      "area_name": "string",
-      "current_state": "string",
-      "suggested_improvement": "string",
-      "expected_impact": "string",
-      "priority": "string (High/Medium/Low)"
-    }}
-  ],
-  "recommendations": [
-    {{
-      "title": "string",
-      "description": "string",
-      "impact_score": 0.0,
-      "implementation_difficulty": "string (Easy/Medium/Hard)"
-    }}
-  ],
-  "learning_observations": [
-    {{
-      "observation": "string",
-      "skill_area": "string",
-      "progress_indicator": "string",
-      "next_steps": ["string"]
-    }}
-  ]
-}}
+{json_schema}
 
 Important: Return ONLY the JSON object, no additional text or explanation."#,
-        input.raw_session
+        session = input.raw_session,
+        entries_description = entries_description,
+        json_schema = json_schema
     )
 }
 
@@ -226,18 +196,40 @@ fn parse_quantitative_response(response_text: &str) -> Result<QuantitativeOutput
     }
 }
 
-fn parse_qualitative_response(response_text: &str) -> Result<QualitativeOutput> {
+fn parse_qualitative_response(
+    response_text: &str,
+    entry_list: &QualitativeEntryList,
+) -> Result<AIQualitativeOutput> {
     // Try to extract JSON from the response
     let json_text = extract_json_from_text(response_text);
 
-    serde_json::from_str::<QualitativeOutput>(&json_text).map_err(|e| {
+    // Parse the response as a dynamic JSON object
+    let parsed: serde_json::Value = serde_json::from_str(&json_text).map_err(|e| {
         tracing::warn!(
             "Failed to parse AI response as JSON: {}. Response: {}",
             e,
             response_text
         );
         anyhow::anyhow!("Failed to parse AI qualitative response: {}", e)
-    })
+    })?;
+
+    // Extract entries based on the entry list configuration
+    let mut entries: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+
+    if let Some(obj) = parsed.as_object() {
+        for entry_def in &entry_list.entries {
+            if let Some(value) = obj.get(&entry_def.key) {
+                if let Some(arr) = value.as_array() {
+                    entries.insert(entry_def.key.clone(), arr.clone());
+                }
+            }
+        }
+    }
+
+    Ok(AIQualitativeOutput::new(
+        entries,
+        entry_list.version.clone(),
+    ))
 }
 
 fn extract_json_from_text(text: &str) -> String {

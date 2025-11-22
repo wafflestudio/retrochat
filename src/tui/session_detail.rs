@@ -569,10 +569,11 @@ impl SessionDetailWidget {
                 line_count += 9;
 
                 // Insights section
-                if !analytics.qualitative_output.insights.is_empty() {
+                let insights = analytics.qualitative_output.insights();
+                if !insights.is_empty() {
                     line_count += 2; // Header + blank
                                      // Estimate 3-5 lines per insight (title + wrapped description)
-                    let insights_count = analytics.qualitative_output.insights.len().min(3);
+                    let insights_count = insights.len().min(3);
                     line_count += insights_count * 4;
                 }
 
@@ -728,7 +729,8 @@ impl SessionDetailWidget {
             lines.push(Line::from(""));
 
             // Key insights from qualitative output
-            if !analytics.qualitative_output.insights.is_empty() {
+            let insights = analytics.qualitative_output.insights();
+            if !insights.is_empty() {
                 lines.push(Line::from(vec![Span::styled(
                     "💡 Key Insights",
                     Style::default()
@@ -738,13 +740,7 @@ impl SessionDetailWidget {
                 lines.push(Line::from(""));
 
                 // Show first few insights
-                for (idx, insight) in analytics
-                    .qualitative_output
-                    .insights
-                    .iter()
-                    .take(3)
-                    .enumerate()
-                {
+                for (idx, insight) in insights.iter().take(3).enumerate() {
                     lines.push(Line::from(vec![Span::styled(
                         format!("  {}. {}", idx + 1, insight.title),
                         Style::default()
