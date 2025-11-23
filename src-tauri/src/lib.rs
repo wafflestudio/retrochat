@@ -9,13 +9,13 @@ use commands::{
         analyze_session, cancel_analysis, create_analysis, get_analysis_result,
         get_analysis_status, list_analyses, run_analysis,
     },
-    file::{clear_opened_files, get_opened_files, handle_file_drop},
+    file::{clear_opened_files, get_opened_files, handle_file_drop, import_sessions},
     session::{get_providers, get_session_detail, get_sessions, search_messages},
 };
 use retrochat::database::{config, DatabaseManager};
 use retrochat::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
-    AnalyticsRequestService, QueryService,
+    AnalyticsRequestService, ImportService, QueryService,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -26,6 +26,7 @@ use tokio::sync::Mutex;
 pub struct AppState {
     pub db_manager: Arc<DatabaseManager>,
     pub query_service: Arc<QueryService>,
+    pub import_service: Arc<ImportService>,
     pub analytics_service: Option<Arc<AnalyticsRequestService>>,
 }
 
@@ -40,6 +41,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Initialize services
     let query_service = Arc::new(QueryService::with_database(db_manager.clone()));
+    let import_service = Arc::new(ImportService::new(db_manager.clone()));
 
     // Initialize analytics service if Google AI API key is available
     let analytics_service = match std::env::var(retrochat::env::apis::GOOGLE_AI_API_KEY) {
@@ -62,6 +64,7 @@ pub async fn run() -> anyhow::Result<()> {
     let app_state = Arc::new(Mutex::new(AppState {
         db_manager,
         query_service,
+        import_service,
         analytics_service,
     }));
 
@@ -118,6 +121,7 @@ pub async fn run() -> anyhow::Result<()> {
             cancel_analysis,
             get_opened_files,
             clear_opened_files,
+            import_sessions,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

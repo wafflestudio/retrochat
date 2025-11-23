@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { stat } from '@tauri-apps/plugin-fs'
 import { FileText, History, Upload } from 'lucide-react'
@@ -38,6 +39,7 @@ export function SessionManager() {
   const { theme, setTheme } = useTheme()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [filesToImport, setFilesToImport] = useState<FileInfo[]>([])
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Keyboard shortcuts
   useHotkeys('meta+1', () => setActiveTab('sessions'), { preventDefault: true })
@@ -129,19 +131,61 @@ export function SessionManager() {
   }
 
   const confirmImport = async () => {
-    try {
-      const filePaths = filesToImport.map((file) => file.path)
-      console.log('Confirming import for:', filePaths)
+    const filePaths = filesToImport.map((file) => file.path)
+    console.log('Confirming import for:', filePaths)
 
-      // TODO: Call Tauri backend command to import files
-      // await invoke('import_sessions', { filePaths })
+    setImportDialogOpen(false)
 
-      setImportDialogOpen(false)
-      toast.success(`Importing ${filesToImport.length} file(s)...`)
-    } catch (error) {
-      console.error('Failed to import files:', error)
-      toast.error(`Failed to import: ${error}`)
-    }
+    // Use promise-based toast for better control
+    toast.promise(
+      invoke<{
+        total_files: number
+        successful_imports: number
+        failed_imports: number
+        total_sessions_imported: number
+        total_messages_imported: number
+        results: Array<{
+          file_path: string
+          sessions_imported: number
+          messages_imported: number
+          success: boolean
+          error?: string
+        }>
+      }>('import_sessions', { filePaths }),
+      {
+        loading: 'Importing sessions...',
+        success: async (response) => {
+          // Refresh the session list and select first session
+          setRefreshTrigger((prev) => prev + 1)
+
+          // Fetch the first session and select it
+          try {
+            const { getSessions } = await import('@/lib/api')
+            const sessions = await getSessions(1, 1, provider)
+            if (sessions.length > 0) {
+              setSelectedSession(sessions[0].id)
+            }
+          } catch (error) {
+            console.error('Failed to fetch first session:', error)
+          }
+
+          if (response.failed_imports > 0) {
+            const failedFiles = response.results
+              .filter((r) => !r.success)
+              .map((r) => r.file_path.split('/').pop())
+              .join(', ')
+
+            return `Imported ${response.successful_imports}/${response.total_files} files. Failed: ${failedFiles}`
+          }
+
+          return `Successfully imported ${response.total_sessions_imported} sessions (${response.total_messages_imported} messages) from ${response.total_files} file(s)`
+        },
+        error: (error) => {
+          console.error('Failed to import files:', error)
+          return `Failed to import: ${error}`
+        },
+      }
+    )
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -231,6 +275,7 @@ export function SessionManager() {
                 selectedSession={selectedSession}
                 onSessionSelect={setSelectedSession}
                 onImport={handleImport}
+                refreshTrigger={refreshTrigger}
               />
             ) : (
               <SearchView

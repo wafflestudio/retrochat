@@ -23,6 +23,7 @@ interface SessionListProps {
   selectedSession: string | null
   onSessionSelect: (sessionId: string) => void
   onImport?: () => void
+  refreshTrigger?: number
 }
 
 export function SessionList({
@@ -31,6 +32,7 @@ export function SessionList({
   selectedSession,
   onSessionSelect,
   onImport,
+  refreshTrigger,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [providers, setProviders] = useState<string[]>([])
@@ -57,7 +59,7 @@ export function SessionList({
     } finally {
       setLoading(false)
     }
-  }, [page, provider])
+  }, [page, provider, refreshTrigger])
 
   useEffect(() => {
     loadProviders()
