@@ -868,7 +868,7 @@ export async function getProviders(): Promise<string[]> {
     return await invoke('get_providers')
   } catch (_error) {
     console.log('[v0] Using mock data for getProviders')
-    return ['claude', 'gpt4', 'gemini']
+    return ['Claude Code', 'Gemini CLI', 'Codex']
   }
 }
 

@@ -34,3 +34,4 @@ chrono = { version = "0.4", features = ["serde"] }
 tauri-plugin-fs = "2"
 tauri-plugin-log = "2"
 log = "0.4.28"
+tauri-plugin-updater = "2.9.0"

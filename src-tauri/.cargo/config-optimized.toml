@@ -1,0 +1,19 @@
+[profile.release]
+# Basic size optimizations that work on stable Rust
+opt-level = "z"        # Optimize for size instead of speed
+lto = true             # Enable Link Time Optimization
+codegen-units = 1      # Single codegen unit for better optimization
+strip = true           # Remove symbols from binary
+panic = "abort"        # Abort on panic instead of unwinding
+
+[target.x86_64-apple-darwin]
+# Stable-only optimizations (safe for dev builds)
+rustflags = [
+    "-C", "link-arg=-Wl,-dead_strip",  # Remove unused code at link time
+]
+
+[target.aarch64-apple-darwin]
+# Stable-only optimizations (safe for dev builds)
+rustflags = [
+    "-C", "link-arg=-Wl,-dead_strip",  # Remove unused code at link time
+]

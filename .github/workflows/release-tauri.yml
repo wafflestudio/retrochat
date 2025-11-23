@@ -1,0 +1,98 @@
+name: Release Build
+
+on:
+    push:
+        tags:
+            - "v*" # Trigger on version tags like v0.1.0, v1.2.3
+    workflow_dispatch: # Allow manual trigger
+        inputs:
+            optimized:
+                description: "Build optimized release (LTO, size optimization)"
+                required: true
+                type: boolean
+                default: false
+
+jobs:
+    release:
+        permissions:
+            contents: write
+            packages: write
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "macos-latest" # macOS Apple Silicon
+                      args: "--target aarch64-apple-darwin"
+                      rust_target: "aarch64-apple-darwin"
+                    - platform: "macos-latest" # macOS Intel
+                      args: "--target x86_64-apple-darwin"
+                      rust_target: "x86_64-apple-darwin"
+                    - platform: "ubuntu-22.04" # Linux
+                      args: ""
+                      rust_target: ""
+                    - platform: "windows-latest" # Windows
+                      args: ""
+                      rust_target: ""
+
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install dependencies (Ubuntu only)
+              if: matrix.platform == 'ubuntu-22.04'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 8
+
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  # Cross-compilation targets (macOS only)
+                  targets: ${{ matrix.rust_target }}
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: "./src-tauri -> target"
+
+            - name: Install frontend dependencies
+              run: cd ui-react && pnpm install
+
+            - name: Setup optimized build config (if enabled)
+              if: github.event.inputs.optimized == 'true' || startsWith(github.ref, 'refs/tags/')
+              shell: bash
+              run: |
+                  cp src-tauri/.cargo/config-optimized.toml src-tauri/.cargo/config.toml
+
+            - name: Build Tauri app
+              uses: tauri-apps/tauri-action@v0
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  NODE_OPTIONS: "--max-old-space-size=8192" # Increase Node.js heap size to 8GB
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+              with:
+                  tagName: ${{ github.ref_name }}
+                  releaseName: "RetroChat v__VERSION__"
+                  releaseBody: "See the assets to download and install this version."
+                  releaseDraft: true
+                  prerelease: false
+                  args: ${{ matrix.args }}
+                  includeUpdaterJson: true
+
+            - name: Cleanup optimized config
+              if: always() && (github.event.inputs.optimized == 'true' || startsWith(github.ref, 'refs/tags/'))
+              shell: bash
+              run: |
+                  rm -f src-tauri/.cargo/config.toml

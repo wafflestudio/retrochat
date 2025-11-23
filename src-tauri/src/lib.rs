@@ -105,6 +105,14 @@ pub async fn run() -> anyhow::Result<()> {
         .setup(|app| {
             log::debug!("Running Tauri setup");
 
+            // Initialize updater plugin for desktop platforms
+            #[cfg(desktop)]
+            {
+                log::info!("Initializing updater plugin");
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+
             #[cfg(debug_assertions)]
             {
                 log::debug!("Debug mode: initializing devtools");

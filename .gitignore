@@ -87,3 +87,4 @@ examples/local_*
 src-tauri/target/
 src-tauri/WixTools/
 src-tauri/gen/
+src-tauri/.cargo/config.toml

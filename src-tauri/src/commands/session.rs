@@ -241,8 +241,8 @@ pub async fn get_providers(_state: State<'_, Arc<Mutex<AppState>>>) -> Result<Ve
     log::debug!("get_providers called");
     // Return available providers
     Ok(vec![
-        "Claude".to_string(),
-        "Gemini".to_string(),
+        "Claude Code".to_string(),
+        "Gemini CLI".to_string(),
         "Codex".to_string(),
     ])
 }
