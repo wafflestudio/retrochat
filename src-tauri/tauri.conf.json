@@ -48,7 +48,8 @@
             "core:webview:allow-internal-toggle-devtools",
             "dialog:default",
             "core:event:default",
-            "fs:allow-stat"
+            "fs:allow-stat",
+            "log:default"
           ]
         }
       ]

@@ -6,7 +6,6 @@ import { Filter, Upload } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Select,
   SelectContent,
@@ -14,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getProviders, getSessions } from '@/lib/api'
 import type { Session } from '@/types'
 
@@ -59,7 +59,7 @@ export function SessionList({
     } finally {
       setLoading(false)
     }
-  }, [page, provider, refreshTrigger])
+  }, [page, provider])
 
   useEffect(() => {
     loadProviders()
@@ -68,6 +68,13 @@ export function SessionList({
   useEffect(() => {
     loadSessions()
   }, [loadSessions])
+
+  // Refresh sessions when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      loadSessions()
+    }
+  }, [refreshTrigger, loadSessions])
 
   return (
     <div className="h-full flex flex-col">
