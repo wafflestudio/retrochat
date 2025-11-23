@@ -1,13 +1,18 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod dto;
+
+use dto::{
+    AnalyticsItem, AnalyticsRequestItem, FileMetadataItem, MessageItem, SearchResultItem,
+    SessionDetail, SessionListItem, ToolOperationItem,
+};
 use retrochat::database::{config, DatabaseManager, ToolOperationRepository};
 use retrochat::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
     AnalyticsRequestService, QueryService, SearchRequest, SessionDetailRequest, SessionFilters,
     SessionsQueryRequest,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::Manager;
 use tauri::State;
@@ -18,79 +23,6 @@ pub struct AppState {
     db_manager: Arc<DatabaseManager>,
     query_service: Arc<QueryService>,
     analytics_service: Option<Arc<AnalyticsRequestService>>,
-}
-
-// DTOs for frontend communication
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SessionListItem {
-    pub id: String,
-    pub provider: String,
-    pub project_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub message_count: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SessionDetail {
-    pub id: String,
-    pub provider: String,
-    pub project_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub messages: Vec<MessageItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MessageItem {
-    pub id: String,
-    pub role: String,
-    pub content: String,
-    pub timestamp: String,
-    pub message_type: String,
-    pub tool_operation: Option<ToolOperationItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ToolOperationItem {
-    pub id: String,
-    pub tool_use_id: String,
-    pub tool_name: String,
-    pub timestamp: String,
-    pub success: Option<bool>,
-    pub result_summary: Option<String>,
-    pub file_metadata: Option<FileMetadataItem>,
-    pub bash_metadata: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FileMetadataItem {
-    pub file_path: String,
-    pub file_extension: Option<String>,
-    pub is_code_file: Option<bool>,
-    pub lines_added: Option<i32>,
-    pub lines_removed: Option<i32>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SearchResultItem {
-    pub session_id: String,
-    pub message_id: String,
-    pub content: String,
-    pub role: String,
-    pub timestamp: String,
-    pub provider: String,
-}
-
-// Analysis DTOs
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AnalyticsRequestItem {
-    pub id: String,
-    pub session_id: String,
-    pub status: String,
-    pub started_at: String,
-    pub completed_at: Option<String>,
-    pub error_message: Option<String>,
 }
 
 // Tauri Commands
@@ -315,6 +247,7 @@ async fn analyze_session(
         status: completed_request.status.to_string(),
         started_at: completed_request.started_at.to_rfc3339(),
         completed_at: completed_request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: completed_request.created_by,
         error_message: completed_request.error_message,
     })
 }
@@ -343,6 +276,7 @@ async fn create_analysis(
         status: request.status.to_string(),
         started_at: request.started_at.to_rfc3339(),
         completed_at: request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: request.created_by,
         error_message: request.error_message,
     })
 }
@@ -388,6 +322,7 @@ async fn get_analysis_status(
         status: request.status.to_string(),
         started_at: request.started_at.to_rfc3339(),
         completed_at: request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: request.created_by,
         error_message: request.error_message,
     })
 }
@@ -396,7 +331,7 @@ async fn get_analysis_status(
 async fn get_analysis_result(
     state: State<'_, Arc<Mutex<AppState>>>,
     request_id: String,
-) -> Result<Option<serde_json::Value>, String> {
+) -> Result<Option<AnalyticsItem>, String> {
     let state_guard = state.lock().await;
 
     let analytics_service = state_guard
@@ -409,8 +344,8 @@ async fn get_analysis_result(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Convert Analytics to JSON
-    Ok(result.map(|analytics| serde_json::to_value(analytics).unwrap_or(serde_json::Value::Null)))
+    // Convert Analytics DB entity to Tauri DTO
+    Ok(result.map(AnalyticsItem::from))
 }
 
 #[tauri::command]
@@ -439,6 +374,7 @@ async fn list_analyses(
             status: r.status.to_string(),
             started_at: r.started_at.to_rfc3339(),
             completed_at: r.completed_at.map(|dt| dt.to_rfc3339()),
+            created_by: r.created_by,
             error_message: r.error_message,
         })
         .collect())

@@ -499,6 +499,7 @@ const MOCK_ANALYTICS_REQUESTS: AnalyticsRequest[] = [
     status: 'completed',
     started_at: '2024-01-15T12:00:00Z',
     completed_at: '2024-01-15T12:00:45Z',
+    created_by: null,
     error_message: null,
   },
   {
@@ -507,6 +508,7 @@ const MOCK_ANALYTICS_REQUESTS: AnalyticsRequest[] = [
     status: 'completed',
     started_at: '2024-01-14T17:00:00Z',
     completed_at: '2024-01-14T17:01:12Z',
+    created_by: null,
     error_message: null,
   },
   {
@@ -515,6 +517,7 @@ const MOCK_ANALYTICS_REQUESTS: AnalyticsRequest[] = [
     status: 'running',
     started_at: '2024-01-13T12:30:00Z',
     completed_at: null,
+    created_by: null,
     error_message: null,
   },
 ]
@@ -525,45 +528,125 @@ const MOCK_ANALYTICS: Record<string, Analytics> = {
     analytics_request_id: 'req-001',
     session_id: '550e8400-e29b-41d4-a716-446655440001',
     generated_at: '2024-01-15T12:00:45Z',
-    scores: {
-      overall: 0.85,
-      code_quality: 0.88,
-      productivity: 0.82,
-      efficiency: 0.79,
-      collaboration: 0.91,
-      learning: 0.76,
+    ai_qualitative_output: {
+      entries: [
+        {
+          key: 'insights',
+          title: 'Insights',
+          description: 'Key observations and patterns identified during the session',
+          summary: 'Strong component architecture with clear separation of concerns',
+          items: [
+            'Demonstrated excellent component composition with reusable patterns',
+            'Effective problem-solving approach by breaking down complex requirements',
+            'Strong TypeScript typing throughout with proper interface definitions',
+          ],
+        },
+        {
+          key: 'good_patterns',
+          title: 'Good Patterns',
+          description: 'Positive coding patterns and practices observed',
+          summary: 'Consistent use of reusable components and type safety',
+          items: [
+            'Component Reusability: Created reusable components leveraged across the application',
+            'Type Safety: Proper TypeScript types and interfaces defined for all components',
+            'Responsive Design: Mobile-first approach with proper breakpoints',
+          ],
+        },
+        {
+          key: 'improvement_areas',
+          title: 'Improvement Areas',
+          description: 'Areas where improvements could be made',
+          summary: 'Error handling and performance optimization opportunities identified',
+          items: [
+            'Error Handling: Implement comprehensive error boundaries and user-friendly messages',
+            'Performance: Add React.memo and useMemo for expensive computations',
+          ],
+        },
+        {
+          key: 'recommendations',
+          title: 'Recommendations',
+          description: 'Suggested actions for future improvement',
+          summary: 'Focus on testing and documentation',
+          items: [
+            'Add unit tests for critical components to ensure reliability',
+            'Implement code splitting to reduce initial bundle size',
+            'Add JSDoc comments to document component props and behavior',
+          ],
+        },
+      ],
+      summary: {
+        total_entries: 11,
+        categories_evaluated: 4,
+        entries_version: '1.0',
+      },
+      entries_version: '1.0',
     },
-    metrics: {
-      total_files_modified: 8,
-      total_files_read: 15,
-      lines_added: 543,
-      lines_removed: 127,
-      total_tokens_used: 45320,
-      session_duration_minutes: 135,
+    ai_quantitative_output: {
+      rubric_scores: [
+        {
+          rubric_id: 'rubric_001',
+          rubric_name: 'Code Quality',
+          score: 4.4,
+          max_score: 5,
+          reasoning:
+            'Excellent component composition with clear separation of concerns and reusable patterns.',
+        },
+        {
+          rubric_id: 'rubric_002',
+          rubric_name: 'Productivity',
+          score: 4.1,
+          max_score: 5,
+          reasoning:
+            'Efficient problem-solving approach with good task breakdown and iterative development.',
+        },
+        {
+          rubric_id: 'rubric_003',
+          rubric_name: 'Efficiency',
+          score: 3.95,
+          max_score: 5,
+          reasoning: 'Good token efficiency and time utilization with minimal context switching.',
+        },
+        {
+          rubric_id: 'rubric_004',
+          rubric_name: 'Collaboration',
+          score: 4.55,
+          max_score: 5,
+          reasoning: 'Clear communication with well-structured dialogue and iterative refinement.',
+        },
+        {
+          rubric_id: 'rubric_005',
+          rubric_name: 'Learning',
+          score: 3.8,
+          max_score: 5,
+          reasoning:
+            'Growing proficiency with React hooks and state management patterns demonstrated.',
+        },
+      ],
+      rubric_summary: {
+        total_score: 20.8,
+        max_score: 25,
+        percentage: 83.2,
+        rubrics_evaluated: 5,
+        rubrics_version: '1.0',
+      },
     },
-    quantitative_input: {
+    metric_quantitative_output: {
       file_changes: {
         total_files_modified: 8,
         total_files_read: 15,
         lines_added: 543,
         lines_removed: 127,
         net_code_growth: 416,
-        refactoring_operations: 3,
-        bulk_edit_operations: 2,
       },
       time_metrics: {
         total_session_time_minutes: 135,
-        average_session_length_minutes: 45,
         peak_hours: [14, 15, 16],
-        break_duration_minutes: 15,
-        context_switching_time_minutes: 8,
       },
       token_metrics: {
         total_tokens_used: 45320,
         input_tokens: 28500,
         output_tokens: 16820,
         token_efficiency: 0.89,
-        tokens_per_hour: 20142,
       },
       tool_usage: {
         total_operations: 42,
@@ -578,176 +661,7 @@ const MOCK_ANALYTICS: Record<string, Analytics> = {
         average_execution_time_ms: 245,
       },
     },
-    qualitative_input: {
-      file_contexts: [
-        {
-          file_path: 'components/dashboard-layout.tsx',
-          file_type: 'React Component',
-          modification_type: 'Creation',
-          content_snippet: 'export function DashboardLayout({ children }...',
-          complexity_indicators: [
-            'Complex state management',
-            'Multiple child components',
-            'Custom hooks',
-          ],
-        },
-      ],
-      chat_context: {
-        conversation_flow:
-          'Well-structured dialogue with clear objectives and iterative refinement',
-        problem_solving_patterns: [
-          'Incremental development',
-          'Test-driven approach',
-          'Clarifying questions',
-        ],
-        ai_interaction_quality: 8.5,
-        key_topics: ['React', 'Dashboard UI', 'Component Architecture', 'State Management'],
-      },
-      project_context: {
-        project_type: 'Web Application',
-        technology_stack: ['React', 'TypeScript', 'Next.js', 'Tailwind CSS', 'shadcn/ui'],
-        project_complexity: 7,
-        development_stage: 'Active Development',
-      },
-    },
-    qualitative_output: {
-      insights: [
-        {
-          title: 'Strong Component Architecture',
-          description:
-            'The session demonstrated excellent component composition with clear separation of concerns and reusable patterns.',
-          category: 'Code Quality',
-          confidence: 0.92,
-        },
-        {
-          title: 'Efficient Problem Solving',
-          description:
-            'User showed good problem-solving approach by breaking down complex requirements into manageable tasks.',
-          category: 'Productivity',
-          confidence: 0.87,
-        },
-        {
-          title: 'Good TypeScript Usage',
-          description:
-            'Strong typing throughout with proper interface definitions and type safety practices.',
-          category: 'Code Quality',
-          confidence: 0.89,
-        },
-      ],
-      good_patterns: [
-        {
-          pattern_name: 'Component Reusability',
-          description:
-            'Consistently created reusable components that can be leveraged across the application',
-          frequency: 8,
-          impact: 'High',
-        },
-        {
-          pattern_name: 'Type Safety',
-          description:
-            'Proper TypeScript types and interfaces defined for all components and functions',
-          frequency: 12,
-          impact: 'Medium',
-        },
-        {
-          pattern_name: 'Responsive Design',
-          description: 'Mobile-first approach with proper breakpoints and responsive utilities',
-          frequency: 6,
-          impact: 'High',
-        },
-      ],
-      improvement_areas: [
-        {
-          area_name: 'Error Handling',
-          current_state: 'Basic error handling with console logs',
-          suggested_improvement:
-            'Implement comprehensive error boundaries and user-friendly error messages',
-          expected_impact: 'Improved user experience and debugging capabilities',
-          priority: 'medium',
-        },
-        {
-          area_name: 'Performance Optimization',
-          current_state: 'Some components re-render unnecessarily',
-          suggested_improvement: 'Add React.memo and useMemo for expensive computations',
-          expected_impact: 'Better rendering performance and reduced CPU usage',
-          priority: 'low',
-        },
-      ],
-      recommendations: [
-        {
-          title: 'Add Unit Tests',
-          description:
-            'Consider adding unit tests for critical components to ensure reliability and catch regressions early',
-          impact_score: 8,
-          implementation_difficulty: 'Medium',
-        },
-        {
-          title: 'Implement Code Splitting',
-          description:
-            'Use dynamic imports and lazy loading to reduce initial bundle size and improve load times',
-          impact_score: 7,
-          implementation_difficulty: 'Easy',
-        },
-        {
-          title: 'Document Component APIs',
-          description:
-            'Add JSDoc comments to document component props and behavior for better team collaboration',
-          impact_score: 6,
-          implementation_difficulty: 'Easy',
-        },
-      ],
-      learning_observations: [
-        {
-          observation:
-            'Demonstrated growing proficiency with React hooks and state management patterns',
-          skill_area: 'React Development',
-          progress_indicator: 'Intermediate to Advanced',
-          next_steps: [
-            'Explore advanced patterns like compound components',
-            'Learn about React Server Components',
-            'Practice custom hook creation',
-          ],
-        },
-        {
-          observation: 'Good understanding of TypeScript but room for advanced features',
-          skill_area: 'TypeScript',
-          progress_indicator: 'Intermediate',
-          next_steps: [
-            'Learn utility types and conditional types',
-            'Practice generic type constraints',
-            'Explore advanced type inference patterns',
-          ],
-        },
-      ],
-    },
-    processed_output: {
-      session_metrics: {
-        total_sessions: 1,
-        average_session_duration_minutes: 135,
-        session_consistency_score: 0.85,
-      },
-      token_metrics: {
-        total_tokens: 45320,
-        tokens_per_hour: 20142,
-        input_output_ratio: 1.69,
-        token_efficiency_score: 0.89,
-        cost_estimate: 0.2266,
-      },
-      code_change_metrics: {
-        net_lines_changed: 416,
-        files_per_session: 8,
-        lines_per_hour: 185,
-        refactoring_ratio: 0.23,
-        code_velocity: 0.82,
-      },
-      time_efficiency_metrics: {
-        productivity_score: 0.82,
-        context_switching_cost: 0.06,
-        deep_work_ratio: 0.88,
-        time_utilization: 0.89,
-      },
-    },
-    model_used: 'gpt-4o',
+    model_used: 'gemini-2.0-flash',
     analysis_duration_ms: 3456,
   },
   'req-002': {
@@ -755,45 +669,110 @@ const MOCK_ANALYTICS: Record<string, Analytics> = {
     analytics_request_id: 'req-002',
     session_id: '550e8400-e29b-41d4-a716-446655440002',
     generated_at: '2024-01-14T17:01:12Z',
-    scores: {
-      overall: 0.78,
-      code_quality: 0.82,
-      productivity: 0.75,
-      efficiency: 0.71,
-      collaboration: 0.85,
-      learning: 0.8,
+    ai_qualitative_output: {
+      entries: [
+        {
+          key: 'insights',
+          title: 'Insights',
+          description: 'Key observations and patterns identified during the session',
+          summary: 'Effective refactoring with systematic approach',
+          items: [
+            'Successfully improved code quality through systematic refactoring',
+            'Focused code review with specific improvement suggestions',
+          ],
+        },
+        {
+          key: 'good_patterns',
+          title: 'Good Patterns',
+          description: 'Positive coding patterns and practices observed',
+          summary: 'Comprehensive validation patterns',
+          items: ['Input Validation: Comprehensive validation patterns with proper error messages'],
+        },
+        {
+          key: 'improvement_areas',
+          title: 'Improvement Areas',
+          description: 'Areas where improvements could be made',
+          summary: 'Test coverage needs improvement',
+          items: ['Test Coverage: Add comprehensive test suite for validation functions'],
+        },
+        {
+          key: 'recommendations',
+          title: 'Recommendations',
+          description: 'Suggested actions for future improvement',
+          summary: 'Add integration tests',
+          items: ['Consider adding integration tests to validate end-to-end workflows'],
+        },
+      ],
+      summary: {
+        total_entries: 5,
+        categories_evaluated: 4,
+        entries_version: '1.0',
+      },
+      entries_version: '1.0',
     },
-    metrics: {
-      total_files_modified: 5,
-      total_files_read: 12,
-      lines_added: 324,
-      lines_removed: 89,
-      total_tokens_used: 32100,
-      session_duration_minutes: 110,
+    ai_quantitative_output: {
+      rubric_scores: [
+        {
+          rubric_id: 'rubric_001',
+          rubric_name: 'Code Quality',
+          score: 4.1,
+          max_score: 5,
+          reasoning: 'Successfully improved code quality through systematic refactoring approach.',
+        },
+        {
+          rubric_id: 'rubric_002',
+          rubric_name: 'Productivity',
+          score: 3.75,
+          max_score: 5,
+          reasoning: 'Good productivity with focused code review sessions.',
+        },
+        {
+          rubric_id: 'rubric_003',
+          rubric_name: 'Efficiency',
+          score: 3.55,
+          max_score: 5,
+          reasoning: 'Reasonable efficiency with some room for optimization.',
+        },
+        {
+          rubric_id: 'rubric_004',
+          rubric_name: 'Collaboration',
+          score: 4.25,
+          max_score: 5,
+          reasoning: 'Clear communication and specific improvement suggestions.',
+        },
+        {
+          rubric_id: 'rubric_005',
+          rubric_name: 'Learning',
+          score: 4.0,
+          max_score: 5,
+          reasoning: 'Strong understanding of refactoring principles and patterns.',
+        },
+      ],
+      rubric_summary: {
+        total_score: 19.65,
+        max_score: 25,
+        percentage: 78.6,
+        rubrics_evaluated: 5,
+        rubrics_version: '1.0',
+      },
     },
-    quantitative_input: {
+    metric_quantitative_output: {
       file_changes: {
         total_files_modified: 5,
         total_files_read: 12,
         lines_added: 324,
         lines_removed: 89,
         net_code_growth: 235,
-        refactoring_operations: 2,
-        bulk_edit_operations: 1,
       },
       time_metrics: {
         total_session_time_minutes: 110,
-        average_session_length_minutes: 55,
         peak_hours: [10, 11],
-        break_duration_minutes: 10,
-        context_switching_time_minutes: 5,
       },
       token_metrics: {
         total_tokens_used: 32100,
         input_tokens: 20000,
         output_tokens: 12100,
         token_efficiency: 0.85,
-        tokens_per_hour: 17509,
       },
       tool_usage: {
         total_operations: 28,
@@ -808,104 +787,7 @@ const MOCK_ANALYTICS: Record<string, Analytics> = {
         average_execution_time_ms: 220,
       },
     },
-    qualitative_input: {
-      file_contexts: [
-        {
-          file_path: 'src/utils/validation.ts',
-          file_type: 'Utility Module',
-          modification_type: 'Enhancement',
-          content_snippet: 'export const validateEmail = (email: string)...',
-          complexity_indicators: ['Regex patterns', 'Type guards', 'Error handling'],
-        },
-      ],
-      chat_context: {
-        conversation_flow: 'Focused code review with specific improvement suggestions',
-        problem_solving_patterns: [
-          'Code refactoring',
-          'Performance optimization',
-          'Best practices',
-        ],
-        ai_interaction_quality: 8.0,
-        key_topics: ['Code Review', 'Refactoring', 'Type Safety', 'Validation'],
-      },
-      project_context: {
-        project_type: 'Library/Package',
-        technology_stack: ['TypeScript', 'Jest', 'ESLint'],
-        project_complexity: 5,
-        development_stage: 'Maintenance',
-      },
-    },
-    qualitative_output: {
-      insights: [
-        {
-          title: 'Effective Refactoring',
-          description: 'Successfully improved code quality through systematic refactoring approach',
-          category: 'Code Quality',
-          confidence: 0.88,
-        },
-      ],
-      good_patterns: [
-        {
-          pattern_name: 'Input Validation',
-          description: 'Comprehensive validation patterns with proper error messages',
-          frequency: 5,
-          impact: 'High',
-        },
-      ],
-      improvement_areas: [
-        {
-          area_name: 'Test Coverage',
-          current_state: 'Some functions lack unit tests',
-          suggested_improvement: 'Add comprehensive test suite for validation functions',
-          expected_impact: 'Increased confidence in code reliability',
-          priority: 'high',
-        },
-      ],
-      recommendations: [
-        {
-          title: 'Add Integration Tests',
-          description: 'Consider adding integration tests to validate end-to-end workflows',
-          impact_score: 7,
-          implementation_difficulty: 'Medium',
-        },
-      ],
-      learning_observations: [
-        {
-          observation: 'Strong understanding of refactoring principles and patterns',
-          skill_area: 'Software Engineering',
-          progress_indicator: 'Advanced',
-          next_steps: ['Learn design patterns', 'Study SOLID principles', 'Practice TDD'],
-        },
-      ],
-    },
-    processed_output: {
-      session_metrics: {
-        total_sessions: 1,
-        average_session_duration_minutes: 110,
-        session_consistency_score: 0.78,
-      },
-      token_metrics: {
-        total_tokens: 32100,
-        tokens_per_hour: 17509,
-        input_output_ratio: 1.65,
-        token_efficiency_score: 0.85,
-        cost_estimate: 0.1605,
-      },
-      code_change_metrics: {
-        net_lines_changed: 235,
-        files_per_session: 5,
-        lines_per_hour: 128,
-        refactoring_ratio: 0.27,
-        code_velocity: 0.75,
-      },
-      time_efficiency_metrics: {
-        productivity_score: 0.75,
-        context_switching_cost: 0.05,
-        deep_work_ratio: 0.91,
-        time_utilization: 0.87,
-      },
-    },
-    model_used: 'gpt-4o',
+    model_used: 'gemini-2.0-flash',
     analysis_duration_ms: 2890,
   },
 }
@@ -1007,6 +889,7 @@ export async function analyzeSession(
       status: 'completed',
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
+      created_by: null,
       error_message: null,
     }
     return request
@@ -1030,6 +913,7 @@ export async function createAnalysis(
       status: 'pending',
       started_at: new Date().toISOString(),
       completed_at: null,
+      created_by: null,
       error_message: null,
     }
     return request
@@ -1064,6 +948,7 @@ export async function getAnalysisStatus(requestId: string): Promise<AnalyticsReq
         status: 'completed',
         started_at: new Date().toISOString(),
         completed_at: new Date().toISOString(),
+        created_by: null,
         error_message: null,
       }
     )
