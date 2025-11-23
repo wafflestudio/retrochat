@@ -493,7 +493,286 @@ async fn list_cancellable_requests(service: &AnalyticsRequestService) -> Result<
 // Print Functions
 // =============================================================================
 
-async fn print_unified_analysis(_analysis: &crate::models::Analytics) -> Result<()> {
-    println!("Good!");
+async fn print_unified_analysis(analysis: &crate::models::Analytics) -> Result<()> {
+    println!();
+    println!("╔══════════════════════════════════════════════════════════════════════════════╗");
+    println!("║                           📊 Analysis Results                                ║");
+    println!("╚══════════════════════════════════════════════════════════════════════════════╝");
+    println!();
+
+    // Session Info
+    println!("📋 Session: {}", analysis.session_id);
+    println!(
+        "🕐 Generated: {}",
+        analysis.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    if let Some(model) = &analysis.model_used {
+        println!("🤖 Model: {model}");
+    }
+    if let Some(duration) = analysis.analysis_duration_ms {
+        println!("⏱️  Analysis Duration: {}ms", duration);
+    }
+    println!();
+
+    // 1. Metric Quantitative Output
+    print_metric_quantitative(&analysis.metric_quantitative_output);
+
+    // 2. AI Quantitative Output (Rubric Scores)
+    print_ai_quantitative(&analysis.ai_quantitative_output);
+
+    // 3. AI Qualitative Output
+    print_ai_qualitative(&analysis.ai_qualitative_output);
+
     Ok(())
+}
+
+fn print_metric_quantitative(metrics: &crate::services::analytics::MetricQuantitativeOutput) {
+    println!("┌──────────────────────────────────────────────────────────────────────────────┐");
+    println!("│  📈 Metric Quantitative Analysis                                             │");
+    println!("└──────────────────────────────────────────────────────────────────────────────┘");
+    println!();
+
+    // File Changes
+    println!("  📁 File Changes:");
+    println!(
+        "     • Files Modified: {}",
+        metrics.file_changes.total_files_modified
+    );
+    println!(
+        "     • Files Read: {}",
+        metrics.file_changes.total_files_read
+    );
+    println!("     • Lines Added: +{}", metrics.file_changes.lines_added);
+    println!(
+        "     • Lines Removed: -{}",
+        metrics.file_changes.lines_removed
+    );
+    println!(
+        "     • Net Code Growth: {}{}",
+        if metrics.file_changes.net_code_growth >= 0 {
+            "+"
+        } else {
+            ""
+        },
+        metrics.file_changes.net_code_growth
+    );
+    println!();
+
+    // Time Metrics
+    println!("  ⏰ Time Consumption:");
+    println!(
+        "     • Total Session Time: {:.1} minutes",
+        metrics.time_metrics.total_session_time_minutes
+    );
+    if !metrics.time_metrics.peak_hours.is_empty() {
+        let peak_hours: Vec<String> = metrics
+            .time_metrics
+            .peak_hours
+            .iter()
+            .map(|h| format!("{:02}:00", h))
+            .collect();
+        println!("     • Peak Hours: {}", peak_hours.join(", "));
+    }
+    println!();
+
+    // Token Metrics
+    println!("  🔢 Token Consumption:");
+    println!(
+        "     • Total Tokens: {}",
+        metrics.token_metrics.total_tokens_used
+    );
+    println!(
+        "     • Input Tokens: {}",
+        metrics.token_metrics.input_tokens
+    );
+    println!(
+        "     • Output Tokens: {}",
+        metrics.token_metrics.output_tokens
+    );
+    println!(
+        "     • Token Efficiency: {:.2}%",
+        metrics.token_metrics.token_efficiency * 100.0
+    );
+    println!();
+
+    // Tool Usage
+    println!("  🔧 Tool Usage:");
+    println!(
+        "     • Total Operations: {}",
+        metrics.tool_usage.total_operations
+    );
+    println!(
+        "     • Successful: {}",
+        metrics.tool_usage.successful_operations
+    );
+    println!("     • Failed: {}", metrics.tool_usage.failed_operations);
+    if metrics.tool_usage.total_operations > 0 {
+        let success_rate = (metrics.tool_usage.successful_operations as f64
+            / metrics.tool_usage.total_operations as f64)
+            * 100.0;
+        println!("     • Success Rate: {:.1}%", success_rate);
+    }
+    println!(
+        "     • Avg Execution Time: {:.1}ms",
+        metrics.tool_usage.average_execution_time_ms
+    );
+    if !metrics.tool_usage.tool_distribution.is_empty() {
+        println!("     • Tool Distribution:");
+        let mut tools: Vec<_> = metrics.tool_usage.tool_distribution.iter().collect();
+        tools.sort_by(|a, b| b.1.cmp(a.1));
+        for (tool, count) in tools.iter().take(10) {
+            println!("       - {}: {}", tool, count);
+        }
+        if tools.len() > 10 {
+            println!("       ... and {} more tools", tools.len() - 10);
+        }
+    }
+    println!();
+}
+
+fn print_ai_quantitative(ai_quant: &crate::services::analytics::AIQuantitativeOutput) {
+    println!("┌──────────────────────────────────────────────────────────────────────────────┐");
+    println!("│  🎯 AI Quantitative Analysis (Rubric Scores)                                 │");
+    println!("└──────────────────────────────────────────────────────────────────────────────┘");
+    println!();
+
+    if ai_quant.rubric_scores.is_empty() {
+        println!("  No rubric scores available.");
+        println!();
+        return;
+    }
+
+    // Summary
+    if let Some(summary) = &ai_quant.rubric_summary {
+        println!(
+            "  📊 Overall Score: {:.1}/{:.1} ({:.1}%)",
+            summary.total_score, summary.max_score, summary.percentage
+        );
+        println!(
+            "     Rubrics Evaluated: {} (version: {})",
+            summary.rubrics_evaluated, summary.rubrics_version
+        );
+        println!();
+    }
+
+    // Individual Rubric Scores
+    println!("  📝 Rubric Scores:");
+    for score in &ai_quant.rubric_scores {
+        let bar = generate_score_bar(score.score, score.max_score);
+        println!(
+            "     [{bar}] {:.1}/{:.1}  {}",
+            score.score, score.max_score, score.rubric_name
+        );
+        // Print reasoning with indentation
+        if !score.reasoning.is_empty() {
+            let reasoning_lines: Vec<&str> = score.reasoning.lines().collect();
+            for line in reasoning_lines.iter().take(3) {
+                println!("        💬 {}", line.trim());
+            }
+            if reasoning_lines.len() > 3 {
+                println!("        ... ({} more lines)", reasoning_lines.len() - 3);
+            }
+        }
+        println!();
+    }
+}
+
+fn print_ai_qualitative(ai_qual: &crate::services::analytics::AIQualitativeOutput) {
+    use crate::services::analytics::QualitativeEntryList;
+
+    println!("┌──────────────────────────────────────────────────────────────────────────────┐");
+    println!("│  💡 AI Qualitative Analysis                                                  │");
+    println!("└──────────────────────────────────────────────────────────────────────────────┘");
+    println!();
+
+    // Summary
+    if let Some(summary) = &ai_qual.summary {
+        println!(
+            "  📋 Summary: {} entries across {} categories (version: {})",
+            summary.total_entries, summary.categories_evaluated, summary.entries_version
+        );
+        println!();
+    }
+
+    if ai_qual.entries.is_empty() {
+        println!("  No qualitative analysis available.");
+        println!();
+        return;
+    }
+
+    // Load entry configuration for titles and ordering
+    let entry_list = QualitativeEntryList::default_entries();
+
+    // Build a map of key -> title from configuration
+    let entry_titles: std::collections::HashMap<&str, &str> = entry_list
+        .entries
+        .iter()
+        .map(|e| (e.key.as_str(), e.title.as_str()))
+        .collect();
+
+    // Track which keys we've printed (to maintain config order first)
+    let mut printed_keys: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
+    // Print entries in configuration order first
+    for entry_def in &entry_list.entries {
+        if let Some(entries) = ai_qual.entries.get(&entry_def.key) {
+            if !entries.is_empty() {
+                println!("  • {}:", entry_def.title);
+                for entry in entries {
+                    println!("    - {}", entry);
+                }
+                println!();
+                printed_keys.insert(&entry_def.key);
+            }
+        }
+    }
+
+    // Print any remaining entries not in configuration (sorted alphabetically)
+    let mut remaining_keys: Vec<&String> = ai_qual
+        .entries
+        .keys()
+        .filter(|k| !printed_keys.contains(k.as_str()))
+        .collect();
+    remaining_keys.sort();
+
+    for key in remaining_keys {
+        if let Some(entries) = ai_qual.entries.get(key) {
+            if !entries.is_empty() {
+                // Use configured title if available, otherwise convert key to title case
+                let title = entry_titles
+                    .get(key.as_str())
+                    .map_or_else(|| key_to_title(key), |t| t.to_string());
+                println!("  • {}:", title);
+                for entry in entries {
+                    println!("    - {}", entry);
+                }
+                println!();
+            }
+        }
+    }
+}
+
+/// Convert snake_case key to Title Case
+fn key_to_title(key: &str) -> String {
+    key.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().chain(chars).collect(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn generate_score_bar(score: f64, max_score: f64) -> String {
+    let percentage = if max_score > 0.0 {
+        score / max_score
+    } else {
+        0.0
+    };
+    let filled = (percentage * 10.0).round() as usize;
+    let empty = 10 - filled;
+    format!("{}{}", "█".repeat(filled), "░".repeat(empty))
 }
