@@ -56,6 +56,7 @@ export interface AnalyticsRequest {
   status: OperationStatus
   started_at: string
   completed_at: string | null
+  created_by: string | null
   error_message: string | null
 }
 

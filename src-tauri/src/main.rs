@@ -90,6 +90,7 @@ pub struct AnalyticsRequestItem {
     pub status: String,
     pub started_at: String,
     pub completed_at: Option<String>,
+    pub created_by: Option<String>,
     pub error_message: Option<String>,
 }
 
@@ -315,6 +316,7 @@ async fn analyze_session(
         status: completed_request.status.to_string(),
         started_at: completed_request.started_at.to_rfc3339(),
         completed_at: completed_request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: completed_request.created_by,
         error_message: completed_request.error_message,
     })
 }
@@ -343,6 +345,7 @@ async fn create_analysis(
         status: request.status.to_string(),
         started_at: request.started_at.to_rfc3339(),
         completed_at: request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: request.created_by,
         error_message: request.error_message,
     })
 }
@@ -388,6 +391,7 @@ async fn get_analysis_status(
         status: request.status.to_string(),
         started_at: request.started_at.to_rfc3339(),
         completed_at: request.completed_at.map(|dt| dt.to_rfc3339()),
+        created_by: request.created_by,
         error_message: request.error_message,
     })
 }
@@ -439,6 +443,7 @@ async fn list_analyses(
             status: r.status.to_string(),
             started_at: r.started_at.to_rfc3339(),
             completed_at: r.completed_at.map(|dt| dt.to_rfc3339()),
+            created_by: r.created_by,
             error_message: r.error_message,
         })
         .collect())
