@@ -98,12 +98,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_claude_code_file() {
-        let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        // Use UUID format filename as required by accepts_filename
+        let file_path = temp_dir
+            .path()
+            .join("550e8400-e29b-41d4-a716-446655440000.jsonl");
         let sample_data = r#"{"uuid":"550e8400-e29b-41d4-a716-446655440000","name":"Test Session","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T11:00:00Z","chat_messages":[{"uuid":"550e8400-e29b-41d4-a716-446655440001","content":"Hello","created_at":"2024-01-01T10:00:00Z","updated_at":"2024-01-01T10:00:00Z","role":"human"},{"uuid":"550e8400-e29b-41d4-a716-446655440002","content":"Hi there!","created_at":"2024-01-01T10:01:00Z","updated_at":"2024-01-01T10:01:00Z","role":"assistant"}]}"#;
-        temp_file.write_all(sample_data.as_bytes()).unwrap();
+        fs::write(&file_path, sample_data).unwrap();
 
         let service = ParserService::new();
-        let result = service.parse_file(temp_file.path()).await;
+        let result = service.parse_file(&file_path).await;
 
         assert!(result.is_ok());
         let sessions = result.unwrap();

@@ -36,7 +36,7 @@ async fn test_analytics_show_command_structure() {
 #[tokio::test]
 async fn test_analytics_show_all_formats() {
     // Test all output formats
-    for format in ["text", "json", "markdown"] {
+    for _format in ["text", "json", "markdown"] {
         let result = handle_show_command(
             None, // session_id (None when using --all)
             true, // all

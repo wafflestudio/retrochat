@@ -227,18 +227,14 @@ mod tests {
     fn test_detect_provider_by_extension() {
         let temp_dir = TempDir::new().unwrap();
 
-        let jsonl_file = temp_dir.path().join("test.jsonl");
-        fs::write(&jsonl_file, r#"{"uuid":"test","chat_messages":[]}"#).unwrap();
-
-        let json_file = temp_dir.path().join("test.json");
-        fs::write(&json_file, r#"{"conversations":[]}"#).unwrap();
-
-        // Note: These will return None because the files don't have valid content
-        // But we can test the filename patterns
-        let claude_file = temp_dir.path().join("claude_session.jsonl");
+        // Use UUID format filename for Claude Code (required by accepts_filename)
+        let claude_file = temp_dir
+            .path()
+            .join("550e8400-e29b-41d4-a716-446655440000.jsonl");
         fs::write(&claude_file, r#"{"uuid":"test","chat_messages":[]}"#).unwrap();
 
-        let gemini_file = temp_dir.path().join("gemini_export.json");
+        // Use "session-" prefix for Gemini CLI (required by accepts_filename)
+        let gemini_file = temp_dir.path().join("session-test.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
         assert_eq!(
@@ -255,11 +251,15 @@ mod tests {
     fn test_scan_directory() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create test files
-        let claude_file = temp_dir.path().join("claude.jsonl");
+        // Create test files with proper naming conventions
+        // UUID format for Claude Code
+        let claude_file = temp_dir
+            .path()
+            .join("550e8400-e29b-41d4-a716-446655440000.jsonl");
         fs::write(&claude_file, r#"{"uuid":"test","chat_messages":[]}"#).unwrap();
 
-        let gemini_file = temp_dir.path().join("gemini.json");
+        // "session-" prefix for Gemini CLI
+        let gemini_file = temp_dir.path().join("session-test.json");
         fs::write(&gemini_file, r#"{"conversations":[]}"#).unwrap();
 
         let unknown_file = temp_dir.path().join("unknown.txt");

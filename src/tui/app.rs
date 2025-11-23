@@ -509,7 +509,9 @@ impl App {
             AppMode::SessionList => {
                 "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit"
             }
-            AppMode::SessionDetail => "↑/↓: Scroll | a: Toggle Analytics | Esc: Back | ?: Help | q: Quit",
+            AppMode::SessionDetail => {
+                "↑/↓: Scroll | a: Toggle Analytics | Esc: Back | ?: Help | q: Quit"
+            }
             AppMode::Help => "Any key: Close Help",
         }
         .to_string();

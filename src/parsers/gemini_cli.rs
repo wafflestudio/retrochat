@@ -996,11 +996,16 @@ mod tests {
 
     #[test]
     fn test_is_valid_file() {
-        let mut temp_file = NamedTempFile::with_suffix(".json").unwrap();
-        let sample_data = r#"{"conversations":[]}"#;
-        temp_file.write_all(sample_data.as_bytes()).unwrap();
+        use std::fs;
+        use tempfile::TempDir;
 
-        assert!(GeminiCLIParser::is_valid_file(temp_file.path()));
+        let temp_dir = TempDir::new().unwrap();
+        // Use "session-" prefix as required by accepts_filename
+        let file_path = temp_dir.path().join("session-test.json");
+        let sample_data = r#"{"conversations":[]}"#;
+        fs::write(&file_path, sample_data).unwrap();
+
+        assert!(GeminiCLIParser::is_valid_file(&file_path));
     }
 
     #[test]

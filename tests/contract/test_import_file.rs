@@ -14,7 +14,10 @@ pub struct ErrorResponse {
 #[tokio::test]
 async fn test_import_claude_code_file_success() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let file_path = temp_dir.path().join("claude_session.jsonl");
+    // Use UUID format filename as required by accepts_filename
+    let file_path = temp_dir
+        .path()
+        .join("550e8400-e29b-41d4-a716-446655440000.jsonl");
 
     let claude_content = r#"{"type":"conversation","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T00:00:00Z","message":{"role":"user","content":"Hello"}}
 {"type":"conversation","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T00:01:00Z","message":{"role":"assistant","content":"Hi there!"}}
@@ -49,7 +52,8 @@ async fn test_import_claude_code_file_success() {
 #[tokio::test]
 async fn test_import_gemini_file_success() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let file_path = temp_dir.path().join("gemini_conversations.json");
+    // Use "session-" prefix as required by accepts_filename
+    let file_path = temp_dir.path().join("session-test.json");
 
     let gemini_content = r#"{
         "sessionId": "550e8400-e29b-41d4-a716-446655440000",
@@ -142,7 +146,10 @@ async fn test_import_file_invalid_format() {
 #[tokio::test]
 async fn test_import_file_duplicate_detection() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let file_path = temp_dir.path().join("duplicate.jsonl");
+    // Use UUID format filename as required by accepts_filename
+    let file_path = temp_dir
+        .path()
+        .join("550e8400-e29b-41d4-a716-446655440001.jsonl");
 
     let content = r#"{"type":"conversation","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T00:00:00Z","message":{"role":"user","content":"Test"}}"#;
     fs::write(&file_path, content).expect("Failed to write test file");
@@ -178,7 +185,10 @@ async fn test_import_file_duplicate_detection() {
 #[tokio::test]
 async fn test_import_file_overwrite_existing() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let file_path = temp_dir.path().join("overwrite_existing.jsonl");
+    // Use UUID format filename as required by accepts_filename
+    let file_path = temp_dir
+        .path()
+        .join("550e8400-e29b-41d4-a716-446655440002.jsonl");
 
     let content = r#"{"type":"conversation","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T00:00:00Z","message":{"role":"user","content":"Test"}}"#;
     fs::write(&file_path, content).expect("Failed to write test file");
@@ -238,7 +248,10 @@ async fn test_import_file_invalid_provider() {
 #[tokio::test]
 async fn test_import_response_schema_validation() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let file_path = temp_dir.path().join("schema_test.jsonl");
+    // Use UUID format filename as required by accepts_filename
+    let file_path = temp_dir
+        .path()
+        .join("550e8400-e29b-41d4-a716-446655440003.jsonl");
 
     let content = r#"{"type":"conversation","sessionId":"550e8400-e29b-41d4-a716-446655440000","timestamp":"2024-01-01T00:00:00Z","message":{"role":"user","content":"Schema test"}}"#;
     fs::write(&file_path, content).expect("Failed to write test file");

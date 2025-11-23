@@ -700,11 +700,18 @@ mod tests {
 
     #[test]
     fn test_is_valid_file() {
-        let mut temp_file = NamedTempFile::with_suffix(".jsonl").unwrap();
-        let sample_data = r#"{"uuid":"test","chat_messages":[]}"#;
-        temp_file.write_all(sample_data.as_bytes()).unwrap();
+        use std::fs;
+        use tempfile::TempDir;
 
-        assert!(ClaudeCodeParser::is_valid_file(temp_file.path()));
+        let temp_dir = TempDir::new().unwrap();
+        // Use UUID format filename as required by accepts_filename
+        let file_path = temp_dir
+            .path()
+            .join("550e8400-e29b-41d4-a716-446655440000.jsonl");
+        let sample_data = r#"{"uuid":"test","chat_messages":[]}"#;
+        fs::write(&file_path, sample_data).unwrap();
+
+        assert!(ClaudeCodeParser::is_valid_file(&file_path));
     }
 
     #[test]

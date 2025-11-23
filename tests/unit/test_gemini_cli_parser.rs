@@ -7,11 +7,13 @@ use tempfile::{NamedTempFile, TempDir};
 
 #[tokio::test]
 async fn test_gemini_parser_is_valid_file() {
-    let mut temp_file = NamedTempFile::with_suffix(".json").unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    // Use "session-" prefix as required by accepts_filename
+    let file_path = temp_dir.path().join("session-test.json");
     let sample_data = r#"{"conversations":[]}"#;
-    temp_file.write_all(sample_data.as_bytes()).unwrap();
+    fs::write(&file_path, sample_data).unwrap();
 
-    assert!(GeminiCLIParser::is_valid_file(temp_file.path()));
+    assert!(GeminiCLIParser::is_valid_file(&file_path));
 }
 
 #[tokio::test]
