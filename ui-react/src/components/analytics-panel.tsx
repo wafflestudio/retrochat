@@ -12,6 +12,7 @@ import {
   Target,
   Zap,
 } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { useCallback, useEffect, useState } from 'react'
 import {
   PolarAngleAxis,
@@ -35,9 +36,22 @@ interface AnalyticsPanelProps {
 }
 
 export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
+  const { theme } = useTheme()
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isDark = theme === 'dark'
+
+  // Theme-aware colors
+  const chartColors = {
+    grid: isDark ? '#6366f1' : '#9ca3af',
+    axisText: isDark ? '#e2e8f0' : '#374151',
+    axisMuted: isDark ? '#cbd5e1' : '#6b7280',
+    radarStroke: isDark ? '#8b5cf6' : '#6366f1',
+    radarFill: isDark ? '#8b5cf6' : '#6366f1',
+    dotStroke: isDark ? '#ffffff' : '#ffffff',
+  }
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true)
@@ -131,33 +145,33 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           <CardContent>
             <ResponsiveContainer width="100%" height={400}>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="#6366f1" strokeWidth={1.5} opacity={0.3} />
+                <PolarGrid stroke={chartColors.grid} strokeWidth={1.5} opacity={0.3} />
                 <PolarAngleAxis
                   dataKey="metric"
-                  tick={{ fill: '#e2e8f0', fontSize: 14, fontWeight: 500 }}
-                  stroke="#6366f1"
+                  tick={{ fill: chartColors.axisText, fontSize: 14, fontWeight: 500 }}
+                  stroke={chartColors.grid}
                   strokeWidth={1}
                 />
                 <PolarRadiusAxis
                   angle={90}
                   domain={[0, 100]}
-                  tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                  stroke="#6366f1"
+                  tick={{ fill: chartColors.axisMuted, fontSize: 12 }}
+                  stroke={chartColors.grid}
                   strokeWidth={1}
                   opacity={0.5}
                 />
                 <Radar
                   name="Score"
                   dataKey="score"
-                  stroke="#8b5cf6"
+                  stroke={chartColors.radarStroke}
                   strokeWidth={3}
-                  fill="#8b5cf6"
+                  fill={chartColors.radarFill}
                   fillOpacity={0.25}
                   dot={{
-                    fill: '#8b5cf6',
+                    fill: chartColors.radarFill,
                     r: 5,
                     strokeWidth: 2,
-                    stroke: '#ffffff',
+                    stroke: chartColors.dotStroke,
                   }}
                 />
                 <Tooltip
@@ -419,7 +433,9 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                     {entryOutput.items.map((item, idx) => (
                       <Card key={`${entryOutput.key}-item-${idx}`}>
                         <CardContent className="pt-4">
-                          <div className="prose prose-sm prose-invert max-w-none">
+                          <div
+                            className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}
+                          >
                             <p className="text-sm leading-relaxed">{item}</p>
                           </div>
                         </CardContent>

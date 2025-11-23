@@ -8,9 +8,14 @@ import {
 import { format } from 'date-fns'
 import { Bot, Brain, FileCode, MessageSquare, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getSessionDetail } from '@/lib/api'
 import type { SessionWithMessages, ToolOperation } from '@/types'
 import { AnalyticsPanel } from './analytics-panel'
@@ -41,6 +46,9 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
     loadSessionDetail()
   }, [loadSessionDetail])
 
+  // Keyboard shortcut: Cmd+I to toggle analytics
+  useHotkeys('meta+i', () => setShowAnalytics(!showAnalytics), { preventDefault: true })
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -58,52 +66,71 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border bg-card p-4 flex-shrink-0">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">
-              {session.project_name || 'Untitled Session'}
-            </h2>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Badge variant="secondary">{session.provider}</Badge>
-              </span>
-              <span className="flex items-center gap-1">
-                <MessageSquare className="w-4 h-4" />
-                {session.message_count} messages
-              </span>
-              <span className="flex items-center gap-1">
-                <CalendarIcon className="w-4 h-4" />
-                {format(new Date(session.created_at), 'MMM d, yyyy HH:mm')}
-              </span>
+    <TooltipProvider>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="border-b border-border bg-card p-4 flex-shrink-0">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                {session.project_name || 'Untitled Session'}
+              </h2>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Badge variant="secondary">{session.provider}</Badge>
+                </span>
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="w-4 h-4" />
+                  {session.message_count} messages
+                </span>
+                <span className="flex items-center gap-1">
+                  <CalendarIcon className="w-4 h-4" />
+                  {format(new Date(session.created_at), 'MMM d, yyyy HH:mm')}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAnalytics(!showAnalytics)}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Analytics
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex items-center gap-1">
+                    <span>Toggle Analytics</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>I</Kbd>
+                    </KbdGroup>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <Cross2Icon className="w-4 h-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowAnalytics(!showAnalytics)}>
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Analytics
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <Cross2Icon className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
-      </div>
 
-      {showAnalytics ? (
-        <AnalyticsPanel sessionId={sessionId} />
-      ) : (
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="p-6 space-y-4 max-w-4xl mx-auto">
-            {session.messages.map((message) => (
-              <MessageRenderer key={message.id} message={message} />
-            ))}
+        {showAnalytics ? (
+          <AnalyticsPanel sessionId={sessionId} />
+        ) : (
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="p-6 space-y-4 max-w-4xl mx-auto">
+              {session.messages.map((message) => (
+                <MessageRenderer key={message.id} message={message} />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </TooltipProvider>
   )
 }
 
@@ -265,7 +292,7 @@ function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
             message.role === 'User'
               ? 'bg-primary text-primary-foreground'
-              : 'bg-secondary text-secondary-foreground'
+              : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
           }`}
         >
           {message.role === 'User' ? (
@@ -276,13 +303,13 @@ function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0
         </div>
         <div className={`flex flex-col ${message.role === 'User' ? 'items-end' : 'items-start'}`}>
           <div
-            className={`rounded-lg p-4 ${
+            className={`rounded-lg p-4 prose prose-sm max-w-none dark:prose-invert ${
               message.role === 'User'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-card-foreground'
-            }`}
+                ? 'bg-primary text-primary-foreground prose-p:text-primary-foreground prose-headings:text-primary-foreground prose-strong:text-primary-foreground prose-code:text-primary-foreground prose-a:text-primary-foreground prose-a:underline'
+                : 'bg-gray-100 border border-gray-200 text-gray-900 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 prose-p:text-gray-900 dark:prose-p:text-gray-100 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100 prose-pre:bg-gray-200 dark:prose-pre:bg-gray-900 prose-a:text-blue-600 dark:prose-a:text-blue-400'
+            } prose-p:leading-relaxed`}
           >
-            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
           <span className="text-xs text-muted-foreground mt-1">
             {format(new Date(message.timestamp), 'HH:mm:ss')}
