@@ -7,6 +7,7 @@ use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
 use crate::services::google_ai::GoogleAiClient;
 use anyhow::Result;
+use futures::future::join_all;
 use regex::Regex;
 
 // =============================================================================
@@ -24,11 +25,26 @@ pub async fn generate_qualitative_analysis_ai(
         None => QualitativeEntryList::default_entries(),
     };
 
-    // Process each entry type with a separate LLM request for better quality
-    let mut all_entries: Vec<QualitativeEntryOutput> = Vec::new();
+    // Process all entry types in parallel for better performance
+    let futures: Vec<_> = entry_list
+        .entries
+        .iter()
+        .map(|entry| {
+            let entry = entry.clone();
+            let qualitative_input = qualitative_input.clone();
+            async move {
+                let result = generate_single_entry(&qualitative_input, &entry, ai_client).await;
+                (entry, result)
+            }
+        })
+        .collect();
 
-    for entry in &entry_list.entries {
-        match generate_single_entry(qualitative_input, entry, ai_client).await {
+    let results = join_all(futures).await;
+
+    // Collect results into Vec<QualitativeEntryOutput>
+    let mut all_entries: Vec<QualitativeEntryOutput> = Vec::new();
+    for (entry, result) in results {
+        match result {
             Ok(entry_output) => {
                 all_entries.push(entry_output);
             }
@@ -439,12 +455,28 @@ async fn score_all_rubrics(
     };
 
     // Format messages once for all rubrics
-    let formatted_session = &qualitative_input.raw_session;
+    let formatted_session = qualitative_input.raw_session.clone();
 
-    // Score against each rubric
+    // Score all rubrics in parallel for better performance
+    let futures: Vec<_> = rubric_list
+        .rubrics
+        .iter()
+        .map(|rubric| {
+            let rubric = rubric.clone();
+            let session = formatted_session.clone();
+            async move {
+                let result = score_rubric(&rubric, &session, ai_client).await;
+                (rubric, result)
+            }
+        })
+        .collect();
+
+    let results = join_all(futures).await;
+
+    // Collect results into Vec
     let mut scores = Vec::new();
-    for rubric in &rubric_list.rubrics {
-        match score_rubric(rubric, formatted_session, ai_client).await {
+    for (rubric, result) in results {
+        match result {
             Ok(score) => scores.push(score),
             Err(e) => {
                 tracing::error!("Failed to score rubric {}: {}", rubric.id, e);

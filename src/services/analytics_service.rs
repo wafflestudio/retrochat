@@ -72,11 +72,12 @@ impl AnalyticsService {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
 
-        let ai_qualitative_output =
-            generate_qualitative_analysis_ai(&qualitative_input, ai_client, None).await?;
-
-        let ai_quantitative_output =
-            generate_quantitative_analysis_ai(&qualitative_input, ai_client, None).await?;
+        // Run qualitative and quantitative analysis in parallel
+        // try_join! cancels remaining futures immediately if one fails
+        let (ai_qualitative_output, ai_quantitative_output) = tokio::try_join!(
+            generate_qualitative_analysis_ai(&qualitative_input, ai_client, None),
+            generate_quantitative_analysis_ai(&qualitative_input, ai_client, None)
+        )?;
 
         // Create Analytics directly
         Ok(Analytics::new(
