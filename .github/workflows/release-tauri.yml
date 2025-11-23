@@ -67,7 +67,7 @@ jobs:
                   workspaces: "./src-tauri -> target"
 
             - name: Install frontend dependencies
-              run: pnpm install
+              run: cd ui-react && pnpm install
 
             - name: Setup optimized build config (if enabled)
               if: github.event.inputs.optimized == 'true' || startsWith(github.ref, 'refs/tags/')
