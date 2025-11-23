@@ -74,7 +74,7 @@ impl AnalyticsRequestService {
                                 "Session unchanged since last analysis - using cached results"
                             );
                             return Err(format!(
-                                "Session {session_id} has not been modified since last analysis (completed at {completed_at}). Use 'retrochat analytics show {session_id}' to view cached results, or provide --custom-prompt to force new analysis."
+                                "Session {session_id} has not been modified since last analysis (completed at {completed_at}). Use 'retrochat analytics show {session_id}' to view cached results."
                             ).into());
                         }
                     }

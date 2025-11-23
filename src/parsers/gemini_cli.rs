@@ -851,6 +851,21 @@ impl GeminiCLIParser {
         Uuid::from_bytes(bytes)
     }
 
+    /// Check if the filename matches Gemini's expected format (session-*.json pattern)
+    pub fn accepts_filename(file_path: impl AsRef<Path>) -> bool {
+        let path = file_path.as_ref();
+        
+        // Get the file stem (filename without extension)
+        if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+            // Gemini only accepts files starting with "session-"
+            if file_stem.starts_with("session-") {
+                return true;
+            }
+        }
+        
+        false
+    }
+
     pub fn is_valid_file(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
 
@@ -865,6 +880,11 @@ impl GeminiCLIParser {
 
         // Check if file exists and is readable
         if !path.exists() || !path.is_file() {
+            return false;
+        }
+
+        // Check filename filter first - Gemini only accepts files starting with "session-"
+        if !Self::accepts_filename(path) {
             return false;
         }
 

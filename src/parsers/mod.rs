@@ -61,6 +61,7 @@ impl ParserRegistry {
         let path = file_path.as_ref();
 
         // First check by file extension and content
+        // is_valid_file() already includes filename filtering via accepts_filename()
         if ClaudeCodeParser::is_valid_file(path) {
             return Some(Provider::ClaudeCode);
         }
@@ -73,20 +74,25 @@ impl ParserRegistry {
             return Some(Provider::GeminiCLI);
         }
 
-        // Fallback to file name patterns
+        // Fallback to file name patterns (with filename filtering)
+        // Note: For fallback, we need to check accepts_filename() separately
+        // since is_valid_file() may fail on content checks
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_lowercase();
 
-        if file_name.contains("claude") || file_name.contains("anthropic") {
+        if (file_name.contains("claude") || file_name.contains("anthropic"))
+            && ClaudeCodeParser::accepts_filename(path)
+        {
             return Some(Provider::ClaudeCode);
         }
 
-        if file_name.contains("gemini")
+        if (file_name.contains("gemini")
             || file_name.contains("bard")
-            || file_name.contains("google")
+            || file_name.contains("google"))
+            && GeminiCLIParser::accepts_filename(path)
         {
             return Some(Provider::GeminiCLI);
         }
@@ -95,19 +101,28 @@ impl ParserRegistry {
             || file_name.contains("github")
             || file_name.contains("copilot")
         {
+            // Codex doesn't enforce filename filtering in fallback
             return Some(Provider::Other("codex".to_string()));
         }
 
-        // Check by file extension as last resort
+        // Check by file extension as last resort (with filename filtering)
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             match extension.to_lowercase().as_str() {
-                "jsonl" => Some(Provider::ClaudeCode), // Default JSONL to Claude
-                "json" => Some(Provider::GeminiCLI),   // Default JSON to Gemini
-                _ => None,
+                "jsonl" => {
+                    if ClaudeCodeParser::accepts_filename(path) {
+                        return Some(Provider::ClaudeCode);
+                    }
+                }
+                "json" => {
+                    if GeminiCLIParser::accepts_filename(path) {
+                        return Some(Provider::GeminiCLI);
+                    }
+                }
+                _ => {}
             }
-        } else {
-            None
         }
+
+        None
     }
 
     pub fn create_parser(file_path: impl AsRef<Path>) -> Result<ChatParser> {

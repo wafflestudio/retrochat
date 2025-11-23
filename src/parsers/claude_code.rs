@@ -581,6 +581,23 @@ impl ClaudeCodeParser {
         Ok(format!("{:x}", hasher.finish()))
     }
 
+    /// Check if the filename matches Claude Code's expected format (UUID-based filename)
+    pub fn accepts_filename(file_path: impl AsRef<Path>) -> bool {
+        let path = file_path.as_ref();
+        
+        // Get the file stem (filename without extension)
+        if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+            // Check if the filename is a valid UUID format
+            // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            // Pattern: 8-4-4-4-12 hex digits separated by hyphens
+            if let Ok(_) = Uuid::parse_str(file_stem) {
+                return true;
+            }
+        }
+        
+        false
+    }
+
     pub fn is_valid_file(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
 
@@ -595,6 +612,11 @@ impl ClaudeCodeParser {
 
         // Check if file exists and is readable
         if !path.exists() || !path.is_file() {
+            return false;
+        }
+
+        // Check filename filter first - Claude Code only accepts UUID-based filenames
+        if !Self::accepts_filename(path) {
             return false;
         }
 

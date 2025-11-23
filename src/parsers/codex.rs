@@ -460,6 +460,14 @@ impl CodexParser {
         })
     }
 
+    /// Check if the filename should be accepted by Codex parser
+    /// Codex doesn't have strict filename requirements, so this always returns true
+    pub fn accepts_filename(_file_path: impl AsRef<Path>) -> bool {
+        // Codex doesn't have specific filename format requirements
+        // Accept all files that pass the content validation
+        true
+    }
+
     pub fn is_valid_file(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
 
@@ -476,6 +484,12 @@ impl CodexParser {
         if !path.exists() || !path.is_file() {
             return false;
         }
+
+        // Note: Codex doesn't enforce filename filtering, so we skip accepts_filename check
+        // If you want to add filename filtering for Codex in the future, uncomment this:
+        // if !Self::accepts_filename(path) {
+        //     return false;
+        // }
 
         // Try to read the first line and see if it looks like Codex format
         if let Ok(file) = File::open(path) {
