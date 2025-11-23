@@ -77,6 +77,29 @@ pub struct SearchResultItem {
 }
 
 // =============================================================================
+// Import DTOs
+// =============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportFileResult {
+    pub file_path: String,
+    pub sessions_imported: i32,
+    pub messages_imported: i32,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportSessionsResponse {
+    pub total_files: i32,
+    pub successful_imports: i32,
+    pub failed_imports: i32,
+    pub total_sessions_imported: i32,
+    pub total_messages_imported: i32,
+    pub results: Vec<ImportFileResult>,
+}
+
+// =============================================================================
 // Analytics Request DTOs
 // =============================================================================
 

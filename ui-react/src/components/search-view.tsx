@@ -56,13 +56,13 @@ export function SearchView({ searchQuery, onSearchQueryChange, onSessionSelect }
       <ScrollArea className="flex-1">
         <div className="p-2">
           {searchQuery.trim().length < 3 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center py-8 text-muted-foreground">
               Enter at least 3 characters to search
             </div>
           ) : loading ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">Searching...</div>
+            <div className="text-center py-8 text-muted-foreground">Searching...</div>
           ) : results.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">No results found</div>
+            <div className="text-center py-8 text-muted-foreground">No results found</div>
           ) : (
             <div className="space-y-2">
               {results.map((result, index) => (

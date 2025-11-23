@@ -2,9 +2,11 @@
 
 import { ChevronLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons'
 import { formatDistanceToNow } from 'date-fns'
-import { Filter } from 'lucide-react'
+import { Filter, Upload } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Select,
   SelectContent,
@@ -20,6 +22,8 @@ interface SessionListProps {
   onProviderChange: (provider: string | null) => void
   selectedSession: string | null
   onSessionSelect: (sessionId: string) => void
+  onImport?: () => void
+  refreshTrigger?: number
 }
 
 export function SessionList({
@@ -27,6 +31,8 @@ export function SessionList({
   onProviderChange,
   selectedSession,
   onSessionSelect,
+  onImport,
+  refreshTrigger,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [providers, setProviders] = useState<string[]>([])
@@ -53,7 +59,7 @@ export function SessionList({
     } finally {
       setLoading(false)
     }
-  }, [page, provider])
+  }, [page, provider, refreshTrigger])
 
   useEffect(() => {
     loadProviders()
@@ -95,7 +101,28 @@ export function SessionList({
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading sessions...</div>
           ) : sessions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No sessions found</div>
+            <div className="text-center py-8">
+              <div className="text-muted-foreground mb-4">No sessions found</div>
+              {onImport && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={onImport} className="gap-2">
+                      <Upload className="w-4 h-4" />
+                      Import Sessions
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center gap-2">
+                      <p>Import chat sessions from JSON or JSONL files</p>
+                      <KbdGroup>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>O</Kbd>
+                      </KbdGroup>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           ) : (
             <div className="space-y-2">
               {sessions.map((session) => (
