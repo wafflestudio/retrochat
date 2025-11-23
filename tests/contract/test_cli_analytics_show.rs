@@ -38,8 +38,8 @@ async fn test_analytics_show_all_formats() {
     // Test all output formats
     for format in ["text", "json", "markdown"] {
         let result = handle_show_command(
-            None,               // session_id (None when using --all)
-            true,               // all
+            None, // session_id (None when using --all)
+            true, // all
         )
         .await;
 
@@ -70,8 +70,8 @@ async fn test_analytics_show_all_formats() {
 async fn test_analytics_show_filtering() {
     // Test filtering by analysis type
     let result = handle_show_command(
-        None,               // session_id
-        true,               // all
+        None, // session_id
+        true, // all
     )
     .await;
 
