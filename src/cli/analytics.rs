@@ -678,6 +678,8 @@ fn print_ai_quantitative(ai_quant: &crate::services::analytics::AIQuantitativeOu
 }
 
 fn print_ai_qualitative(ai_qual: &crate::services::analytics::AIQualitativeOutput) {
+    use crate::services::analytics::QualitativeEntryList;
+
     println!("┌──────────────────────────────────────────────────────────────────────────────┐");
     println!("│  💡 AI Qualitative Analysis                                                  │");
     println!("└──────────────────────────────────────────────────────────────────────────────┘");
@@ -692,57 +694,76 @@ fn print_ai_qualitative(ai_qual: &crate::services::analytics::AIQualitativeOutpu
         println!();
     }
 
-    // Define display order and icons for known categories
-    let category_config = [
-        ("insights", "🔍", "Insights"),
-        ("good_patterns", "✅", "Good Patterns"),
-        ("improvement_areas", "📈", "Improvement Areas"),
-        ("recommendations", "💡", "Recommendations"),
-        ("learning_observations", "📚", "Learning Observations"),
-    ];
+    if ai_qual.entries.is_empty() {
+        println!("  No qualitative analysis available.");
+        println!();
+        return;
+    }
 
-    // Print known categories in order
-    for (key, icon, title) in &category_config {
-        if let Some(entries) = ai_qual.entries.get(*key) {
+    // Load entry configuration for titles and ordering
+    let entry_list = QualitativeEntryList::default_entries();
+
+    // Build a map of key -> title from configuration
+    let entry_titles: std::collections::HashMap<&str, &str> = entry_list
+        .entries
+        .iter()
+        .map(|e| (e.key.as_str(), e.title.as_str()))
+        .collect();
+
+    // Track which keys we've printed (to maintain config order first)
+    let mut printed_keys: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
+    // Print entries in configuration order first
+    for entry_def in &entry_list.entries {
+        if let Some(entries) = ai_qual.entries.get(&entry_def.key) {
             if !entries.is_empty() {
-                println!("  {} {}:", icon, title);
+                println!("  • {}:", entry_def.title);
                 for entry in entries {
-                    println!("     • {}", entry);
+                    println!("    - {}", entry);
+                }
+                println!();
+                printed_keys.insert(&entry_def.key);
+            }
+        }
+    }
+
+    // Print any remaining entries not in configuration (sorted alphabetically)
+    let mut remaining_keys: Vec<&String> = ai_qual
+        .entries
+        .keys()
+        .filter(|k| !printed_keys.contains(k.as_str()))
+        .collect();
+    remaining_keys.sort();
+
+    for key in remaining_keys {
+        if let Some(entries) = ai_qual.entries.get(key) {
+            if !entries.is_empty() {
+                // Use configured title if available, otherwise convert key to title case
+                let title = entry_titles
+                    .get(key.as_str())
+                    .map_or_else(|| key_to_title(key), |t| t.to_string());
+                println!("  • {}:", title);
+                for entry in entries {
+                    println!("    - {}", entry);
                 }
                 println!();
             }
         }
     }
+}
 
-    // Print any additional categories not in the predefined list
-    let known_keys: std::collections::HashSet<&str> =
-        category_config.iter().map(|(k, _, _)| *k).collect();
-    for (key, entries) in &ai_qual.entries {
-        if !known_keys.contains(key.as_str()) && !entries.is_empty() {
-            // Convert key to title case
-            let title: String = key
-                .split('_')
-                .map(|word| {
-                    let mut chars = word.chars();
-                    match chars.next() {
-                        None => String::new(),
-                        Some(first) => first.to_uppercase().chain(chars).collect(),
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-            println!("  📌 {}:", title);
-            for entry in entries {
-                println!("     • {}", entry);
+/// Convert snake_case key to Title Case
+fn key_to_title(key: &str) -> String {
+    key.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().chain(chars).collect(),
             }
-            println!();
-        }
-    }
-
-    if ai_qual.entries.is_empty() {
-        println!("  No qualitative analysis available.");
-        println!();
-    }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn generate_score_bar(score: f64, max_score: f64) -> String {
