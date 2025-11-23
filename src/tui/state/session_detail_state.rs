@@ -3,6 +3,14 @@ use ratatui::widgets::ScrollbarState;
 use crate::models::{ChatSession, Message};
 use crate::services::SessionAnalytics;
 
+/// Which analytics panel is currently focused for scrolling
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AnalyticsPanelFocus {
+    #[default]
+    Quantitative,
+    Qualitative,
+}
+
 /// State for the session detail view
 #[derive(Debug)]
 pub struct SessionDetailState {
@@ -18,10 +26,6 @@ pub struct SessionDetailState {
     pub scroll_state: ScrollbarState,
     /// Current scroll position (line number) for messages
     pub current_scroll: usize,
-    /// Scrollbar state for analytics
-    pub analytics_scroll_state: ScrollbarState,
-    /// Current scroll position for analytics
-    pub analytics_scroll: usize,
     /// Loading indicator
     pub loading: bool,
     /// Whether to show detailed tool output (expanded view)
@@ -32,8 +36,22 @@ pub struct SessionDetailState {
     pub show_thinking: bool,
     /// Last known viewport height for messages (used for scroll calculations)
     pub viewport_height: usize,
-    /// Last known viewport height for analytics (used for scroll calculations)
-    pub analytics_viewport_height: usize,
+
+    // Analytics panel state
+    /// Which analytics panel is focused for scrolling
+    pub analytics_panel_focus: AnalyticsPanelFocus,
+    /// Scrollbar state for quantitative analytics panel
+    pub quantitative_scroll_state: ScrollbarState,
+    /// Current scroll position for quantitative panel
+    pub quantitative_scroll: usize,
+    /// Viewport height for quantitative panel
+    pub quantitative_viewport_height: usize,
+    /// Scrollbar state for qualitative analytics panel
+    pub qualitative_scroll_state: ScrollbarState,
+    /// Current scroll position for qualitative panel
+    pub qualitative_scroll: usize,
+    /// Viewport height for qualitative panel
+    pub qualitative_viewport_height: usize,
 }
 
 impl SessionDetailState {
@@ -46,14 +64,20 @@ impl SessionDetailState {
             analytics: None,
             scroll_state: ScrollbarState::default(),
             current_scroll: 0,
-            analytics_scroll_state: ScrollbarState::default(),
-            analytics_scroll: 0,
             loading: false,
             show_tool_details: false,
             show_analytics: false,
-            show_thinking: true,           // Show thinking messages by default
-            viewport_height: 20,           // Default fallback
-            analytics_viewport_height: 20, // Default fallback
+            show_thinking: true, // Show thinking messages by default
+            viewport_height: 20, // Default fallback
+
+            // Analytics panel state
+            analytics_panel_focus: AnalyticsPanelFocus::default(),
+            quantitative_scroll_state: ScrollbarState::default(),
+            quantitative_scroll: 0,
+            quantitative_viewport_height: 20,
+            qualitative_scroll_state: ScrollbarState::default(),
+            qualitative_scroll: 0,
+            qualitative_viewport_height: 20,
         }
     }
 
@@ -149,42 +173,108 @@ impl SessionDetailState {
         self.scroll_state = self.scroll_state.position(self.current_scroll);
     }
 
-    /// Analytics scroll methods
-    pub fn analytics_scroll_up(&mut self) {
-        if self.analytics_scroll > 0 {
-            self.analytics_scroll -= 1;
+    // Dual panel analytics methods
+
+    /// Switch focus between quantitative and qualitative panels
+    pub fn toggle_analytics_panel_focus(&mut self) {
+        self.analytics_panel_focus = match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => AnalyticsPanelFocus::Qualitative,
+            AnalyticsPanelFocus::Qualitative => AnalyticsPanelFocus::Quantitative,
+        };
+    }
+
+    /// Scroll up in the currently focused analytics panel
+    pub fn focused_panel_scroll_up(&mut self) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                if self.quantitative_scroll > 0 {
+                    self.quantitative_scroll -= 1;
+                }
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                if self.qualitative_scroll > 0 {
+                    self.qualitative_scroll -= 1;
+                }
+            }
         }
     }
 
-    pub fn analytics_scroll_down(&mut self, max_scroll: usize) {
-        if self.analytics_scroll < max_scroll {
-            self.analytics_scroll += 1;
+    /// Scroll down in the currently focused analytics panel
+    pub fn focused_panel_scroll_down(&mut self, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                if self.quantitative_scroll < quant_max {
+                    self.quantitative_scroll += 1;
+                }
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                if self.qualitative_scroll < qual_max {
+                    self.qualitative_scroll += 1;
+                }
+            }
         }
     }
 
-    pub fn analytics_scroll_page_up(&mut self, page_size: usize) {
-        self.analytics_scroll = self.analytics_scroll.saturating_sub(page_size);
+    /// Page up in the currently focused analytics panel
+    pub fn focused_panel_page_up(&mut self, page_size: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                self.quantitative_scroll = self.quantitative_scroll.saturating_sub(page_size);
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                self.qualitative_scroll = self.qualitative_scroll.saturating_sub(page_size);
+            }
+        }
     }
 
-    pub fn analytics_scroll_page_down(&mut self, page_size: usize, max_scroll: usize) {
-        self.analytics_scroll = (self.analytics_scroll + page_size).min(max_scroll);
+    /// Page down in the currently focused analytics panel
+    pub fn focused_panel_page_down(&mut self, page_size: usize, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                self.quantitative_scroll = (self.quantitative_scroll + page_size).min(quant_max);
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                self.qualitative_scroll = (self.qualitative_scroll + page_size).min(qual_max);
+            }
+        }
     }
 
-    pub fn analytics_scroll_to_top(&mut self) {
-        self.analytics_scroll = 0;
+    /// Scroll to top in the currently focused analytics panel
+    pub fn focused_panel_scroll_to_top(&mut self) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => self.quantitative_scroll = 0,
+            AnalyticsPanelFocus::Qualitative => self.qualitative_scroll = 0,
+        }
     }
 
-    pub fn analytics_scroll_to_bottom(&mut self, max_scroll: usize) {
-        self.analytics_scroll = max_scroll;
+    /// Scroll to bottom in the currently focused analytics panel
+    pub fn focused_panel_scroll_to_bottom(&mut self, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => self.quantitative_scroll = quant_max,
+            AnalyticsPanelFocus::Qualitative => self.qualitative_scroll = qual_max,
+        }
     }
 
-    /// Update analytics scrollbar state
-    pub fn update_analytics_scroll_state(&mut self, total_lines: usize) {
-        self.analytics_scroll_state = self.analytics_scroll_state.content_length(total_lines);
-        self.analytics_scroll_state = self
-            .analytics_scroll_state
-            .viewport_content_length(self.analytics_viewport_height);
-        self.analytics_scroll_state = self.analytics_scroll_state.position(self.analytics_scroll);
+    /// Update quantitative panel scrollbar state
+    pub fn update_quantitative_scroll_state(&mut self, total_lines: usize) {
+        self.quantitative_scroll_state = self.quantitative_scroll_state.content_length(total_lines);
+        self.quantitative_scroll_state = self
+            .quantitative_scroll_state
+            .viewport_content_length(self.quantitative_viewport_height);
+        self.quantitative_scroll_state = self
+            .quantitative_scroll_state
+            .position(self.quantitative_scroll);
+    }
+
+    /// Update qualitative panel scrollbar state
+    pub fn update_qualitative_scroll_state(&mut self, total_lines: usize) {
+        self.qualitative_scroll_state = self.qualitative_scroll_state.content_length(total_lines);
+        self.qualitative_scroll_state = self
+            .qualitative_scroll_state
+            .viewport_content_length(self.qualitative_viewport_height);
+        self.qualitative_scroll_state = self
+            .qualitative_scroll_state
+            .position(self.qualitative_scroll);
     }
 }
 

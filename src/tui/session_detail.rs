@@ -13,9 +13,13 @@ use crate::database::DatabaseManager;
 use crate::models::{Message, MessageRole};
 use crate::services::{MessageGroup, QueryService, SessionDetailRequest};
 
+use super::state::session_detail_state::AnalyticsPanelFocus;
 use super::state::SessionDetailState;
 use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
 use super::utils::text::wrap_text;
+
+/// Reserved width for labels and values next to bar charts (e.g., "  Tokens", " 12345 total")
+const BAR_CHART_LABEL_WIDTH: u16 = 20;
 
 pub struct SessionDetailWidget {
     pub state: SessionDetailState,
@@ -85,8 +89,8 @@ impl SessionDetailWidget {
         match key.code {
             KeyCode::Up => {
                 if scroll_analytics {
-                    self.state.analytics_scroll_up();
-                    self.update_analytics_scroll_state();
+                    self.state.focused_panel_scroll_up();
+                    self.update_dual_panel_scroll_state();
                 } else {
                     self.state.scroll_up();
                     self.update_scroll_state();
@@ -94,9 +98,9 @@ impl SessionDetailWidget {
             }
             KeyCode::Down => {
                 if scroll_analytics {
-                    let max_scroll = self.get_analytics_max_scroll();
-                    self.state.analytics_scroll_down(max_scroll);
-                    self.update_analytics_scroll_state();
+                    let (quant_max, qual_max) = self.get_dual_panel_max_scroll();
+                    self.state.focused_panel_scroll_down(quant_max, qual_max);
+                    self.update_dual_panel_scroll_state();
                 } else {
                     let max_scroll = self.get_max_scroll();
                     self.state.scroll_down(max_scroll);
@@ -106,8 +110,8 @@ impl SessionDetailWidget {
             KeyCode::PageUp => {
                 let page_size = 10;
                 if scroll_analytics {
-                    self.state.analytics_scroll_page_up(page_size);
-                    self.update_analytics_scroll_state();
+                    self.state.focused_panel_page_up(page_size);
+                    self.update_dual_panel_scroll_state();
                 } else {
                     self.state.scroll_page_up(page_size);
                     self.update_scroll_state();
@@ -116,9 +120,10 @@ impl SessionDetailWidget {
             KeyCode::PageDown => {
                 let page_size = 10;
                 if scroll_analytics {
-                    let max_scroll = self.get_analytics_max_scroll();
-                    self.state.analytics_scroll_page_down(page_size, max_scroll);
-                    self.update_analytics_scroll_state();
+                    let (quant_max, qual_max) = self.get_dual_panel_max_scroll();
+                    self.state
+                        .focused_panel_page_down(page_size, quant_max, qual_max);
+                    self.update_dual_panel_scroll_state();
                 } else {
                     let max_scroll = self.get_max_scroll();
                     self.state.scroll_page_down(page_size, max_scroll);
@@ -127,8 +132,8 @@ impl SessionDetailWidget {
             }
             KeyCode::Home => {
                 if scroll_analytics {
-                    self.state.analytics_scroll_to_top();
-                    self.update_analytics_scroll_state();
+                    self.state.focused_panel_scroll_to_top();
+                    self.update_dual_panel_scroll_state();
                 } else {
                     self.state.scroll_to_top();
                     self.update_scroll_state();
@@ -136,13 +141,20 @@ impl SessionDetailWidget {
             }
             KeyCode::End => {
                 if scroll_analytics {
-                    let max_scroll = self.get_analytics_max_scroll();
-                    self.state.analytics_scroll_to_bottom(max_scroll);
-                    self.update_analytics_scroll_state();
+                    let (quant_max, qual_max) = self.get_dual_panel_max_scroll();
+                    self.state
+                        .focused_panel_scroll_to_bottom(quant_max, qual_max);
+                    self.update_dual_panel_scroll_state();
                 } else {
                     let max_scroll = self.get_max_scroll();
                     self.state.scroll_to_bottom(max_scroll);
                     self.update_scroll_state();
+                }
+            }
+            KeyCode::Left | KeyCode::Right => {
+                // Left/Right: Switch focus between quantitative and qualitative panels
+                if scroll_analytics {
+                    self.state.toggle_analytics_panel_focus();
                 }
             }
             KeyCode::Char('d') => {
@@ -534,70 +546,35 @@ impl SessionDetailWidget {
         self.state.update_scroll_state(total_lines);
     }
 
-    fn get_analytics_max_scroll(&self) -> usize {
-        let total_lines = self.get_analytics_total_lines();
-        // Use actual viewport height from last render
-        total_lines.saturating_sub(self.state.analytics_viewport_height)
-    }
-
-    fn update_analytics_scroll_state(&mut self) {
-        let total_lines = self.get_analytics_total_lines();
-        self.state.update_analytics_scroll_state(total_lines);
-    }
-
-    fn get_analytics_total_lines(&self) -> usize {
-        // Count total lines that will be rendered in analytics
-        if let Some(analytics_data) = &self.state.analytics {
-            let mut line_count = 0;
-
-            // Status line
-            if analytics_data.latest_request.is_some() {
-                line_count += 2; // Status + blank line
-            }
-
-            // Active request
-            if analytics_data.active_request.is_some() {
-                line_count += 2; // Active request + blank line
-            }
-
-            // Analytics content
-            if let Some(analytics) = &analytics_data.latest_analytics {
-                // Scores section: header + blank + 6 scores + blank
-                line_count += 9;
-
-                // Insights section
-                let insights = analytics.ai_qualitative_output.insights();
-                if !insights.is_empty() {
-                    line_count += 2; // Header + blank
-                                     // Estimate 3-5 lines per insight (title + wrapped description)
-                    let insights_count = insights.len().min(3);
-                    line_count += insights_count * 4;
-                }
-
-                // Model line
-                if analytics.model_used.is_some() {
-                    line_count += 1;
-                }
-            } else if analytics_data.active_request.is_none() {
-                line_count += 1; // "No completed analysis" message
-            }
-
-            line_count
-        } else {
-            1 // "No analytics available"
-        }
-    }
-
     fn render_analytics(&mut self, f: &mut Frame, area: Rect) {
-        let analytics_data = match &self.state.analytics {
-            Some(session_analytics) => session_analytics,
-            None => {
-                let paragraph = Paragraph::new("No analytics available")
-                    .block(Block::default().borders(Borders::ALL).title("Analytics"))
-                    .style(Style::default().fg(Color::Gray));
-                f.render_widget(paragraph, area);
-                return;
-            }
+        if self.state.analytics.is_none() {
+            let paragraph = Paragraph::new("No analytics available")
+                .block(Block::default().borders(Borders::ALL).title("Analytics"))
+                .style(Style::default().fg(Color::Gray));
+            f.render_widget(paragraph, area);
+            return;
+        }
+
+        // Split area into two horizontal panels
+        let panels = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area);
+
+        // Render quantitative panel (left)
+        self.render_quantitative_panel(f, panels[0]);
+
+        // Render qualitative panel (right)
+        self.render_qualitative_panel(f, panels[1]);
+    }
+
+    fn render_quantitative_panel(&mut self, f: &mut Frame, area: Rect) {
+        let analytics_data = self.state.analytics.as_ref().unwrap();
+        let is_focused = self.state.analytics_panel_focus == AnalyticsPanelFocus::Quantitative;
+        let border_style = if is_focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
         };
 
         let mut lines = Vec::new();
@@ -623,7 +600,7 @@ impl SessionDetailWidget {
         // Show active request if any
         if let Some(active) = &analytics_data.active_request {
             lines.push(Line::from(vec![Span::styled(
-                format!("⏳ Analysis in progress: {:?}", active.status),
+                format!("Analysis in progress: {:?}", active.status),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::ITALIC),
@@ -631,48 +608,212 @@ impl SessionDetailWidget {
             lines.push(Line::from(""));
         }
 
-        // Show analytics results if available
         if let Some(analytics) = &analytics_data.latest_analytics {
-            // Scores section
-            lines.push(Line::from(vec![Span::styled(
-                "📊 Scores",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            )]));
-            lines.push(Line::from(""));
+            let bar_width = area.width.saturating_sub(BAR_CHART_LABEL_WIDTH) as usize;
 
-            // Key insights from qualitative output
-            let insights = analytics.ai_qualitative_output.insights();
-            if !insights.is_empty() {
+            // AI Quantitative Output - Rubric Scores
+            if !analytics.ai_quantitative_output.rubric_scores.is_empty() {
                 lines.push(Line::from(vec![Span::styled(
-                    "💡 Key Insights",
+                    "Rubric Scores",
                     Style::default()
                         .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                        .add_modifier(Modifier::BOLD),
                 )]));
                 lines.push(Line::from(""));
 
-                // Show first few insights (each is a markdown string)
-                for (idx, insight) in insights.iter().take(3).enumerate() {
-                    // Wrap the insight text
-                    let wrapped = wrap_text(insight, area.width.saturating_sub(6) as usize);
-                    for (i, line) in wrapped.iter().enumerate() {
-                        if i == 0 {
-                            lines.push(Line::from(vec![Span::styled(
-                                format!("  {}. {}", idx + 1, line),
-                                Style::default().fg(Color::Yellow),
-                            )]));
-                        } else {
-                            lines.push(Line::from(format!("     {line}")));
-                        }
-                    }
+                for score in &analytics.ai_quantitative_output.rubric_scores {
+                    // Rubric name
+                    lines.push(Line::from(vec![Span::styled(
+                        format!("  {}", score.rubric_name),
+                        Style::default().fg(Color::White),
+                    )]));
+
+                    // Bar visualization
+                    let percentage = score.percentage();
+                    let filled = (percentage / 100.0 * bar_width as f64) as usize;
+                    let empty = bar_width.saturating_sub(filled);
+
+                    let bar_color = if percentage >= 80.0 {
+                        Color::Green
+                    } else if percentage >= 60.0 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
+
+                    lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled("█".repeat(filled), Style::default().fg(bar_color)),
+                        Span::styled("░".repeat(empty), Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!(" {:.0}/{:.0}", score.score, score.max_score),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]));
+                    lines.push(Line::from(""));
+                }
+
+                // Show summary if available
+                if let Some(summary) = &analytics.ai_quantitative_output.rubric_summary {
+                    lines.push(Line::from(vec![Span::styled(
+                        format!(
+                            "Total: {:.1}/{:.1} ({:.0}%)",
+                            summary.total_score, summary.max_score, summary.percentage
+                        ),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    )]));
                     lines.push(Line::from(""));
                 }
             }
 
-            // Show model used
+            // Metric Quantitative Output
+            lines.push(Line::from(vec![Span::styled(
+                "Session Metrics",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]));
+            lines.push(Line::from(""));
+
+            let metrics = &analytics.metric_quantitative_output;
+
+            // Token metrics
+            lines.push(Line::from(vec![Span::styled(
+                "  Tokens",
+                Style::default().fg(Color::White),
+            )]));
+            let token_total = metrics.token_metrics.total_tokens_used;
+            let input_ratio = if token_total > 0 {
+                metrics.token_metrics.input_tokens as f64 / token_total as f64
+            } else {
+                0.0
+            };
+            let input_filled = (input_ratio * bar_width as f64) as usize;
+            let output_filled = bar_width.saturating_sub(input_filled);
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled("█".repeat(input_filled), Style::default().fg(Color::Blue)),
+                Span::styled("█".repeat(output_filled), Style::default().fg(Color::Green)),
+                Span::styled(
+                    format!(" {} total", token_total),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled("■", Style::default().fg(Color::Blue)),
+                Span::styled(
+                    format!(" In: {} ", metrics.token_metrics.input_tokens),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled("■", Style::default().fg(Color::Green)),
+                Span::styled(
+                    format!(" Out: {}", metrics.token_metrics.output_tokens),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            lines.push(Line::from(""));
+
+            // File changes
+            lines.push(Line::from(vec![Span::styled(
+                "  File Changes",
+                Style::default().fg(Color::White),
+            )]));
+            let file_changes = &metrics.file_changes;
+            let total_lines_changed =
+                (file_changes.lines_added + file_changes.lines_removed) as usize;
+            let add_ratio = if total_lines_changed > 0 {
+                file_changes.lines_added as f64 / total_lines_changed as f64
+            } else {
+                0.5
+            };
+            let add_filled = (add_ratio * bar_width as f64) as usize;
+            let remove_filled = bar_width.saturating_sub(add_filled);
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled("█".repeat(add_filled), Style::default().fg(Color::Green)),
+                Span::styled("█".repeat(remove_filled), Style::default().fg(Color::Red)),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled("+", Style::default().fg(Color::Green)),
+                Span::styled(
+                    format!("{} ", file_changes.lines_added),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled("-", Style::default().fg(Color::Red)),
+                Span::styled(
+                    format!("{} ", file_changes.lines_removed),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!(
+                        "(net: {}{})",
+                        if file_changes.net_code_growth >= 0 {
+                            "+"
+                        } else {
+                            ""
+                        },
+                        file_changes.net_code_growth
+                    ),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+            lines.push(Line::from(""));
+
+            // Tool usage
+            lines.push(Line::from(vec![Span::styled(
+                "  Tool Usage",
+                Style::default().fg(Color::White),
+            )]));
+            let tool_usage = &metrics.tool_usage;
+            let total_ops = tool_usage.total_operations as usize;
+            let success_ratio = if total_ops > 0 {
+                tool_usage.successful_operations as f64 / total_ops as f64
+            } else {
+                1.0
+            };
+            let success_filled = (success_ratio * bar_width as f64) as usize;
+            let failed_filled = bar_width.saturating_sub(success_filled);
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    "█".repeat(success_filled),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled("█".repeat(failed_filled), Style::default().fg(Color::Red)),
+                Span::styled(
+                    format!(" {} ops", total_ops),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    format!("OK: {} ", tool_usage.successful_operations),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled(
+                    format!("Fail: {}", tool_usage.failed_operations),
+                    Style::default().fg(Color::Red),
+                ),
+            ]));
+            lines.push(Line::from(""));
+
+            // Time metrics
+            lines.push(Line::from(vec![Span::styled(
+                format!(
+                    "  Duration: {:.1} min",
+                    metrics.time_metrics.total_session_time_minutes
+                ),
+                Style::default().fg(Color::White),
+            )]));
+
+            // Model used
             if let Some(model) = &analytics.model_used {
+                lines.push(Line::from(""));
                 lines.push(Line::from(vec![
                     Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
                     Span::styled(model, Style::default().fg(Color::Gray)),
@@ -687,28 +828,33 @@ impl SessionDetailWidget {
             )]));
         }
 
-        // Calculate visible area and apply scrolling
-        let available_height = area.height.saturating_sub(2) as usize; // Account for borders
-
-        // Store viewport height for scroll calculations
-        self.state.analytics_viewport_height = available_height;
+        let available_height = area.height.saturating_sub(2) as usize;
+        self.state.quantitative_viewport_height = available_height;
 
         let total_lines = lines.len();
-
         let visible_lines: Vec<Line> = lines
             .into_iter()
-            .skip(self.state.analytics_scroll)
+            .skip(self.state.quantitative_scroll)
             .take(available_height)
             .collect();
 
+        let title = if is_focused {
+            "Quantitative [*]"
+        } else {
+            "Quantitative"
+        };
         let paragraph = Paragraph::new(visible_lines)
-            .block(Block::default().borders(Borders::ALL).title("Analytics"))
-            .wrap(Wrap { trim: true })
-            .scroll((0, 0));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(border_style),
+            )
+            .wrap(Wrap { trim: true });
 
         f.render_widget(paragraph, area);
 
-        // Render scrollbar if content is scrollable
+        // Render scrollbar if needed
         if total_lines > available_height {
             let scrollbar_area = Rect {
                 x: area.x + area.width - 1,
@@ -725,8 +871,203 @@ impl SessionDetailWidget {
             f.render_stateful_widget(
                 scrollbar,
                 scrollbar_area,
-                &mut self.state.analytics_scroll_state,
+                &mut self.state.quantitative_scroll_state,
             );
         }
+    }
+
+    fn render_qualitative_panel(&mut self, f: &mut Frame, area: Rect) {
+        let analytics_data = self.state.analytics.as_ref().unwrap();
+        let is_focused = self.state.analytics_panel_focus == AnalyticsPanelFocus::Qualitative;
+        let border_style = if is_focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let mut lines = Vec::new();
+        let content_width = area.width.saturating_sub(6) as usize;
+
+        if let Some(analytics) = &analytics_data.latest_analytics {
+            // Render all qualitative entries
+            for entry in &analytics.ai_qualitative_output.entries {
+                // Entry title
+                lines.push(Line::from(vec![Span::styled(
+                    &entry.title,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+
+                // Summary
+                if !entry.summary.is_empty() {
+                    let wrapped_summary = wrap_text(&entry.summary, content_width);
+                    for line in wrapped_summary {
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("  {line}"),
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::ITALIC),
+                        )]));
+                    }
+                }
+                lines.push(Line::from(""));
+
+                // Items
+                for (idx, item) in entry.items.iter().enumerate() {
+                    let wrapped = wrap_text(item, content_width.saturating_sub(4));
+                    for (i, line) in wrapped.iter().enumerate() {
+                        if i == 0 {
+                            lines.push(Line::from(vec![Span::styled(
+                                format!("  {}. {line}", idx + 1),
+                                Style::default().fg(Color::White),
+                            )]));
+                        } else {
+                            lines.push(Line::from(vec![Span::styled(
+                                format!("     {line}"),
+                                Style::default().fg(Color::White),
+                            )]));
+                        }
+                    }
+                }
+                lines.push(Line::from(""));
+            }
+
+            // If no entries, show summary info
+            if analytics.ai_qualitative_output.entries.is_empty() {
+                if let Some(summary) = &analytics.ai_qualitative_output.summary {
+                    lines.push(Line::from(vec![Span::styled(
+                        format!(
+                            "Categories: {}, Entries: {}",
+                            summary.categories_evaluated, summary.total_entries
+                        ),
+                        Style::default().fg(Color::DarkGray),
+                    )]));
+                }
+            }
+        } else {
+            lines.push(Line::from(vec![Span::styled(
+                "No qualitative analysis available",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
+        }
+
+        let available_height = area.height.saturating_sub(2) as usize;
+        self.state.qualitative_viewport_height = available_height;
+
+        let total_lines = lines.len();
+        let visible_lines: Vec<Line> = lines
+            .into_iter()
+            .skip(self.state.qualitative_scroll)
+            .take(available_height)
+            .collect();
+
+        let title = if is_focused {
+            "Qualitative [*]"
+        } else {
+            "Qualitative"
+        };
+        let paragraph = Paragraph::new(visible_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(border_style),
+            )
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(paragraph, area);
+
+        // Render scrollbar if needed
+        if total_lines > available_height {
+            let scrollbar_area = Rect {
+                x: area.x + area.width - 1,
+                y: area.y + 1,
+                width: 1,
+                height: area.height - 2,
+            };
+
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+
+            f.render_stateful_widget(
+                scrollbar,
+                scrollbar_area,
+                &mut self.state.qualitative_scroll_state,
+            );
+        }
+    }
+
+    fn get_quantitative_total_lines(&self) -> usize {
+        if let Some(analytics_data) = &self.state.analytics {
+            let mut count = 0;
+
+            // Status and active request
+            if analytics_data.latest_request.is_some() {
+                count += 2;
+            }
+            if analytics_data.active_request.is_some() {
+                count += 2;
+            }
+
+            if let Some(analytics) = &analytics_data.latest_analytics {
+                // Rubric scores
+                if !analytics.ai_quantitative_output.rubric_scores.is_empty() {
+                    count += 2; // header
+                    count += analytics.ai_quantitative_output.rubric_scores.len() * 3;
+                    if analytics.ai_quantitative_output.rubric_summary.is_some() {
+                        count += 2;
+                    }
+                }
+                // Session metrics: header + tokens(4) + files(4) + tools(4) + time(1) + model(2)
+                count += 2 + 4 + 4 + 4 + 1 + 2;
+            } else {
+                count += 1;
+            }
+            count
+        } else {
+            1
+        }
+    }
+
+    fn get_qualitative_total_lines(&self) -> usize {
+        if let Some(analytics_data) = &self.state.analytics {
+            if let Some(analytics) = &analytics_data.latest_analytics {
+                let mut count = 0;
+                for entry in &analytics.ai_qualitative_output.entries {
+                    count += 1; // title
+                    count += 2; // summary + blank
+                    count += entry.items.len() * 2; // items with spacing
+                    count += 1; // blank line between entries
+                }
+                if count == 0 {
+                    count = 1;
+                }
+                count
+            } else {
+                1
+            }
+        } else {
+            1
+        }
+    }
+
+    fn get_dual_panel_max_scroll(&self) -> (usize, usize) {
+        let quant_total = self.get_quantitative_total_lines();
+        let qual_total = self.get_qualitative_total_lines();
+        let quant_max = quant_total.saturating_sub(self.state.quantitative_viewport_height);
+        let qual_max = qual_total.saturating_sub(self.state.qualitative_viewport_height);
+        (quant_max, qual_max)
+    }
+
+    fn update_dual_panel_scroll_state(&mut self) {
+        let quant_total = self.get_quantitative_total_lines();
+        let qual_total = self.get_qualitative_total_lines();
+        self.state.update_quantitative_scroll_state(quant_total);
+        self.state.update_qualitative_scroll_state(qual_total);
     }
 }

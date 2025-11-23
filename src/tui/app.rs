@@ -507,14 +507,21 @@ impl App {
     fn render_footer(&self, f: &mut Frame, area: Rect) {
         let key_hints = match self.state.mode {
             AppMode::SessionList => {
-                "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit"
+                "↑/↓: Navigate | Enter: View | a: Analytics | ?: Help | q: Quit".to_string()
             }
             AppMode::SessionDetail => {
-                "↑/↓: Scroll | a: Toggle Analytics | Esc: Back | ?: Help | q: Quit"
+                if self.session_detail.state.show_analytics
+                    && self.session_detail.state.analytics.is_some()
+                {
+                    "↑/↓: Scroll | ←/→: Switch Panel | a: Toggle Analytics | Esc: Back | q: Quit"
+                        .to_string()
+                } else {
+                    "↑/↓: Scroll | d: Tool Details | t: Thinking | a: Analytics | Esc: Back | q: Quit"
+                        .to_string()
+                }
             }
-            AppMode::Help => "Any key: Close Help",
-        }
-        .to_string();
+            AppMode::Help => "Any key: Close Help".to_string(),
+        };
 
         // Processing status removed from bottom area
 
@@ -556,6 +563,11 @@ impl App {
             Line::from("  d              - Toggle tool details"),
             Line::from("  a              - Toggle analytics view"),
             Line::from("  t              - Toggle thinking messages"),
+            Line::from(""),
+            Line::from("Analytics View:"),
+            Line::from("  ←/→            - Switch between panels"),
+            Line::from("  ↑/↓            - Scroll current panel"),
+            Line::from("  a              - Return to messages"),
         ];
 
         let dialog = Dialog::new(DialogType::Help, content).size(80, 70);
