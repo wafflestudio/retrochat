@@ -67,11 +67,6 @@ pub fn build_session_transcript(
     let tool_ops_map = build_tool_operations_map(tool_operations);
 
     for message in messages {
-        // Skip thinking messages as they don't represent actual conversation
-        if message.is_thinking() {
-            continue;
-        }
-
         // Increment turn for user messages
         if message.is_user_message() {
             turn_number += 1;
@@ -82,6 +77,9 @@ pub fn build_session_transcript(
             MessageRole::Assistant => "assistant".to_string(),
             MessageRole::System => "system".to_string(),
         };
+
+        // Determine message_type string with tool name if applicable
+        let message_type = get_message_type_string(message, &tool_ops_map);
 
         // Determine content based on message type
         let content = match message.message_type {
@@ -102,6 +100,7 @@ pub fn build_session_transcript(
         turns.push(SessionTurn {
             turn_number,
             role,
+            message_type,
             content,
         });
     }
@@ -126,6 +125,39 @@ fn build_tool_operations_map(tool_operations: &[ToolOperation]) -> HashMap<Uuid,
     }
 
     map
+}
+
+/// Gets the message type string with tool name if applicable.
+/// Returns formats like "simple_message", "thinking", "tool_request(Bash)", "tool_result(Read)"
+fn get_message_type_string(
+    message: &Message,
+    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
+) -> String {
+    match message.message_type {
+        MessageType::ToolRequest => {
+            let tool_name = get_tool_name_from_message(message, tool_ops_map);
+            format!("tool_request({})", tool_name)
+        }
+        MessageType::ToolResult => {
+            let tool_name = get_tool_name_from_message(message, tool_ops_map);
+            format!("tool_result({})", tool_name)
+        }
+        MessageType::Thinking => "thinking".to_string(),
+        MessageType::SimpleMessage => "simple_message".to_string(),
+    }
+}
+
+/// Gets the tool name from the tool operation associated with the message.
+fn get_tool_name_from_message(
+    message: &Message,
+    tool_ops_map: &HashMap<Uuid, &ToolOperation>,
+) -> String {
+    if let Some(tool_op_id) = message.tool_operation_id {
+        if let Some(tool_op) = tool_ops_map.get(&tool_op_id) {
+            return tool_op.tool_name.clone();
+        }
+    }
+    "unknown".to_string()
 }
 
 /// Gets content for a ToolRequest message by extracting raw_input from the tool operation.
@@ -249,6 +281,89 @@ fn find_char_boundary_from_end(s: &str, bytes_from_end: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ToolOperation;
+    use chrono::Utc;
+
+    fn create_test_message(message_type: MessageType, tool_op_id: Option<Uuid>) -> Message {
+        let mut msg = Message::new(
+            Uuid::new_v4(),
+            MessageRole::Assistant,
+            "test content".to_string(),
+            Utc::now(),
+            1,
+        )
+        .with_message_type(message_type);
+        if let Some(id) = tool_op_id {
+            msg = msg.with_tool_operation(id);
+        }
+        msg
+    }
+
+    #[test]
+    fn test_get_message_type_string_simple_message() {
+        let msg = create_test_message(MessageType::SimpleMessage, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "simple_message");
+    }
+
+    #[test]
+    fn test_get_message_type_string_thinking() {
+        let msg = create_test_message(MessageType::Thinking, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "thinking");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_with_tool_op() {
+        let tool_op =
+            ToolOperation::new("tool_use_123".to_string(), "Bash".to_string(), Utc::now());
+        let tool_op_id = tool_op.id;
+        let msg = create_test_message(MessageType::ToolRequest, Some(tool_op_id));
+
+        let mut tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+        tool_ops_map.insert(tool_op_id, &tool_op);
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(Bash)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_result_with_tool_op() {
+        let tool_op =
+            ToolOperation::new("tool_use_456".to_string(), "Read".to_string(), Utc::now());
+        let tool_op_id = tool_op.id;
+        let msg = create_test_message(MessageType::ToolResult, Some(tool_op_id));
+
+        let mut tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+        tool_ops_map.insert(tool_op_id, &tool_op);
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_result(Read)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_without_tool_op() {
+        // When tool_operation_id is None
+        let msg = create_test_message(MessageType::ToolRequest, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(unknown)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_with_missing_tool_op() {
+        // When tool_operation_id exists but not found in map
+        let msg = create_test_message(MessageType::ToolRequest, Some(Uuid::new_v4()));
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(unknown)");
+    }
 
     #[test]
     fn test_truncate_content_short() {

@@ -241,6 +241,8 @@ pub struct SessionTurn {
     pub turn_number: u32,
     /// Message role: "user", "assistant", or "system"
     pub role: String,
+    /// Message type: "simple_message", "thinking", "tool_request(ToolName)", "tool_result(ToolName)"
+    pub message_type: String,
     /// The text content of the message
     pub content: String,
 }
