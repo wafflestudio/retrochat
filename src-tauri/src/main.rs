@@ -94,6 +94,248 @@ pub struct AnalyticsRequestItem {
     pub error_message: Option<String>,
 }
 
+// Analytics Result DTOs
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnalyticsItem {
+    pub id: String,
+    pub analytics_request_id: String,
+    pub session_id: String,
+    pub generated_at: String,
+    pub ai_qualitative_output: AIQualitativeOutputItem,
+    pub ai_quantitative_output: AIQuantitativeOutputItem,
+    pub metric_quantitative_output: MetricQuantitativeOutputItem,
+    pub model_used: Option<String>,
+    pub analysis_duration_ms: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AIQualitativeOutputItem {
+    pub entries: Vec<QualitativeEntryOutputItem>,
+    pub summary: Option<QualitativeEvaluationSummaryItem>,
+    pub entries_version: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QualitativeEntryOutputItem {
+    pub key: String,
+    pub title: String,
+    pub description: String,
+    pub summary: String,
+    pub items: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QualitativeEvaluationSummaryItem {
+    pub total_entries: usize,
+    pub categories_evaluated: usize,
+    pub entries_version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AIQuantitativeOutputItem {
+    pub rubric_scores: Vec<RubricScoreItem>,
+    pub rubric_summary: Option<RubricEvaluationSummaryItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RubricScoreItem {
+    pub rubric_id: String,
+    pub rubric_name: String,
+    pub score: f64,
+    pub max_score: f64,
+    pub reasoning: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RubricEvaluationSummaryItem {
+    pub total_score: f64,
+    pub max_score: f64,
+    pub percentage: f64,
+    pub rubrics_evaluated: usize,
+    pub rubrics_version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MetricQuantitativeOutputItem {
+    pub file_changes: FileChangeMetricsItem,
+    pub time_metrics: TimeConsumptionMetricsItem,
+    pub token_metrics: TokenConsumptionMetricsItem,
+    pub tool_usage: ToolUsageMetricsItem,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileChangeMetricsItem {
+    pub total_files_modified: u64,
+    pub total_files_read: u64,
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    pub net_code_growth: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimeConsumptionMetricsItem {
+    pub total_session_time_minutes: f64,
+    pub peak_hours: Vec<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenConsumptionMetricsItem {
+    pub total_tokens_used: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub token_efficiency: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ToolUsageMetricsItem {
+    pub total_operations: u64,
+    pub successful_operations: u64,
+    pub failed_operations: u64,
+    pub tool_distribution: std::collections::HashMap<String, u64>,
+    pub average_execution_time_ms: f64,
+}
+
+// Conversion implementations
+impl From<retrochat::models::Analytics> for AnalyticsItem {
+    fn from(analytics: retrochat::models::Analytics) -> Self {
+        Self {
+            id: analytics.id,
+            analytics_request_id: analytics.analytics_request_id,
+            session_id: analytics.session_id,
+            generated_at: analytics.generated_at.to_rfc3339(),
+            ai_qualitative_output: analytics.ai_qualitative_output.into(),
+            ai_quantitative_output: analytics.ai_quantitative_output.into(),
+            metric_quantitative_output: analytics.metric_quantitative_output.into(),
+            model_used: analytics.model_used,
+            analysis_duration_ms: analytics.analysis_duration_ms,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::AIQualitativeOutput> for AIQualitativeOutputItem {
+    fn from(output: retrochat::services::analytics::AIQualitativeOutput) -> Self {
+        Self {
+            entries: output.entries.into_iter().map(Into::into).collect(),
+            summary: output.summary.map(Into::into),
+            entries_version: output.entries_version,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::QualitativeEntryOutput> for QualitativeEntryOutputItem {
+    fn from(entry: retrochat::services::analytics::QualitativeEntryOutput) -> Self {
+        Self {
+            key: entry.key,
+            title: entry.title,
+            description: entry.description,
+            summary: entry.summary,
+            items: entry.items,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::QualitativeEvaluationSummary>
+    for QualitativeEvaluationSummaryItem
+{
+    fn from(summary: retrochat::services::analytics::QualitativeEvaluationSummary) -> Self {
+        Self {
+            total_entries: summary.total_entries,
+            categories_evaluated: summary.categories_evaluated,
+            entries_version: summary.entries_version,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::AIQuantitativeOutput> for AIQuantitativeOutputItem {
+    fn from(output: retrochat::services::analytics::AIQuantitativeOutput) -> Self {
+        Self {
+            rubric_scores: output.rubric_scores.into_iter().map(Into::into).collect(),
+            rubric_summary: output.rubric_summary.map(Into::into),
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::RubricScore> for RubricScoreItem {
+    fn from(score: retrochat::services::analytics::RubricScore) -> Self {
+        Self {
+            rubric_id: score.rubric_id,
+            rubric_name: score.rubric_name,
+            score: score.score,
+            max_score: score.max_score,
+            reasoning: score.reasoning,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::RubricEvaluationSummary> for RubricEvaluationSummaryItem {
+    fn from(summary: retrochat::services::analytics::RubricEvaluationSummary) -> Self {
+        Self {
+            total_score: summary.total_score,
+            max_score: summary.max_score,
+            percentage: summary.percentage,
+            rubrics_evaluated: summary.rubrics_evaluated,
+            rubrics_version: summary.rubrics_version,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::MetricQuantitativeOutput>
+    for MetricQuantitativeOutputItem
+{
+    fn from(output: retrochat::services::analytics::MetricQuantitativeOutput) -> Self {
+        Self {
+            file_changes: output.file_changes.into(),
+            time_metrics: output.time_metrics.into(),
+            token_metrics: output.token_metrics.into(),
+            tool_usage: output.tool_usage.into(),
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::FileChangeMetrics> for FileChangeMetricsItem {
+    fn from(metrics: retrochat::services::analytics::FileChangeMetrics) -> Self {
+        Self {
+            total_files_modified: metrics.total_files_modified,
+            total_files_read: metrics.total_files_read,
+            lines_added: metrics.lines_added,
+            lines_removed: metrics.lines_removed,
+            net_code_growth: metrics.net_code_growth,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::TimeConsumptionMetrics> for TimeConsumptionMetricsItem {
+    fn from(metrics: retrochat::services::analytics::TimeConsumptionMetrics) -> Self {
+        Self {
+            total_session_time_minutes: metrics.total_session_time_minutes,
+            peak_hours: metrics.peak_hours,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::TokenConsumptionMetrics> for TokenConsumptionMetricsItem {
+    fn from(metrics: retrochat::services::analytics::TokenConsumptionMetrics) -> Self {
+        Self {
+            total_tokens_used: metrics.total_tokens_used,
+            input_tokens: metrics.input_tokens,
+            output_tokens: metrics.output_tokens,
+            token_efficiency: metrics.token_efficiency,
+        }
+    }
+}
+
+impl From<retrochat::services::analytics::ToolUsageMetrics> for ToolUsageMetricsItem {
+    fn from(metrics: retrochat::services::analytics::ToolUsageMetrics) -> Self {
+        Self {
+            total_operations: metrics.total_operations,
+            successful_operations: metrics.successful_operations,
+            failed_operations: metrics.failed_operations,
+            tool_distribution: metrics.tool_distribution,
+            average_execution_time_ms: metrics.average_execution_time_ms,
+        }
+    }
+}
+
 // Tauri Commands
 #[tauri::command]
 async fn get_sessions(
@@ -400,7 +642,7 @@ async fn get_analysis_status(
 async fn get_analysis_result(
     state: State<'_, Arc<Mutex<AppState>>>,
     request_id: String,
-) -> Result<Option<serde_json::Value>, String> {
+) -> Result<Option<AnalyticsItem>, String> {
     let state_guard = state.lock().await;
 
     let analytics_service = state_guard
@@ -413,8 +655,8 @@ async fn get_analysis_result(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Convert Analytics to JSON
-    Ok(result.map(|analytics| serde_json::to_value(analytics).unwrap_or(serde_json::Value::Null)))
+    // Convert Analytics DB entity to Tauri DTO
+    Ok(result.map(AnalyticsItem::from))
 }
 
 #[tauri::command]
