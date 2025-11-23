@@ -1,7 +1,7 @@
 {
-  "productName": "Retrochat",
+  "productName": "RetroChat",
   "version": "0.1.0",
-  "identifier": "com.retrochat.app",
+  "identifier": "com.wafflestudio.retrochat",
   "build": {
     "frontendDist": "../ui-react/dist",
     "devUrl": "http://localhost:5173",
@@ -10,19 +10,32 @@
   },
   "bundle": {
     "active": false,
-    "targets": "all"
+    "targets": "all",
+    "fileAssociations": [
+      {
+        "ext": ["json"],
+        "mimeType": "application/json",
+        "role": "Editor"
+      },
+      {
+        "ext": ["jsonl"],
+        "mimeType": "application/jsonl",
+        "role": "Editor"
+      }
+    ]
   },
   "app": {
     "windows": [
       {
-        "title": "Retrochat - LLM Chat History Viewer",
+        "title": "RetroChat - LLM Chat History Viewer",
         "width": 1200,
         "height": 800,
         "resizable": true,
         "fullscreen": false,
         "center": true,
         "minWidth": 800,
-        "minHeight": 600
+        "minHeight": 600,
+        "dragDropEnabled": true
       }
     ],
     "security": {
@@ -32,7 +45,10 @@
           "identifier": "main",
           "windows": ["main"],
           "permissions": [
-            "core:webview:allow-internal-toggle-devtools"
+            "core:webview:allow-internal-toggle-devtools",
+            "dialog:default",
+            "core:event:default",
+            "fs:allow-stat"
           ]
         }
       ]

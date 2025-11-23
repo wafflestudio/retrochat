@@ -11,7 +11,7 @@ name = "retrochat_tauri_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "retrochat-tauri"
+name = "RetroChat"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
 # Tauri dependencies
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -30,3 +31,4 @@ tokio = { version = "1.35", features = ["full"] }
 anyhow = "1.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+tauri-plugin-fs = "2"

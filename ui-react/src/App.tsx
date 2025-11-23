@@ -1,7 +1,14 @@
 import { SessionManager } from './components/session-manager'
+import { ThemeProvider } from './components/theme-provider'
+import { Toaster } from 'sonner'
 
 function App() {
-  return <SessionManager />
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <SessionManager />
+      <Toaster richColors />
+    </ThemeProvider>
+  )
 }
 
 export default App
