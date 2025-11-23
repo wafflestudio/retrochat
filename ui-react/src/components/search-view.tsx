@@ -39,8 +39,8 @@ export function SearchView({ searchQuery, onSearchQueryChange, onSessionSelect }
   }, [searchQuery, performSearch])
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="p-4 border-b border-border">
+    <div className="flex-1 flex flex-col h-full">
+      <div className="p-4 border-b border-border flex-shrink-0">
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -53,8 +53,8 @@ export function SearchView({ searchQuery, onSearchQueryChange, onSessionSelect }
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-2">
+      <ScrollArea className="flex-1 overflow-hidden">
+        <div className="p-2 h-full">
           {searchQuery.trim().length < 3 ? (
             <div className="text-center py-8 text-muted-foreground">
               Enter at least 3 characters to search
