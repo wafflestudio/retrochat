@@ -18,14 +18,24 @@ pub async fn get_sessions(
     page_size: Option<i32>,
     provider: Option<String>,
 ) -> Result<Vec<SessionListItem>, String> {
+    log::info!(
+        "get_sessions called - page: {:?}, page_size: {:?}, provider: {:?}",
+        page,
+        page_size,
+        provider
+    );
+
     let state = state.lock().await;
 
-    let filters = provider.map(|p| SessionFilters {
-        provider: Some(p),
-        project: None,
-        date_range: None,
-        min_messages: None,
-        max_messages: None,
+    let filters = provider.as_ref().map(|p| {
+        log::debug!("Applying provider filter: {}", p);
+        SessionFilters {
+            provider: Some(p.clone()),
+            project: None,
+            date_range: None,
+            min_messages: None,
+            max_messages: None,
+        }
     });
 
     let request = SessionsQueryRequest {
@@ -40,7 +50,13 @@ pub async fn get_sessions(
         .query_service
         .query_sessions(request)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("Failed to query sessions: {}", e);
+            e.to_string()
+        })?;
+
+    let session_count = response.sessions.len();
+    log::info!("Successfully retrieved {} sessions", session_count);
 
     Ok(response
         .sessions
@@ -61,6 +77,8 @@ pub async fn get_session_detail(
     state: State<'_, Arc<Mutex<AppState>>>,
     session_id: String,
 ) -> Result<SessionDetail, String> {
+    log::info!("get_session_detail called - session_id: {}", session_id);
+
     let state_guard = state.lock().await;
 
     let request = SessionDetailRequest {
@@ -70,21 +88,40 @@ pub async fn get_session_detail(
         message_offset: None,
     };
 
+    log::debug!("Fetching session detail from query service");
     let response = state_guard
         .query_service
         .get_session_detail(request)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("Failed to get session detail: {}", e);
+            e.to_string()
+        })?;
 
     // Get tool operations for all messages in this session
-    let session_uuid = uuid::Uuid::parse_str(&session_id).map_err(|e| e.to_string())?;
+    log::debug!("Parsing session UUID");
+    let session_uuid = uuid::Uuid::parse_str(&session_id).map_err(|e| {
+        log::error!("Failed to parse session UUID: {}", e);
+        e.to_string()
+    })?;
+
+    log::debug!("Fetching tool operations for session");
     let tool_op_repo = ToolOperationRepository::new(&state_guard.db_manager);
     let tool_operations = tool_op_repo
         .get_by_session(&session_uuid)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("Failed to fetch tool operations: {}", e);
+            e.to_string()
+        })?;
+
+    log::debug!(
+        "Found {} tool operations for session",
+        tool_operations.len()
+    );
 
     // Create a map of message_id -> tool_operation
+    log::debug!("Building tool operation map");
     let mut tool_op_map = std::collections::HashMap::new();
     for tool_op in tool_operations {
         // Find the message that references this tool operation
@@ -95,6 +132,11 @@ pub async fn get_session_detail(
             }
         }
     }
+
+    log::info!(
+        "Successfully retrieved session detail with {} messages",
+        response.messages.len()
+    );
 
     Ok(SessionDetail {
         id: response.session.id.to_string(),
@@ -149,10 +191,16 @@ pub async fn search_messages(
     query: String,
     limit: Option<i32>,
 ) -> Result<Vec<SearchResultItem>, String> {
+    log::info!(
+        "search_messages called - query: '{}', limit: {:?}",
+        query,
+        limit
+    );
+
     let state = state.lock().await;
 
     let request = SearchRequest {
-        query,
+        query: query.clone(),
         providers: None,
         projects: None,
         date_range: None,
@@ -161,11 +209,18 @@ pub async fn search_messages(
         page_size: limit,
     };
 
+    log::debug!("Executing message search");
     let response = state
         .query_service
         .search_messages(request)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("Failed to search messages: {}", e);
+            e.to_string()
+        })?;
+
+    let result_count = response.results.len();
+    log::info!("Search completed - found {} results", result_count);
 
     Ok(response
         .results
@@ -183,6 +238,7 @@ pub async fn search_messages(
 
 #[tauri::command]
 pub async fn get_providers(_state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<String>, String> {
+    log::debug!("get_providers called");
     // Return available providers
     Ok(vec![
         "Claude".to_string(),

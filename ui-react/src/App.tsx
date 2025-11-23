@@ -1,6 +1,6 @@
+import { Toaster } from 'sonner'
 import { SessionManager } from './components/session-manager'
 import { ThemeProvider } from './components/theme-provider'
-import { Toaster } from 'sonner'
 
 function App() {
   return (
