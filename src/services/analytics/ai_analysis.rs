@@ -1,6 +1,7 @@
 use super::models::{
     AIQualitativeOutput, AIQuantitativeOutput, QualitativeEntry, QualitativeEntryList,
-    QualitativeInput, Rubric, RubricEvaluationSummary, RubricList, RubricScore,
+    QualitativeEntryOutput, QualitativeInput, Rubric, RubricEvaluationSummary, RubricList,
+    RubricScore,
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
@@ -8,7 +9,6 @@ use crate::services::google_ai::GoogleAiClient;
 use anyhow::Result;
 use futures::future::join_all;
 use regex::Regex;
-use std::collections::HashMap;
 
 // =============================================================================
 // AI Analysis Functions
@@ -34,24 +34,30 @@ pub async fn generate_qualitative_analysis_ai(
             let qualitative_input = qualitative_input.clone();
             async move {
                 let result = generate_single_entry(&qualitative_input, &entry, ai_client).await;
-                (entry.key.clone(), result)
+                (entry, result)
             }
         })
         .collect();
 
     let results = join_all(futures).await;
 
-    // Collect results into HashMap
-    let mut all_entries: HashMap<String, Vec<String>> = HashMap::new();
-    for (key, result) in results {
+    // Collect results into Vec<QualitativeEntryOutput>
+    let mut all_entries: Vec<QualitativeEntryOutput> = Vec::new();
+    for (entry, result) in results {
         match result {
-            Ok(items) => {
-                all_entries.insert(key, items);
+            Ok(entry_output) => {
+                all_entries.push(entry_output);
             }
             Err(e) => {
-                tracing::warn!("Failed to generate entry {}: {}", key, e);
+                tracing::warn!("Failed to generate entry {}: {}", entry.key, e);
                 // Add empty entry on error
-                all_entries.insert(key, Vec::new());
+                all_entries.push(QualitativeEntryOutput {
+                    key: entry.key.clone(),
+                    title: entry.title.clone(),
+                    description: entry.description.clone(),
+                    summary: String::new(),
+                    items: Vec::new(),
+                });
             }
         }
     }
@@ -67,7 +73,7 @@ async fn generate_single_entry(
     qualitative_input: &QualitativeInput,
     entry: &QualitativeEntry,
     ai_client: &GoogleAiClient,
-) -> Result<Vec<String>> {
+) -> Result<QualitativeEntryOutput> {
     let prompt = build_single_entry_prompt(qualitative_input, entry);
 
     let analysis_request = crate::services::google_ai::models::AnalysisRequest {
@@ -106,14 +112,24 @@ Each item should be a single, concise markdown line that captures one specific o
 
 ## Required Output Format
 
-Return ONLY a numbered list of items, one per line. Each line should be a complete, self-contained observation.
+Your response MUST follow this exact format:
 
-Example format:
+SHORT_SUMMARY: [A single line (max 100 characters) summarizing the key finding for {title}]
+
+ITEMS:
 1. **Observation title**: Brief description of the observation with specific details.
 2. **Another observation**: Another specific point with supporting evidence.
 
+Example:
+SHORT_SUMMARY: User demonstrated strong debugging skills but could improve test coverage practices.
+
+ITEMS:
+1. **Clear problem articulation**: User explained the bug clearly with specific error messages.
+2. **Iterative approach**: User refined requirements based on initial results.
+
 Important:
-- Return ONLY the numbered list, no additional text, headers, or explanation.
+- SHORT_SUMMARY must be a single concise line (no more than 100 characters).
+- Return numbered list items under ITEMS section.
 - Each item must be a single line of markdown text.
 - Focus on specific, actionable observations from the session."#,
         title = entry.title.to_lowercase(),
@@ -127,16 +143,36 @@ Important:
 // =============================================================================
 
 /// Parse the LLM response for a single entry type
-/// Expects a numbered list of markdown lines
-fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result<Vec<String>> {
+/// Expects SHORT_SUMMARY and ITEMS sections
+fn parse_entry_response(
+    response_text: &str,
+    entry: &QualitativeEntry,
+) -> Result<QualitativeEntryOutput> {
     let mut items = Vec::new();
+    let mut summary = String::new();
+
+    // Parse SHORT_SUMMARY
+    let summary_re = Regex::new(r"(?i)SHORT_SUMMARY:\s*(.+)").unwrap();
+    if let Some(caps) = summary_re.captures(response_text) {
+        if let Some(summary_match) = caps.get(1) {
+            summary = summary_match.as_str().trim().to_string();
+            // Truncate to 100 characters if needed
+            if summary.len() > 100 {
+                summary = format!("{}...", &summary[..97]);
+            }
+        }
+    }
 
     // Parse numbered list items (e.g., "1. ...", "2. ...")
     let numbered_re = Regex::new(r"^\s*\d+\.\s*(.+)$").unwrap();
 
-    for line in response_text.lines() {
+    // Find ITEMS section and parse from there
+    let items_start = response_text.to_lowercase().find("items:").unwrap_or(0);
+    let items_section = &response_text[items_start..];
+
+    for line in items_section.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || trimmed.to_lowercase().starts_with("items:") {
             continue;
         }
 
@@ -168,7 +204,21 @@ fn parse_entry_response(response_text: &str, entry: &QualitativeEntry) -> Result
         );
     }
 
-    Ok(items)
+    if summary.is_empty() {
+        tracing::warn!(
+            "No summary parsed for entry {}, response: {}",
+            entry.key,
+            response_text
+        );
+    }
+
+    Ok(QualitativeEntryOutput {
+        key: entry.key.clone(),
+        title: entry.title.clone(),
+        description: entry.description.clone(),
+        summary,
+        items,
+    })
 }
 
 // =============================================================================

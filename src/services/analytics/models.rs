@@ -86,6 +86,21 @@ pub struct QualitativeEntry {
     pub description: String,
 }
 
+/// Output structure for a qualitative entry with analysis results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitativeEntryOutput {
+    /// Unique key for the entry (e.g., "insights", "good_patterns")
+    pub key: String,
+    /// Display title (e.g., "Insights", "Good Patterns")
+    pub title: String,
+    /// Full description of what this entry measures
+    pub description: String,
+    /// Short one-line summary of the analysis results
+    pub summary: String,
+    /// List of specific observations/items for this entry
+    pub items: Vec<String>,
+}
+
 impl QualitativeEntry {
     /// Format entry for inclusion in LLM prompts
     pub fn format_for_prompt(&self) -> String {
@@ -246,13 +261,12 @@ pub struct SessionTranscript {
 // =============================================================================
 
 /// AI-generated qualitative output from configurable entry-based analysis
-/// Each entry contains a list of markdown strings (one insight/observation per line)
+/// Each entry contains key, title, description, summary, and items
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AIQualitativeOutput {
-    /// Dynamic entries based on qualitative_entries.json configuration
-    /// Key is the entry key (e.g., "insights"), value is an array of markdown strings
+    /// List of qualitative entry outputs with full metadata and analysis results
     #[serde(default)]
-    pub entries: HashMap<String, Vec<String>>,
+    pub entries: Vec<QualitativeEntryOutput>,
     /// Summary of qualitative evaluation
     #[serde(default)]
     pub summary: Option<QualitativeEvaluationSummary>,
@@ -274,8 +288,8 @@ pub struct QualitativeEvaluationSummary {
 
 impl AIQualitativeOutput {
     /// Create a new AIQualitativeOutput with the given entries
-    pub fn new(entries: HashMap<String, Vec<String>>, entries_version: String) -> Self {
-        let total_entries: usize = entries.values().map(|v| v.len()).sum();
+    pub fn new(entries: Vec<QualitativeEntryOutput>, entries_version: String) -> Self {
+        let total_entries: usize = entries.iter().map(|e| e.items.len()).sum();
         let categories_evaluated = entries.len();
 
         Self {
@@ -289,40 +303,43 @@ impl AIQualitativeOutput {
         }
     }
 
-    /// Get entries by key
-    pub fn get_entries(&self, key: &str) -> Option<&Vec<String>> {
-        self.entries.get(key)
+    /// Get entry by key
+    pub fn get_entry(&self, key: &str) -> Option<&QualitativeEntryOutput> {
+        self.entries.iter().find(|e| e.key == key)
+    }
+
+    /// Get items by key
+    pub fn get_items(&self, key: &str) -> Option<&Vec<String>> {
+        self.get_entry(key).map(|e| &e.items)
     }
 
     /// Get insights as markdown strings
     pub fn insights(&self) -> Vec<String> {
-        self.get_entries("insights").cloned().unwrap_or_default()
+        self.get_items("insights").cloned().unwrap_or_default()
     }
 
     /// Get good patterns as markdown strings
     pub fn good_patterns(&self) -> Vec<String> {
-        self.get_entries("good_patterns")
-            .cloned()
-            .unwrap_or_default()
+        self.get_items("good_patterns").cloned().unwrap_or_default()
     }
 
     /// Get improvement areas as markdown strings
     pub fn improvement_areas(&self) -> Vec<String> {
-        self.get_entries("improvement_areas")
+        self.get_items("improvement_areas")
             .cloned()
             .unwrap_or_default()
     }
 
     /// Get recommendations as markdown strings
     pub fn recommendations(&self) -> Vec<String> {
-        self.get_entries("recommendations")
+        self.get_items("recommendations")
             .cloned()
             .unwrap_or_default()
     }
 
     /// Get learning observations as markdown strings
     pub fn learning_observations(&self) -> Vec<String> {
-        self.get_entries("learning_observations")
+        self.get_items("learning_observations")
             .cloned()
             .unwrap_or_default()
     }

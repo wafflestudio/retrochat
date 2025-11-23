@@ -101,12 +101,25 @@ export interface QualitativeEvaluationSummary {
   entries_version: string
 }
 
+// Output structure for a qualitative entry with analysis results
+export interface QualitativeEntryOutput {
+  // Unique key for the entry (e.g., "insights", "good_patterns")
+  key: string
+  // Display title (e.g., "Insights", "Good Patterns")
+  title: string
+  // Full description of what this entry measures
+  description: string
+  // Short one-line summary of the analysis results
+  summary: string
+  // List of specific observations/items for this entry
+  items: string[]
+}
+
 // AI-generated qualitative output from configurable entry-based analysis
-// Each entry is a list of markdown strings (one observation per item)
+// Each entry contains key, title, description, summary, and items
 export interface AIQualitativeOutput {
-  // Dynamic entries based on qualitative_entries.json configuration
-  // Key is the entry key (e.g., "insights"), value is an array of markdown strings
-  entries: Record<string, string[]>
+  // List of qualitative entry outputs with full metadata and analysis results
+  entries: QualitativeEntryOutput[]
   // Summary of qualitative evaluation
   summary: QualitativeEvaluationSummary | null
   // Version of qualitative entries configuration used
