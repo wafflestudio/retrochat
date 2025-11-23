@@ -91,7 +91,7 @@ cargo run -- show SESSION_ID                          # Show session details
 cargo run -- search "query"                           # Search messages
 
 # Analysis commands (requires GOOGLE_AI_API_KEY env var)
-cargo run -- analysis run [SESSION_ID] [--all] [--custom-prompt PROMPT]  # Analyze sessions
+cargo run -- analysis run [SESSION_ID] [--all] # Analyze sessions
 cargo run -- analysis show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
 cargo run -- analysis status [--all|--history|--watch]      # Check analysis status
 cargo run -- analysis cancel [REQUEST_ID] [--all]    # Cancel operations

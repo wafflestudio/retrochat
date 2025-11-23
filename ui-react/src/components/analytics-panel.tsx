@@ -1,90 +1,88 @@
-'use client'
+"use client";
 
-import { ExclamationTriangleIcon, ReloadIcon } from '@radix-ui/react-icons'
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Activity,
-  Brain,
-  CheckCircle2,
-  Clock,
-  Code,
-  DollarSign,
-  FileCode,
-  Lightbulb,
-  Sparkles,
-  Target,
-  Zap,
-} from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
-import {
-  PolarAngleAxis,
+  RadarChart,
   PolarGrid,
+  PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  RadarChart,
   ResponsiveContainer,
   Tooltip,
-} from 'recharts'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { analyzeSession, getAnalysisResult } from '@/lib/api'
-import type { Analytics } from '@/types'
+} from "recharts";
+import {
+  FileCode,
+  Zap,
+  Target,
+  AlertCircle,
+  Loader2,
+  Clock,
+  Code,
+  Activity,
+  Brain,
+  ListChecks,
+} from "lucide-react";
+import type { Analytics } from "@/types";
+import { analyzeSession, getAnalysisResult } from "@/lib/api";
 
 interface AnalyticsPanelProps {
-  sessionId: string
+  sessionId: string;
 }
 
 export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
-  const [analytics, setAnalytics] = useState<Analytics | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadAnalytics = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const request = await analyzeSession(sessionId)
-      if (request.status === 'completed') {
-        const result = await getAnalysisResult(request.id)
-        setAnalytics(result)
-      } else if (request.status === 'failed') {
-        setError(request.error_message || 'Analysis failed')
-      }
-    } catch (err) {
-      console.error('[v0] Failed to load analytics:', err)
-      setError('Failed to generate analytics')
-    } finally {
-      setLoading(false)
-    }
-  }, [sessionId])
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAnalytics()
-  }, [loadAnalytics])
+    loadAnalytics();
+  }, [sessionId]);
+
+  async function loadAnalytics() {
+    setLoading(true);
+    setError(null);
+    try {
+      const request = await analyzeSession(sessionId);
+      if (request.status === "completed") {
+        const result = await getAnalysisResult(request.id);
+        setAnalytics(result);
+      } else if (request.status === "failed") {
+        setError(request.error_message || "Analysis failed");
+      }
+    } catch (err) {
+      console.error("[v0] Failed to load analytics:", err);
+      setError("Failed to generate analytics");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4">
-          <ReloadIcon className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
           <p className="text-muted-foreground">Analyzing session...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4">
-          <ExclamationTriangleIcon className="w-12 h-12 mx-auto text-destructive" />
+          <AlertCircle className="w-12 h-12 mx-auto text-destructive" />
           <p className="text-muted-foreground">{error}</p>
           <Button onClick={loadAnalytics}>Retry</Button>
         </div>
       </div>
-    )
+    );
   }
 
   if (!analytics) {
@@ -92,43 +90,79 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
       <div className="flex-1 flex items-center justify-center">
         <p className="text-muted-foreground">No analytics available</p>
       </div>
-    )
+    );
   }
+
+  const radarData = analytics.ai_quantitative_output.rubric_scores.map(
+    (rubric) => ({
+      metric: rubric.rubric_name,
+      score: (rubric.score / rubric.max_score) * 100,
+    })
+  );
+
+  const qualitativeEntries = Object.entries(
+    analytics.ai_qualitative_output.entries
+  );
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
       <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Performance Scores */}
+        {/* AI Quantitative Output - Rubric Scores */}
         <Card className="bg-card/50 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Performance Scores
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                Performance Scores (LLM-as-a-Judge)
+              </CardTitle>
+              {analytics.ai_quantitative_output.rubric_summary && (
+                <Badge variant="outline" className="text-base font-semibold">
+                  {analytics.ai_quantitative_output.rubric_summary.percentage.toFixed(
+                    1
+                  )}
+                  %
+                  <span className="text-muted-foreground ml-1 font-normal">
+                    (
+                    {
+                      analytics.ai_quantitative_output.rubric_summary
+                        .total_score
+                    }
+                    /{analytics.ai_quantitative_output.rubric_summary.max_score}
+                    )
+                  </span>
+                </Badge>
+              )}
+            </div>
+            {analytics.ai_quantitative_output.rubric_summary && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Evaluated{" "}
+                {
+                  analytics.ai_quantitative_output.rubric_summary
+                    .rubrics_evaluated
+                }{" "}
+                rubrics (
+                {
+                  analytics.ai_quantitative_output.rubric_summary
+                    .rubrics_version
+                }
+                )
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={400}>
-              <RadarChart
-                data={[
-                  { metric: 'Overall', score: analytics.scores.overall * 100 },
-                  { metric: 'Code Quality', score: analytics.scores.code_quality * 100 },
-                  { metric: 'Productivity', score: analytics.scores.productivity * 100 },
-                  { metric: 'Efficiency', score: analytics.scores.efficiency * 100 },
-                  { metric: 'Collaboration', score: analytics.scores.collaboration * 100 },
-                  { metric: 'Learning', score: analytics.scores.learning * 100 },
-                ]}
-              >
+              <RadarChart data={radarData}>
                 <PolarGrid stroke="#6366f1" strokeWidth={1.5} opacity={0.3} />
                 <PolarAngleAxis
                   dataKey="metric"
-                  tick={{ fill: '#e2e8f0', fontSize: 14, fontWeight: 500 }}
+                  tick={{ fill: "#e2e8f0", fontSize: 14, fontWeight: 500 }}
                   stroke="#6366f1"
                   strokeWidth={1}
                 />
                 <PolarRadiusAxis
                   angle={90}
                   domain={[0, 100]}
-                  tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                  tick={{ fill: "#cbd5e1", fontSize: 12 }}
                   stroke="#6366f1"
                   strokeWidth={1}
                   opacity={0.5}
@@ -140,23 +174,56 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   strokeWidth={3}
                   fill="#8b5cf6"
                   fillOpacity={0.25}
-                  dot={{ fill: '#8b5cf6', r: 5, strokeWidth: 2, stroke: '#ffffff' }}
+                  dot={{
+                    fill: "#8b5cf6",
+                    r: 5,
+                    strokeWidth: 2,
+                    stroke: "#ffffff",
+                  }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--popover))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                    color: 'hsl(var(--popover-foreground))',
+                    backgroundColor: "hsl(var(--popover))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    color: "hsl(var(--popover-foreground))",
                   }}
-                  formatter={(value: number) => [`${value.toFixed(0)}%`, 'Score']}
+                  formatter={(value: number) => [
+                    `${value.toFixed(0)}%`,
+                    "Score",
+                  ]}
                 />
               </RadarChart>
             </ResponsiveContainer>
+
+            {/* Rubric Score Details */}
+            <div className="mt-6 space-y-3">
+              {analytics.ai_quantitative_output.rubric_scores.map((rubric) => (
+                <div key={rubric.rubric_id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      {rubric.rubric_name}
+                    </span>
+                    <Badge variant="secondary">
+                      {rubric.score}/{rubric.max_score}
+                    </Badge>
+                  </div>
+                  <Progress
+                    value={(rubric.score / rubric.max_score) * 100}
+                    className="h-2"
+                  />
+                  {rubric.reasoning && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {rubric.reasoning}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Quick Metrics */}
+        {/* Metric Quantitative Output */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -168,18 +235,49 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Files Modified</span>
-                <span className="font-semibold">{analytics.metrics.total_files_modified}</span>
+                <span className="font-semibold">
+                  {
+                    analytics.metric_quantitative_output.file_changes
+                      .total_files_modified
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Files Read</span>
+                <span className="font-semibold">
+                  {
+                    analytics.metric_quantitative_output.file_changes
+                      .total_files_read
+                  }
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Lines Added</span>
                 <span className="font-semibold text-green-500">
-                  +{analytics.metrics.lines_added}
+                  +
+                  {
+                    analytics.metric_quantitative_output.file_changes
+                      .lines_added
+                  }
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Lines Removed</span>
                 <span className="font-semibold text-red-500">
-                  -{analytics.metrics.lines_removed}
+                  -
+                  {
+                    analytics.metric_quantitative_output.file_changes
+                      .lines_removed
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-2 mt-2">
+                <span className="text-muted-foreground">Net Growth</span>
+                <span className="font-semibold">
+                  {
+                    analytics.metric_quantitative_output.file_changes
+                      .net_code_growth
+                  }
                 </span>
               </div>
             </CardContent>
@@ -194,27 +292,22 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Duration</span>
+                <span className="text-muted-foreground">Total Duration</span>
                 <span className="font-semibold">
-                  {analytics.metrics.session_duration_minutes} min
+                  {
+                    analytics.metric_quantitative_output.time_metrics
+                      .total_session_time_minutes
+                  }{" "}
+                  min
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Deep Work Ratio</span>
+                <span className="text-muted-foreground">Peak Hours</span>
                 <span className="font-semibold">
-                  {(
-                    analytics.processed_output.time_efficiency_metrics.deep_work_ratio * 100
-                  ).toFixed(0)}
-                  %
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Time Utilization</span>
-                <span className="font-semibold">
-                  {(
-                    analytics.processed_output.time_efficiency_metrics.time_utilization * 100
-                  ).toFixed(0)}
-                  %
+                  {analytics.metric_quantitative_output.time_metrics.peak_hours.join(
+                    ", "
+                  )}
+                  h
                 </span>
               </div>
             </CardContent>
@@ -231,21 +324,28 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Tokens</span>
                 <span className="font-semibold">
-                  {analytics.metrics.total_tokens_used.toLocaleString()}
+                  {analytics.metric_quantitative_output.token_metrics.total_tokens_used.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tokens/Hour</span>
+                <span className="text-muted-foreground">Input</span>
                 <span className="font-semibold">
-                  {analytics.processed_output.token_metrics.tokens_per_hour.toLocaleString()}
+                  {analytics.metric_quantitative_output.token_metrics.input_tokens.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Output</span>
+                <span className="font-semibold">
+                  {analytics.metric_quantitative_output.token_metrics.output_tokens.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-2 mt-2">
                 <span className="text-muted-foreground">Efficiency</span>
                 <span className="font-semibold">
-                  {(analytics.processed_output.token_metrics.token_efficiency_score * 100).toFixed(
-                    0
-                  )}
+                  {(
+                    analytics.metric_quantitative_output.token_metrics
+                      .token_efficiency * 100
+                  ).toFixed(0)}
                   %
                 </span>
               </div>
@@ -255,402 +355,194 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Code className="w-4 h-4 text-primary" />
-                Code Velocity
+                <Activity className="w-4 h-4 text-primary" />
+                Tool Usage
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Lines/Hour</span>
+                <span className="text-muted-foreground">Total Ops</span>
                 <span className="font-semibold">
-                  {analytics.processed_output.code_change_metrics.lines_per_hour.toFixed(0)}
+                  {
+                    analytics.metric_quantitative_output.tool_usage
+                      .total_operations
+                  }
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Velocity Score</span>
-                <span className="font-semibold">
-                  {(analytics.processed_output.code_change_metrics.code_velocity * 100).toFixed(0)}%
+                <span className="text-muted-foreground">Success</span>
+                <span className="font-semibold text-green-500">
+                  {
+                    analytics.metric_quantitative_output.tool_usage
+                      .successful_operations
+                  }
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Refactoring Ratio</span>
+                <span className="text-muted-foreground">Failed</span>
+                <span className="font-semibold text-red-500">
+                  {
+                    analytics.metric_quantitative_output.tool_usage
+                      .failed_operations
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-2 mt-2">
+                <span className="text-muted-foreground">Avg Exec Time</span>
                 <span className="font-semibold">
-                  {(analytics.processed_output.code_change_metrics.refactoring_ratio * 100).toFixed(
-                    0
-                  )}
-                  %
+                  {
+                    analytics.metric_quantitative_output.tool_usage
+                      .average_execution_time_ms
+                  }
+                  ms
                 </span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Detailed Analytics Tabs */}
-        <Tabs defaultValue="insights" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="insights">Insights</TabsTrigger>
-            <TabsTrigger value="patterns">Patterns</TabsTrigger>
-            <TabsTrigger value="improvements">Improvements</TabsTrigger>
-            <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
-            <TabsTrigger value="learning">Learning</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="insights" className="space-y-4 mt-4">
-            {analytics.qualitative_output.insights.map((insight, idx) => (
-              <Card key={`${insight.title}-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <Lightbulb className="w-5 h-5 text-primary mt-0.5" />
-                      <div>
-                        <CardTitle className="text-base">{insight.title}</CardTitle>
-                        <Badge variant="outline" className="mt-2">
-                          {insight.category}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">
-                      {Math.round(insight.confidence * 100)}% confidence
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {insight.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="patterns" className="space-y-4 mt-4">
-            {analytics.qualitative_output.good_patterns.map((pattern, idx) => (
-              <Card key={`${pattern.pattern_name}-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
-                      <CardTitle className="text-base">{pattern.pattern_name}</CardTitle>
-                    </div>
-                    <Badge variant="secondary">{pattern.frequency}x</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {pattern.description}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Impact:</span>
-                    <Badge variant="outline">{pattern.impact}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="improvements" className="space-y-4 mt-4">
-            {analytics.qualitative_output.improvement_areas.map((area, idx) => (
-              <Card key={`${area.area_name}-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <ExclamationTriangleIcon className="w-5 h-5 text-orange-500 mt-0.5" />
-                      <CardTitle className="text-base">{area.area_name}</CardTitle>
-                    </div>
-                    <Badge
-                      variant={
-                        area.priority === 'high'
-                          ? 'destructive'
-                          : area.priority === 'medium'
-                            ? 'default'
-                            : 'secondary'
-                      }
-                    >
-                      {area.priority}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium">Current State:</span>
-                    <p className="text-sm text-muted-foreground mt-1">{area.current_state}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">Suggestion:</span>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {area.suggested_improvement}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">Expected Impact:</span>
-                    <p className="text-sm text-muted-foreground mt-1">{area.expected_impact}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="recommendations" className="space-y-4 mt-4">
-            {analytics.qualitative_output.recommendations.map((rec, idx) => (
-              <Card key={`${rec.title}-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <Sparkles className="w-5 h-5 text-primary mt-0.5" />
-                      <CardTitle className="text-base">{rec.title}</CardTitle>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{rec.implementation_difficulty}</Badge>
-                      <Badge variant="secondary">Impact: {rec.impact_score}/10</Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{rec.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="learning" className="space-y-4 mt-4">
-            {analytics.qualitative_output.learning_observations.map((obs, idx) => (
-              <Card key={`${obs.skill_area}-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-start gap-3">
-                    <Brain className="w-5 h-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <CardTitle className="text-base mb-2">{obs.skill_area}</CardTitle>
-                      <Badge variant="outline">{obs.progress_indicator}</Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <span className="text-sm font-medium">Observation:</span>
-                    <p className="text-sm text-muted-foreground mt-1">{obs.observation}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">Next Steps:</span>
-                    <ul className="mt-1 space-y-1">
-                      {obs.next_steps.map((step, i) => (
-                        <li
-                          key={`${step.substring(0, 20)}-${i}`}
-                          className="text-sm text-muted-foreground flex items-start gap-2"
-                        >
-                          <span className="text-primary mt-1">•</span>
-                          <span>{step}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="details" className="space-y-6 mt-4">
-            {/* Tool Usage Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5" />
-                  Tool Usage Metrics
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {analytics.quantitative_input.tool_usage.total_operations}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Total Operations</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-500">
-                      {analytics.quantitative_input.tool_usage.successful_operations}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Successful</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-red-500">
-                      {analytics.quantitative_input.tool_usage.failed_operations}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Failed</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {analytics.quantitative_input.tool_usage.average_execution_time_ms}ms
-                    </div>
-                    <div className="text-sm text-muted-foreground">Avg. Execution</div>
-                  </div>
+        {/* Tool Distribution Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Code className="w-5 h-5" />
+              Tool Distribution
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Object.entries(
+              analytics.metric_quantitative_output.tool_usage.tool_distribution
+            ).map(([tool, count]) => (
+              <div
+                key={tool}
+                className="flex items-center justify-between gap-4"
+              >
+                <span className="text-sm text-muted-foreground min-w-32">
+                  {tool}
+                </span>
+                <div className="flex-1 flex items-center gap-2">
+                  <Progress
+                    value={
+                      (count /
+                        analytics.metric_quantitative_output.tool_usage
+                          .total_operations) *
+                      100
+                    }
+                    className="h-2"
+                  />
+                  <span className="text-sm font-semibold min-w-12 text-right">
+                    {count}
+                  </span>
                 </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Tool Distribution:</div>
-                  {Object.entries(analytics.quantitative_input.tool_usage.tool_distribution).map(
-                    ([tool, count]) => (
-                      <div key={tool} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{tool}</span>
-                        <div className="flex items-center gap-2">
-                          <Progress
-                            value={
-                              (count / analytics.quantitative_input.tool_usage.total_operations) *
-                              100
-                            }
-                            className="w-24 h-2"
-                          />
-                          <span className="text-sm font-semibold w-8 text-right">{count}</span>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Project Context Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileCode className="w-5 h-5" />
-                  Project Context
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium mb-1">Project Type</div>
-                    <Badge variant="outline">
-                      {analytics.qualitative_input.project_context.project_type}
-                    </Badge>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium mb-1">Development Stage</div>
-                    <Badge variant="outline">
-                      {analytics.qualitative_input.project_context.development_stage}
-                    </Badge>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-2">Technology Stack</div>
-                  <div className="flex flex-wrap gap-2">
-                    {analytics.qualitative_input.project_context.technology_stack.map((tech, i) => (
-                      <Badge key={`${tech}-${i}`} variant="secondary">
-                        {tech}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-2">Complexity Score</div>
-                  <div className="flex items-center gap-3">
-                    <Progress
-                      value={analytics.qualitative_input.project_context.project_complexity * 10}
-                      className="flex-1"
-                    />
-                    <span className="text-sm font-semibold">
-                      {analytics.qualitative_input.project_context.project_complexity}/10
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Chat Context Section */}
-            <Card>
-              <CardHeader>
+        {/* AI Qualitative Output - Dynamic Entries */}
+        {qualitativeEntries.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Brain className="w-5 h-5" />
-                  Conversation Analysis
+                  Qualitative Analysis
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="text-sm font-medium mb-2">Conversation Flow</div>
-                  <p className="text-sm text-muted-foreground">
-                    {analytics.qualitative_input.chat_context.conversation_flow}
-                  </p>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-2">AI Interaction Quality</div>
-                  <div className="flex items-center gap-3">
-                    <Progress
-                      value={analytics.qualitative_input.chat_context.ai_interaction_quality * 10}
-                      className="flex-1"
-                    />
-                    <span className="text-sm font-semibold">
-                      {analytics.qualitative_input.chat_context.ai_interaction_quality}/10
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-2">Problem Solving Patterns</div>
-                  <div className="flex flex-wrap gap-2">
-                    {analytics.qualitative_input.chat_context.problem_solving_patterns.map(
-                      (pattern, i) => (
-                        <Badge key={`${pattern}-${i}`} variant="outline">
-                          {pattern}
-                        </Badge>
-                      )
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-2">Key Topics</div>
-                  <div className="flex flex-wrap gap-2">
-                    {analytics.qualitative_input.chat_context.key_topics.map((topic, i) => (
-                      <Badge key={`${topic}-${i}`} variant="secondary">
-                        {topic}
-                      </Badge>
+                {analytics.ai_qualitative_output.summary && (
+                  <Badge variant="outline">
+                    {analytics.ai_qualitative_output.summary.total_entries}{" "}
+                    entries •{" "}
+                    {
+                      analytics.ai_qualitative_output.summary
+                        .categories_evaluated
+                    }{" "}
+                    categories
+                  </Badge>
+                )}
+              </div>
+              {analytics.ai_qualitative_output.entries_version && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Version: {analytics.ai_qualitative_output.entries_version}
+                </p>
+              )}
+            </CardHeader>
+            <CardContent>
+              <Tabs
+                defaultValue={qualitativeEntries[0]?.[0] || "entries"}
+                className="w-full"
+              >
+                <TabsList
+                  className="grid w-full"
+                  style={{
+                    gridTemplateColumns: `repeat(${qualitativeEntries.length}, 1fr)`,
+                  }}
+                >
+                  {qualitativeEntries.map(([key]) => (
+                    <TabsTrigger key={key} value={key} className="capitalize">
+                      {key.replace(/_/g, " ")}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {qualitativeEntries.map(([key, entries]) => (
+                  <TabsContent key={key} value={key} className="space-y-3 mt-4">
+                    {entries.map((entry, idx) => (
+                      <Card key={idx}>
+                        <CardContent className="pt-4">
+                          <div className="prose prose-sm prose-invert max-w-none">
+                            <div
+                              className="text-sm leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: entry }}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Cost Estimate Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Cost Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-2xl font-bold">
-                      ${analytics.processed_output.token_metrics.cost_estimate.toFixed(4)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Estimated Cost</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {analytics.quantitative_input.token_metrics.input_tokens.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Input Tokens</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {analytics.quantitative_input.token_metrics.output_tokens.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Output Tokens</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Footer Info */}
-        <div className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
-          {analytics.model_used && <span>Analyzed using {analytics.model_used}</span>}
-          {analytics.analysis_duration_ms && (
-            <span> • Completed in {(analytics.analysis_duration_ms / 1000).toFixed(2)}s</span>
-          )}
-        </div>
+        {/* Analysis Metadata */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="w-5 h-5" />
+              Analysis Metadata
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-sm text-muted-foreground">Generated At</div>
+              <div className="font-semibold">
+                {new Date(analytics.generated_at).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Model Used</div>
+              <div className="font-semibold">
+                {analytics.model_used || "N/A"}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">
+                Analysis Duration
+              </div>
+              <div className="font-semibold">
+                {analytics.analysis_duration_ms}ms
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Session ID</div>
+              <div className="font-mono text-xs">
+                {analytics.session_id.substring(0, 8)}...
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  )
+  );
 }

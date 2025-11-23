@@ -9,6 +9,7 @@ use retrochat::services::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -495,6 +496,15 @@ async fn main() -> anyhow::Result<()> {
     }));
 
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+                window.close_devtools();
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![

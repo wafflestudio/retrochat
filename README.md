@@ -178,7 +178,7 @@ retrochat analysis run [SESSION_ID]
 retrochat analysis run --all
 
 # Run with custom prompt
-retrochat analysis run SESSION_ID --custom-prompt "Analyze coding patterns"
+retrochat analysis run [SESSION_ID]
 
 # View analysis results
 retrochat analysis show [SESSION_ID]
