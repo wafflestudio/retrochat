@@ -125,6 +125,12 @@ pnpm build            # Build production bundle
 ```
 
 #### Tauri Application (src-tauri/)
+
+**Prerequisites**: Install Tauri CLI before development
+```bash
+cargo install tauri-cli
+```
+
 ```bash
 cd src-tauri
 
@@ -133,6 +139,9 @@ cargo tauri dev       # Run Tauri app in development mode (hot reload)
 
 # Build
 cargo tauri build     # Build production Tauri application
+
+# Icon generation
+cargo tauri icon path/to/icon.png  # Generate app icons from source image
 
 # Testing
 cargo test            # Run Tauri backend tests

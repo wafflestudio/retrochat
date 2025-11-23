@@ -26,7 +26,16 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main",
+          "windows": ["main"],
+          "permissions": [
+            "core:webview:allow-internal-toggle-devtools"
+          ]
+        }
+      ]
     }
   }
 }
