@@ -18,6 +18,9 @@ use super::state::SessionDetailState;
 use super::tool_display::{ToolDisplayConfig, ToolDisplayFormatter};
 use super::utils::text::wrap_text;
 
+/// Reserved width for labels and values next to bar charts (e.g., "  Tokens", " 12345 total")
+const BAR_CHART_LABEL_WIDTH: u16 = 20;
+
 pub struct SessionDetailWidget {
     pub state: SessionDetailState,
     query_service: QueryService,
@@ -606,7 +609,7 @@ impl SessionDetailWidget {
         }
 
         if let Some(analytics) = &analytics_data.latest_analytics {
-            let bar_width = area.width.saturating_sub(20) as usize;
+            let bar_width = area.width.saturating_sub(BAR_CHART_LABEL_WIDTH) as usize;
 
             // AI Quantitative Output - Rubric Scores
             if !analytics.ai_quantitative_output.rubric_scores.is_empty() {

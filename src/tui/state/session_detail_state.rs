@@ -52,14 +52,6 @@ pub struct SessionDetailState {
     pub qualitative_scroll: usize,
     /// Viewport height for qualitative panel
     pub qualitative_viewport_height: usize,
-
-    // Legacy analytics scroll (deprecated, kept for compatibility)
-    /// Scrollbar state for analytics (deprecated)
-    pub analytics_scroll_state: ScrollbarState,
-    /// Current scroll position for analytics (deprecated)
-    pub analytics_scroll: usize,
-    /// Last known viewport height for analytics (deprecated)
-    pub analytics_viewport_height: usize,
 }
 
 impl SessionDetailState {
@@ -86,11 +78,6 @@ impl SessionDetailState {
             qualitative_scroll_state: ScrollbarState::default(),
             qualitative_scroll: 0,
             qualitative_viewport_height: 20,
-
-            // Legacy (deprecated)
-            analytics_scroll_state: ScrollbarState::default(),
-            analytics_scroll: 0,
-            analytics_viewport_height: 20,
         }
     }
 
@@ -186,45 +173,7 @@ impl SessionDetailState {
         self.scroll_state = self.scroll_state.position(self.current_scroll);
     }
 
-    /// Analytics scroll methods
-    pub fn analytics_scroll_up(&mut self) {
-        if self.analytics_scroll > 0 {
-            self.analytics_scroll -= 1;
-        }
-    }
-
-    pub fn analytics_scroll_down(&mut self, max_scroll: usize) {
-        if self.analytics_scroll < max_scroll {
-            self.analytics_scroll += 1;
-        }
-    }
-
-    pub fn analytics_scroll_page_up(&mut self, page_size: usize) {
-        self.analytics_scroll = self.analytics_scroll.saturating_sub(page_size);
-    }
-
-    pub fn analytics_scroll_page_down(&mut self, page_size: usize, max_scroll: usize) {
-        self.analytics_scroll = (self.analytics_scroll + page_size).min(max_scroll);
-    }
-
-    pub fn analytics_scroll_to_top(&mut self) {
-        self.analytics_scroll = 0;
-    }
-
-    pub fn analytics_scroll_to_bottom(&mut self, max_scroll: usize) {
-        self.analytics_scroll = max_scroll;
-    }
-
-    /// Update analytics scrollbar state
-    pub fn update_analytics_scroll_state(&mut self, total_lines: usize) {
-        self.analytics_scroll_state = self.analytics_scroll_state.content_length(total_lines);
-        self.analytics_scroll_state = self
-            .analytics_scroll_state
-            .viewport_content_length(self.analytics_viewport_height);
-        self.analytics_scroll_state = self.analytics_scroll_state.position(self.analytics_scroll);
-    }
-
-    // New dual panel analytics methods
+    // Dual panel analytics methods
 
     /// Switch focus between quantitative and qualitative panels
     pub fn toggle_analytics_panel_focus(&mut self) {
