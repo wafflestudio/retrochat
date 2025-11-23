@@ -854,7 +854,7 @@ impl GeminiCLIParser {
     /// Check if the filename matches Gemini's expected format (session-*.json pattern)
     pub fn accepts_filename(file_path: impl AsRef<Path>) -> bool {
         let path = file_path.as_ref();
-        
+
         // Get the file stem (filename without extension)
         if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
             // Gemini only accepts files starting with "session-"
@@ -862,7 +862,7 @@ impl GeminiCLIParser {
                 return true;
             }
         }
-        
+
         false
     }
 

@@ -100,9 +100,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
     })
   );
 
-  const qualitativeEntries = Object.entries(
-    analytics.ai_qualitative_output.entries
-  );
+  const qualitativeEntries = analytics.ai_qualitative_output.entries;
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
@@ -468,7 +466,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             </CardHeader>
             <CardContent>
               <Tabs
-                defaultValue={qualitativeEntries[0]?.[0] || "entries"}
+                defaultValue={qualitativeEntries[0]?.key || "entries"}
                 className="w-full"
               >
                 <TabsList
@@ -477,22 +475,31 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                     gridTemplateColumns: `repeat(${qualitativeEntries.length}, 1fr)`,
                   }}
                 >
-                  {qualitativeEntries.map(([key]) => (
-                    <TabsTrigger key={key} value={key} className="capitalize">
-                      {key.replace(/_/g, " ")}
+                  {qualitativeEntries.map((entry) => (
+                    <TabsTrigger key={entry.key} value={entry.key} className="capitalize">
+                      {entry.title}
                     </TabsTrigger>
                   ))}
                 </TabsList>
 
-                {qualitativeEntries.map(([key, entries]) => (
-                  <TabsContent key={key} value={key} className="space-y-3 mt-4">
-                    {entries.map((entry, idx) => (
+                {qualitativeEntries.map((entryOutput) => (
+                  <TabsContent key={entryOutput.key} value={entryOutput.key} className="space-y-3 mt-4">
+                    {/* Short Description Summary */}
+                    {entryOutput.short_description && (
+                      <div className="p-3 bg-muted/50 rounded-lg border">
+                        <p className="text-sm text-muted-foreground italic">
+                          {entryOutput.short_description}
+                        </p>
+                      </div>
+                    )}
+                    {/* Items */}
+                    {entryOutput.items.map((item, idx) => (
                       <Card key={idx}>
                         <CardContent className="pt-4">
                           <div className="prose prose-sm prose-invert max-w-none">
                             <div
                               className="text-sm leading-relaxed"
-                              dangerouslySetInnerHTML={{ __html: entry }}
+                              dangerouslySetInnerHTML={{ __html: item }}
                             />
                           </div>
                         </CardContent>
