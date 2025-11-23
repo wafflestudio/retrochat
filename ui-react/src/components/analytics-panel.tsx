@@ -484,11 +484,11 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
 
                 {qualitativeEntries.map((entryOutput) => (
                   <TabsContent key={entryOutput.key} value={entryOutput.key} className="space-y-3 mt-4">
-                    {/* Short Description Summary */}
-                    {entryOutput.short_description && (
+                    {/* Summary */}
+                    {entryOutput.summary && (
                       <div className="p-3 bg-muted/50 rounded-lg border">
                         <p className="text-sm text-muted-foreground italic">
-                          {entryOutput.short_description}
+                          {entryOutput.summary}
                         </p>
                       </div>
                     )}

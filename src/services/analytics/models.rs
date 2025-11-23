@@ -96,7 +96,7 @@ pub struct QualitativeEntryOutput {
     /// Full description of what this entry measures
     pub description: String,
     /// Short one-line summary of the analysis results
-    pub short_description: String,
+    pub summary: String,
     /// List of specific observations/items for this entry
     pub items: Vec<String>,
 }
@@ -261,7 +261,7 @@ pub struct SessionTranscript {
 // =============================================================================
 
 /// AI-generated qualitative output from configurable entry-based analysis
-/// Each entry contains key, title, description, short_description, and items
+/// Each entry contains key, title, description, summary, and items
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AIQualitativeOutput {
     /// List of qualitative entry outputs with full metadata and analysis results

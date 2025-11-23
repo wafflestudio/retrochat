@@ -110,13 +110,13 @@ export interface QualitativeEntryOutput {
   // Full description of what this entry measures
   description: string
   // Short one-line summary of the analysis results
-  short_description: string
+  summary: string
   // List of specific observations/items for this entry
   items: string[]
 }
 
 // AI-generated qualitative output from configurable entry-based analysis
-// Each entry contains key, title, description, short_description, and items
+// Each entry contains key, title, description, summary, and items
 export interface AIQualitativeOutput {
   // List of qualitative entry outputs with full metadata and analysis results
   entries: QualitativeEntryOutput[]

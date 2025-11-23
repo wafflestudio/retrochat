@@ -55,7 +55,7 @@ pub async fn generate_qualitative_analysis_ai(
                     key: entry.key.clone(),
                     title: entry.title.clone(),
                     description: entry.description.clone(),
-                    short_description: String::new(),
+                    summary: String::new(),
                     items: Vec::new(),
                 });
             }
@@ -149,16 +149,16 @@ fn parse_entry_response(
     entry: &QualitativeEntry,
 ) -> Result<QualitativeEntryOutput> {
     let mut items = Vec::new();
-    let mut short_description = String::new();
+    let mut summary = String::new();
 
     // Parse SHORT_SUMMARY
     let summary_re = Regex::new(r"(?i)SHORT_SUMMARY:\s*(.+)").unwrap();
     if let Some(caps) = summary_re.captures(response_text) {
-        if let Some(summary) = caps.get(1) {
-            short_description = summary.as_str().trim().to_string();
+        if let Some(summary_match) = caps.get(1) {
+            summary = summary_match.as_str().trim().to_string();
             // Truncate to 100 characters if needed
-            if short_description.len() > 100 {
-                short_description = format!("{}...", &short_description[..97]);
+            if summary.len() > 100 {
+                summary = format!("{}...", &summary[..97]);
             }
         }
     }
@@ -204,9 +204,9 @@ fn parse_entry_response(
         );
     }
 
-    if short_description.is_empty() {
+    if summary.is_empty() {
         tracing::warn!(
-            "No short_description parsed for entry {}, response: {}",
+            "No summary parsed for entry {}, response: {}",
             entry.key,
             response_text
         );
@@ -216,7 +216,7 @@ fn parse_entry_response(
         key: entry.key.clone(),
         title: entry.title.clone(),
         description: entry.description.clone(),
-        short_description,
+        summary,
         items,
     })
 }

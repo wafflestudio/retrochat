@@ -703,9 +703,9 @@ fn print_ai_qualitative(ai_qual: &crate::services::analytics::AIQualitativeOutpu
         if !entry_output.items.is_empty() {
             println!("  • {}:", entry_output.title);
 
-            // Print short description if available
-            if !entry_output.short_description.is_empty() {
-                println!("    📝 {}", entry_output.short_description);
+            // Print summary if available
+            if !entry_output.summary.is_empty() {
+                println!("    📝 {}", entry_output.summary);
             }
 
             // Print items
