@@ -40,10 +40,10 @@ async fn test_analytics_execute_command_structure() {
 async fn test_analytics_execute_all_sessions() {
     // Test executing analytics on all sessions
     let result = handle_execute_command(
-        None,                   // session_id (None when using --all)
-        None,                   // custom_prompt
-        true,                   // all
-        true,                   // background
+        None, // session_id (None when using --all)
+        None, // custom_prompt
+        true, // all
+        true, // background
     )
     .await;
 
@@ -105,10 +105,10 @@ async fn test_analytics_execute_custom_analysis() {
 async fn test_analytics_execute_validation() {
     // Test argument validation - neither session_id nor all flag
     let result = handle_execute_command(
-        None,                   // session_id
-        None,                   // custom_prompt
-        false,                  // all
-        false,                  // background
+        None,  // session_id
+        None,  // custom_prompt
+        false, // all
+        false, // background
     )
     .await;
 
