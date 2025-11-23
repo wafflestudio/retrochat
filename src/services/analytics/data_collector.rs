@@ -281,6 +281,89 @@ fn find_char_boundary_from_end(s: &str, bytes_from_end: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ToolOperation;
+    use chrono::Utc;
+
+    fn create_test_message(message_type: MessageType, tool_op_id: Option<Uuid>) -> Message {
+        let mut msg = Message::new(
+            Uuid::new_v4(),
+            MessageRole::Assistant,
+            "test content".to_string(),
+            Utc::now(),
+            1,
+        )
+        .with_message_type(message_type);
+        if let Some(id) = tool_op_id {
+            msg = msg.with_tool_operation(id);
+        }
+        msg
+    }
+
+    #[test]
+    fn test_get_message_type_string_simple_message() {
+        let msg = create_test_message(MessageType::SimpleMessage, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "simple_message");
+    }
+
+    #[test]
+    fn test_get_message_type_string_thinking() {
+        let msg = create_test_message(MessageType::Thinking, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "thinking");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_with_tool_op() {
+        let tool_op =
+            ToolOperation::new("tool_use_123".to_string(), "Bash".to_string(), Utc::now());
+        let tool_op_id = tool_op.id;
+        let msg = create_test_message(MessageType::ToolRequest, Some(tool_op_id));
+
+        let mut tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+        tool_ops_map.insert(tool_op_id, &tool_op);
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(Bash)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_result_with_tool_op() {
+        let tool_op =
+            ToolOperation::new("tool_use_456".to_string(), "Read".to_string(), Utc::now());
+        let tool_op_id = tool_op.id;
+        let msg = create_test_message(MessageType::ToolResult, Some(tool_op_id));
+
+        let mut tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+        tool_ops_map.insert(tool_op_id, &tool_op);
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_result(Read)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_without_tool_op() {
+        // When tool_operation_id is None
+        let msg = create_test_message(MessageType::ToolRequest, None);
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(unknown)");
+    }
+
+    #[test]
+    fn test_get_message_type_string_tool_request_with_missing_tool_op() {
+        // When tool_operation_id exists but not found in map
+        let msg = create_test_message(MessageType::ToolRequest, Some(Uuid::new_v4()));
+        let tool_ops_map: HashMap<Uuid, &ToolOperation> = HashMap::new();
+
+        let result = get_message_type_string(&msg, &tool_ops_map);
+        assert_eq!(result, "tool_request(unknown)");
+    }
 
     #[test]
     fn test_truncate_content_short() {
