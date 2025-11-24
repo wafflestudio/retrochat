@@ -266,7 +266,8 @@ impl ClaudeCodeParser {
                     }
 
                     // Skip messages with no meaningful content and no tools
-                    if content == "[No content]" && tool_uses.is_empty() && tool_results.is_empty() {
+                    if content == "[No content]" && tool_uses.is_empty() && tool_results.is_empty()
+                    {
                         continue;
                     }
 
