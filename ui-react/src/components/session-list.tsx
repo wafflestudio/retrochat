@@ -24,6 +24,7 @@ interface SessionListProps {
   onSessionSelect: (sessionId: string) => void
   onImport?: () => void
   refreshTrigger?: number
+  onSessionsLoaded?: (hasSessions: boolean) => void
 }
 
 export function SessionList({
@@ -33,6 +34,7 @@ export function SessionList({
   onSessionSelect,
   onImport,
   refreshTrigger,
+  onSessionsLoaded,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [providers, setProviders] = useState<string[]>([])
@@ -54,12 +56,14 @@ export function SessionList({
     try {
       const data = await getSessions(page, pageSize, provider)
       setSessions(data)
+      onSessionsLoaded?.(data.length > 0)
     } catch (error) {
       console.error('Failed to load sessions:', error)
+      onSessionsLoaded?.(false)
     } finally {
       setLoading(false)
     }
-  }, [page, provider])
+  }, [page, provider, onSessionsLoaded])
 
   useEffect(() => {
     loadProviders()

@@ -51,6 +51,8 @@ pub struct ToolOperationItem {
     pub result_summary: Option<String>,
     pub file_metadata: Option<FileMetadataItem>,
     pub bash_metadata: Option<serde_json::Value>,
+    pub raw_input: Option<serde_json::Value>,
+    pub raw_result: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

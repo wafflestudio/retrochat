@@ -5,8 +5,8 @@ import {
   PersonIcon,
   ReloadIcon,
 } from '@radix-ui/react-icons'
-import { format } from 'date-fns'
-import { Bot, Brain, FileCode, MessageSquare, TrendingUp } from 'lucide-react'
+import { format, formatDistanceToNow } from 'date-fns'
+import { Bot, Brain, Check, Copy, FileCode, MessageSquare, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import ReactMarkdown from 'react-markdown'
@@ -34,6 +34,7 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
     setLoading(true)
     try {
       const data = await getSessionDetail(sessionId)
+      console.log('session detail data:', data)
       setSession(data)
     } catch (error) {
       console.error('Failed to load session detail:', error)
@@ -156,7 +157,7 @@ function ThinkingMessage({ message }: { message: SessionWithMessages['messages']
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="flex gap-4 justify-start">
+    <div className="flex gap-4 justify-start ml-12">
       <div className="flex gap-3 max-w-[80%]">
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-purple-500/20 text-purple-400 border border-purple-500/30">
           <Brain className="w-4 h-4" />
@@ -188,9 +189,6 @@ function ThinkingMessage({ message }: { message: SessionWithMessages['messages']
               </div>
             </CollapsibleContent>
           </Collapsible>
-          <span className="text-xs text-muted-foreground mt-1">
-            {format(new Date(message.timestamp), 'HH:mm:ss')}
-          </span>
         </div>
       </div>
     </div>
@@ -198,35 +196,65 @@ function ThinkingMessage({ message }: { message: SessionWithMessages['messages']
 }
 
 function ToolRequestMessage({ message }: { message: SessionWithMessages['messages'][0] }) {
+  const [isOpen, setIsOpen] = useState(false)
+
   return (
-    <div className="flex gap-4 justify-start">
+    <div className="flex gap-4 justify-start ml-12">
       <div className="flex gap-3 max-w-[80%]">
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-blue-500/20 text-blue-400 border border-blue-500/30">
-          <ReloadIcon className="w-4 h-4 animate-spin" />
+          <ReloadIcon className="w-4 h-4" />
         </div>
-        <div className="flex flex-col items-start">
-          <div className="rounded-lg p-4 bg-card border border-blue-500/30 text-card-foreground">
-            <div className="flex items-center gap-2 mb-2">
-              <FileCode className="w-4 h-4 text-blue-400" />
-              <span className="text-sm font-medium text-blue-300">
-                {message.tool_operation?.tool_name || 'Tool Request'}
-              </span>
-              <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-400">
-                Running
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{message.content}</p>
-            {message.tool_operation?.file_metadata && (
-              <div className="mt-2 p-2 rounded bg-muted/50 text-xs">
-                <div className="font-mono text-blue-400">
-                  {message.tool_operation.file_metadata.file_path}
+        <div className="flex flex-col items-start flex-1">
+          <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between p-3 h-auto bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-blue-300">
+                    {message.tool_operation?.tool_name || 'Tool Request'}
+                  </span>
+                  <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-400">
+                    Running
+                  </Badge>
                 </div>
+                <ChevronDownIcon
+                  className={`w-4 h-4 text-blue-400 transition-transform ${
+                    isOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="rounded-lg p-4 bg-card border border-border text-card-foreground space-y-3">
+                {message.content && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Content</div>
+                    <p className="text-sm text-foreground leading-relaxed">{message.content}</p>
+                  </div>
+                )}
+                {message.tool_operation?.raw_input && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Raw Input</div>
+                    <pre className="text-xs text-muted-foreground bg-muted/50 p-3 rounded overflow-auto max-h-96 max-w-full whitespace-pre-wrap break-words">
+                      {JSON.stringify(message.tool_operation.raw_input, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {message.tool_operation?.file_metadata && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">File</div>
+                    <div className="font-mono text-xs text-blue-400">
+                      {message.tool_operation.file_metadata.file_path}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <span className="text-xs text-muted-foreground mt-1">
-            {format(new Date(message.timestamp), 'HH:mm:ss')}
-          </span>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </div>
@@ -235,9 +263,10 @@ function ToolRequestMessage({ message }: { message: SessionWithMessages['message
 
 function ToolResultMessage({ message }: { message: SessionWithMessages['messages'][0] }) {
   const isSuccess = message.tool_operation?.success !== false
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="flex gap-4 justify-start">
+    <div className="flex gap-4 justify-start ml-12">
       <div className="flex gap-3 max-w-[80%]">
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
@@ -248,31 +277,68 @@ function ToolResultMessage({ message }: { message: SessionWithMessages['messages
         >
           <FileCode className="w-4 h-4" />
         </div>
-        <div className="flex flex-col items-start">
-          <div
-            className={`rounded-lg p-4 border text-card-foreground ${
-              isSuccess ? 'bg-card border-green-500/30' : 'bg-card border-red-500/30'
-            }`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <FileCode className={`w-4 h-4 ${isSuccess ? 'text-green-400' : 'text-red-400'}`} />
-              <span
-                className={`text-sm font-medium ${isSuccess ? 'text-green-300' : 'text-red-300'}`}
+        <div className="flex flex-col items-start flex-1">
+          <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`w-full justify-between p-3 h-auto border rounded-lg ${
+                  isSuccess
+                    ? 'bg-green-500/5 hover:bg-green-500/10 border-green-500/20'
+                    : 'bg-red-500/5 hover:bg-red-500/10 border-red-500/20'
+                }`}
               >
-                {message.tool_operation?.tool_name || 'Tool Result'}
-              </span>
-              <Badge variant={isSuccess ? 'default' : 'destructive'} className="text-xs">
-                {isSuccess ? 'Success' : 'Failed'}
-              </Badge>
-            </div>
-            {message.content && (
-              <p className="text-sm text-muted-foreground mb-2">{message.content}</p>
-            )}
-            {message.tool_operation && <ToolOperationCard operation={message.tool_operation} />}
-          </div>
-          <span className="text-xs text-muted-foreground mt-1">
-            {format(new Date(message.timestamp), 'HH:mm:ss')}
-          </span>
+                <div className="flex items-center gap-2">
+                  <FileCode
+                    className={`w-4 h-4 ${isSuccess ? 'text-green-400' : 'text-red-400'}`}
+                  />
+                  <span
+                    className={`text-sm font-medium ${isSuccess ? 'text-green-300' : 'text-red-300'}`}
+                  >
+                    {message.tool_operation?.tool_name || 'Tool Result'}
+                  </span>
+                  <Badge variant={isSuccess ? 'default' : 'destructive'} className="text-xs">
+                    {isSuccess ? 'Success' : 'Failed'}
+                  </Badge>
+                </div>
+                <ChevronDownIcon
+                  className={`w-4 h-4 transition-transform ${
+                    isSuccess ? 'text-green-400' : 'text-red-400'
+                  } ${isOpen ? 'rotate-180' : ''}`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="rounded-lg p-4 bg-card border border-border text-card-foreground space-y-3">
+                {message.content && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Content</div>
+                    <p className="text-sm text-foreground leading-relaxed">{message.content}</p>
+                  </div>
+                )}
+                {message.tool_operation?.result_summary && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      Result Summary
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {message.tool_operation.result_summary}
+                    </p>
+                  </div>
+                )}
+                {message.tool_operation?.raw_result && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Raw Result</div>
+                    <pre className="text-xs text-muted-foreground bg-muted/50 p-3 rounded overflow-auto max-h-96 max-w-full whitespace-pre-wrap break-words">
+                      {JSON.stringify(message.tool_operation.raw_result, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {message.tool_operation && <ToolOperationCard operation={message.tool_operation} />}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </div>
@@ -280,7 +346,18 @@ function ToolResultMessage({ message }: { message: SessionWithMessages['messages
 }
 
 function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0] }) {
-  console.log(message)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy message:', error)
+    }
+  }
+
   return (
     <div className={`flex gap-4 ${message.role === 'User' ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -311,9 +388,25 @@ function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
-          <span className="text-xs text-muted-foreground mt-1">
-            {format(new Date(message.timestamp), 'HH:mm:ss')}
-          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy}>
+                  {copied ? (
+                    <Check className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{copied ? 'Copied!' : 'Copy message'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </div>

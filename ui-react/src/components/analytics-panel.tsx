@@ -116,7 +116,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="p-8 max-w-7xl mx-auto space-y-8">
         {/* AI Quantitative Output - Rubric Scores */}
         <Card className="bg-card/50 backdrop-blur-sm">
           <CardHeader>
@@ -136,7 +136,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               )}
             </div>
             {analytics.ai_quantitative_output.rubric_summary && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-muted-foreground mt-3">
                 Evaluated {analytics.ai_quantitative_output.rubric_summary.rubrics_evaluated}{' '}
                 rubrics ({analytics.ai_quantitative_output.rubric_summary.rubrics_version})
               </p>
@@ -187,7 +187,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             </ResponsiveContainer>
 
             {/* Rubric Score Details */}
-            <div className="mt-6 space-y-3">
+            <div className="mt-8 space-y-4">
               {analytics.ai_quantitative_output.rubric_scores.map((rubric) => (
                 <div key={rubric.rubric_id} className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -209,15 +209,15 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
         </Card>
 
         {/* Metric Quantitative Output */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-primary" />
                 Code Changes
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Files Modified</span>
                 <span className="font-semibold">
@@ -242,7 +242,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   -{analytics.metric_quantitative_output.file_changes.lines_removed}
                 </span>
               </div>
-              <div className="flex justify-between text-sm border-t pt-2 mt-2">
+              <div className="flex justify-between text-sm border-t pt-3 mt-3">
                 <span className="text-muted-foreground">Net Growth</span>
                 <span className="font-semibold">
                   {analytics.metric_quantitative_output.file_changes.net_code_growth}
@@ -252,13 +252,13 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Clock className="w-4 h-4 text-primary" />
                 Time Metrics
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Duration</span>
                 <span className="font-semibold">
@@ -275,13 +275,13 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Zap className="w-4 h-4 text-primary" />
                 Token Usage
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Tokens</span>
                 <span className="font-semibold">
@@ -300,7 +300,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   {analytics.metric_quantitative_output.token_metrics.output_tokens.toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between text-sm border-t pt-2 mt-2">
+              <div className="flex justify-between text-sm border-t pt-3 mt-3">
                 <span className="text-muted-foreground">Efficiency</span>
                 <span className="font-semibold">
                   {(
@@ -313,13 +313,13 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Activity className="w-4 h-4 text-primary" />
                 Tool Usage
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Ops</span>
                 <span className="font-semibold">
@@ -338,7 +338,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   {analytics.metric_quantitative_output.tool_usage.failed_operations}
                 </span>
               </div>
-              <div className="flex justify-between text-sm border-t pt-2 mt-2">
+              <div className="flex justify-between text-sm border-t pt-3 mt-3">
                 <span className="text-muted-foreground">Avg Exec Time</span>
                 <span className="font-semibold">
                   {analytics.metric_quantitative_output.tool_usage.average_execution_time_ms}
@@ -357,7 +357,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               Tool Distribution
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             {Object.entries(analytics.metric_quantitative_output.tool_usage.tool_distribution).map(
               ([tool, count]) => (
                 <div key={tool} className="flex items-center justify-between gap-4">
@@ -395,7 +395,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                 )}
               </div>
               {analytics.ai_qualitative_output.entries_version && (
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground mt-3">
                   Version: {analytics.ai_qualitative_output.entries_version}
                 </p>
               )}
@@ -419,12 +419,12 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   <TabsContent
                     key={entryOutput.key}
                     value={entryOutput.key}
-                    className="space-y-3 mt-4"
+                    className="space-y-4 mt-6"
                   >
                     {/* Summary */}
                     {entryOutput.summary && (
-                      <div className="p-3 bg-muted/50 rounded-lg border">
-                        <p className="text-sm text-muted-foreground italic">
+                      <div className="p-4 bg-muted/50 rounded-lg border">
+                        <p className="text-sm text-muted-foreground italic leading-relaxed">
                           {entryOutput.summary}
                         </p>
                       </div>
@@ -432,7 +432,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                     {/* Items */}
                     {entryOutput.items.map((item, idx) => (
                       <Card key={`${entryOutput.key}-item-${idx}`}>
-                        <CardContent className="pt-4">
+                        <CardContent className="pt-5 pb-5">
                           <div
                             className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}
                           >
@@ -456,22 +456,22 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               Analysis Metadata
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Generated At</div>
               <div className="font-semibold">
                 {new Date(analytics.generated_at).toLocaleString()}
               </div>
             </div>
-            <div>
+            <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Model Used</div>
               <div className="font-semibold">{analytics.model_used || 'N/A'}</div>
             </div>
-            <div>
+            <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Analysis Duration</div>
               <div className="font-semibold">{analytics.analysis_duration_ms}ms</div>
             </div>
-            <div>
+            <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Session ID</div>
               <div className="font-mono text-xs">{analytics.session_id.substring(0, 8)}...</div>
             </div>

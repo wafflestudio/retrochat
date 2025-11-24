@@ -150,9 +150,8 @@ async fn test_codex_parser_empty_content() -> Result<()> {
     assert!(result.is_ok());
     let (session, messages) = result.unwrap();
 
-    assert_eq!(session.message_count, 1);
-    // Empty content should be replaced with "[No content]"
-    assert_eq!(messages[0].content, "[No content]");
+    // Empty content should be discarded so 0
+    assert_eq!(session.message_count, 0);
 
     Ok(())
 }

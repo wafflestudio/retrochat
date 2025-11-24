@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { SearchView } from './search-view'
 import { SessionDetail } from './session-detail'
 import { SessionList } from './session-list'
+import { SessionStatistics } from './session-statistics'
 import { ThemeToggle } from './theme-toggle'
 
 interface FileInfo {
@@ -40,6 +41,7 @@ export function SessionManager() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [filesToImport, setFilesToImport] = useState<FileInfo[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [hasAnySessions, setHasAnySessions] = useState(false)
 
   // Keyboard shortcuts
   useHotkeys('meta+1', () => setActiveTab('sessions'), { preventDefault: true })
@@ -276,6 +278,7 @@ export function SessionManager() {
                 onSessionSelect={setSelectedSession}
                 onImport={handleImport}
                 refreshTrigger={refreshTrigger}
+                onSessionsLoaded={(hasSessions) => setHasAnySessions(hasSessions)}
               />
             ) : (
               <SearchView
@@ -291,6 +294,8 @@ export function SessionManager() {
         <div className="flex-1 flex flex-col h-full min-w-0">
           {selectedSession ? (
             <SessionDetail sessionId={selectedSession} onClose={() => setSelectedSession(null)} />
+          ) : hasAnySessions ? (
+            <SessionStatistics provider={provider} />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">

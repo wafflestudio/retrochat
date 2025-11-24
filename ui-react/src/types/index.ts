@@ -24,6 +24,8 @@ export interface ToolOperation {
   result_summary: string | null
   file_metadata: FileMetadata | null
   bash_metadata: Record<string, unknown> | null
+  raw_input: Record<string, unknown> | null
+  raw_result: Record<string, unknown> | null
 }
 
 export interface Message {
