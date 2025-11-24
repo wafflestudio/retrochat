@@ -316,6 +316,11 @@ impl CodexParser {
                 content.clone()
             };
 
+            // Skip messages with no meaningful content and no tools
+            if content == "[No content]" {
+                continue;
+            }
+
             // Generate a deterministic UUID for the message
             let message_id = self.generate_uuid_from_string(&format!("{session_id}-msg-{index}"));
 

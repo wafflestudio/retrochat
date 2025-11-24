@@ -120,15 +120,20 @@ pub async fn get_session_detail(
         tool_operations.len()
     );
 
+    // Create a map of tool_operation_id -> tool_operation for efficient lookup
+    log::debug!("Building tool operation lookup map");
+    let tool_op_by_id: std::collections::HashMap<_, _> = tool_operations
+        .into_iter()
+        .map(|op| (op.id, op))
+        .collect();
+
     // Create a map of message_id -> tool_operation
-    log::debug!("Building tool operation map");
+    log::debug!("Building message -> tool operation map");
     let mut tool_op_map = std::collections::HashMap::new();
-    for tool_op in tool_operations {
-        // Find the message that references this tool operation
-        for msg in &response.messages {
-            if msg.tool_operation_id == Some(tool_op.id) {
+    for msg in &response.messages {
+        if let Some(tool_op_id) = msg.tool_operation_id {
+            if let Some(tool_op) = tool_op_by_id.get(&tool_op_id) {
                 tool_op_map.insert(msg.id, tool_op.clone());
-                break;
             }
         }
     }
@@ -159,6 +164,8 @@ pub async fn get_session_detail(
                     timestamp: op.timestamp.to_rfc3339(),
                     success: op.success,
                     result_summary: op.result_summary.clone(),
+                    raw_input: op.raw_input.clone(),
+                    raw_result: op.raw_result.clone(),
                     file_metadata: op.file_metadata.as_ref().map(|fm| FileMetadataItem {
                         file_path: fm.file_path.clone(),
                         file_extension: fm.file_extension.clone(),
