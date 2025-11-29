@@ -34,7 +34,6 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
     setLoading(true)
     try {
       const data = await getSessionDetail(sessionId)
-      console.log('session detail data:', data)
       setSession(data)
     } catch (error) {
       console.error('Failed to load session detail:', error)
