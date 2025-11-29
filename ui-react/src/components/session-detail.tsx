@@ -121,7 +121,7 @@ export function SessionDetail({ sessionId, onClose }: SessionDetailProps) {
         {showAnalytics ? (
           <AnalyticsPanel sessionId={sessionId} />
         ) : (
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
             <div className="p-6 space-y-4 max-w-4xl mx-auto">
               {session.messages.map((message) => (
                 <MessageRenderer key={message.id} message={message} />
@@ -360,7 +360,7 @@ function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0
   return (
     <div className={`flex gap-4 ${message.role === 'User' ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`flex gap-3 max-w-[80%] ${
+        className={`flex gap-3 max-w-[80%] min-w-0 ${
           message.role === 'User' ? 'flex-row-reverse' : 'flex-row'
         }`}
       >
@@ -377,9 +377,13 @@ function SimpleMessage({ message }: { message: SessionWithMessages['messages'][0
             <Bot className="w-4 h-4" />
           )}
         </div>
-        <div className={`flex flex-col ${message.role === 'User' ? 'items-end' : 'items-start'}`}>
+        <div
+          className={`flex flex-col min-w-0 w-full ${
+            message.role === 'User' ? 'items-end' : 'items-start'
+          }`}
+        >
           <div
-            className={`rounded-lg p-4 prose prose-sm max-w-none dark:prose-invert ${
+            className={`rounded-lg p-4 prose prose-sm max-w-none dark:prose-invert break-words w-full prose-p:break-words prose-p:whitespace-normal prose-span:break-words ${
               message.role === 'User'
                 ? 'bg-primary text-primary-foreground prose-p:text-primary-foreground prose-headings:text-primary-foreground prose-strong:text-primary-foreground prose-code:text-primary-foreground prose-a:text-primary-foreground prose-a:underline'
                 : 'bg-gray-100 border border-gray-200 text-gray-900 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 prose-p:text-gray-900 dark:prose-p:text-gray-100 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100 prose-pre:bg-gray-200 dark:prose-pre:bg-gray-900 prose-a:text-blue-600 dark:prose-a:text-blue-400'
