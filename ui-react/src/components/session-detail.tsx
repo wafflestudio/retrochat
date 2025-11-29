@@ -156,7 +156,7 @@ function ThinkingMessage({ message }: { message: SessionWithMessages['messages']
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="flex gap-4 justify-start ml-12">
+    <div className="flex gap-4 justify-start">
       <div className="flex gap-3 max-w-[80%]">
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-purple-500/20 text-purple-400 border border-purple-500/30">
           <Brain className="w-4 h-4" />
@@ -198,7 +198,7 @@ function ToolRequestMessage({ message }: { message: SessionWithMessages['message
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="flex gap-4 justify-start ml-12">
+    <div className="flex gap-4 justify-start">
       <div className="flex gap-3 max-w-[80%]">
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-blue-500/20 text-blue-400 border border-blue-500/30">
           <ReloadIcon className="w-4 h-4" />
@@ -265,7 +265,7 @@ function ToolResultMessage({ message }: { message: SessionWithMessages['messages
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="flex gap-4 justify-start ml-12">
+    <div className="flex gap-4 justify-start">
       <div className="flex gap-3 max-w-[80%]">
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
