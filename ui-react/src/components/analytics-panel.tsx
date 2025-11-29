@@ -26,10 +26,23 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { analyzeSession, getAnalysisResult } from '@/lib/api'
-import type { Analytics } from '@/types'
+import {
+  analyzeSession,
+  getAnalysisResult,
+  getAnalysisStatus,
+  listAnalyses,
+} from '@/lib/api'
+import type { Analytics, AnalyticsRequest } from '@/types'
 
 interface AnalyticsPanelProps {
   sessionId: string
@@ -40,6 +53,9 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [currentRequest, setCurrentRequest] = useState<AnalyticsRequest | null>(null)
 
   const isDark = theme === 'dark'
 
@@ -53,35 +69,133 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
     dotStroke: isDark ? '#ffffff' : '#ffffff',
   }
 
-  const loadAnalytics = useCallback(async () => {
+  // Check for existing completed analysis
+  const checkExistingAnalysis = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const request = await analyzeSession(sessionId)
-      if (request.status === 'completed') {
-        const result = await getAnalysisResult(request.id)
-        setAnalytics(result)
-      } else if (request.status === 'failed') {
-        setError(request.error_message || 'Analysis failed')
+      const requests = await listAnalyses(sessionId)
+      const completedRequest = requests
+        .filter((r) => r.status === 'completed')
+        .sort((a, b) => {
+          const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0
+          const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0
+          return bTime - aTime
+        })[0]
+
+      if (completedRequest) {
+        const result = await getAnalysisResult(completedRequest.id)
+        if (result) {
+          setAnalytics(result)
+          setLoading(false)
+          return true
+        }
       }
-    } catch (err) {
-      console.error('[v0] Failed to load analytics:', err)
-      setError('Failed to generate analytics')
-    } finally {
       setLoading(false)
+      return false
+    } catch (err) {
+      console.error('[v0] Failed to check existing analysis:', err)
+      setLoading(false)
+      return false
     }
   }, [sessionId])
 
+  // Poll for analysis completion when analyzing
   useEffect(() => {
-    loadAnalytics()
-  }, [loadAnalytics])
+    if (!analyzing || !currentRequest) return
+
+    const requestId = currentRequest.id
+    if (currentRequest.status === 'completed' || currentRequest.status === 'failed') {
+      return
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const request = await getAnalysisStatus(requestId)
+        if (request.status === 'completed') {
+          clearInterval(pollInterval)
+          const result = await getAnalysisResult(requestId)
+          if (result) {
+            setAnalytics(result)
+            setAnalyzing(false)
+            setCurrentRequest(null)
+          }
+        } else if (request.status === 'failed') {
+          clearInterval(pollInterval)
+          setError(request.error_message || 'Analysis failed')
+          setAnalyzing(false)
+          setCurrentRequest(null)
+        }
+      } catch (err) {
+        console.error('[v0] Failed to poll analysis status:', err)
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [analyzing, currentRequest])
+
+  // Start new analysis
+  const startAnalysis = useCallback(async () => {
+    setShowConfirmDialog(false)
+    setAnalyzing(true)
+    setError(null)
+    try {
+      const request = await analyzeSession(sessionId)
+      setCurrentRequest(request)
+
+      if (request.status === 'completed') {
+        const result = await getAnalysisResult(request.id)
+        if (result) {
+          setAnalytics(result)
+          setAnalyzing(false)
+          setCurrentRequest(null)
+        }
+      } else if (request.status === 'running' || request.status === 'pending') {
+        // Polling will be handled by useEffect
+      } else if (request.status === 'failed') {
+        setError(request.error_message || 'Analysis failed')
+        setAnalyzing(false)
+        setCurrentRequest(null)
+      }
+    } catch (err) {
+      console.error('[v0] Failed to start analysis:', err)
+      setError('Failed to start analysis')
+      setAnalyzing(false)
+      setCurrentRequest(null)
+    }
+  }, [sessionId])
+
+  // Initial load: check for existing analysis
+  useEffect(() => {
+    checkExistingAnalysis().then((hasExisting) => {
+      if (!hasExisting) {
+        setShowConfirmDialog(true)
+      }
+    })
+  }, [checkExistingAnalysis])
 
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading analytics...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (analyzing) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
           <p className="text-muted-foreground">Analyzing session...</p>
+          {currentRequest && (
+            <p className="text-sm text-muted-foreground">
+              Request ID: {currentRequest.id.substring(0, 8)}...
+            </p>
+          )}
         </div>
       </div>
     )
@@ -93,7 +207,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
         <div className="text-center space-y-4">
           <AlertCircle className="w-12 h-12 mx-auto text-destructive" />
           <p className="text-muted-foreground">{error}</p>
-          <Button onClick={loadAnalytics}>Retry</Button>
+          <Button onClick={startAnalysis}>Retry</Button>
         </div>
       </div>
     )
@@ -101,9 +215,35 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
 
   if (!analytics) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-muted-foreground">No analytics available</p>
-      </div>
+      <>
+        <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Start Analysis</DialogTitle>
+              <DialogDescription>
+                No existing analysis found for this session. Would you like to generate a new
+                analysis? This may take a few moments.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowConfirmDialog(false)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={startAnalysis}>Start Analysis</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <div className="flex-1 flex items-center justify-center">
+          {!showConfirmDialog && (
+            <p className="text-muted-foreground">No analytics available</p>
+          )}
+        </div>
+      </>
     )
   }
 
