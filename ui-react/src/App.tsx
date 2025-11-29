@@ -5,7 +5,7 @@ import { useUpdater } from './hooks/use-updater'
 
 function App() {
   // Initialize updater (checks for updates on startup)
-  useUpdater()
+  // useUpdater()
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

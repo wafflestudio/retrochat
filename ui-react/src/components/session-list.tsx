@@ -75,6 +75,7 @@ export function SessionList({
 
   // Refresh sessions when refreshTrigger changes
   useEffect(() => {
+    console.log('refreshTrigger', refreshTrigger)
     if (refreshTrigger !== undefined) {
       loadSessions()
     }
