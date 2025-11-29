@@ -100,7 +100,7 @@ export function SessionStatistics({ provider }: SessionStatisticsProps) {
             Overview
           </Button>
         </div>
-        <SessionFlamechart provider={provider} />
+        {/* <SessionFlamechart provider={provider} /> */}
       </div>
     )
   }
