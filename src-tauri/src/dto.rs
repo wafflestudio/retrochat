@@ -363,3 +363,29 @@ impl From<retrochat::services::analytics::ToolUsageMetrics> for ToolUsageMetrics
         }
     }
 }
+
+// =============================================================================
+// Histogram DTOs
+// =============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HistogramRequest {
+    pub start_time: String,      // RFC3339 timestamp
+    pub end_time: String,        // RFC3339 timestamp
+    pub interval_minutes: i32,   // 5, 15, 60, 360
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HistogramBucket {
+    pub timestamp: String,       // Bucket start time (RFC3339)
+    pub count: i32,              // Count in this bucket
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HistogramResponse {
+    pub buckets: Vec<HistogramBucket>,
+    pub total_count: i32,
+    pub start_time: String,
+    pub end_time: String,
+    pub interval_minutes: i32,
+}

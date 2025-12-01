@@ -163,3 +163,25 @@ export interface Analytics {
   model_used: string | null
   analysis_duration_ms: number | null
 }
+
+// Histogram types
+export type TimeRange = '6h' | '24h' | '7d' | '30d'
+
+export interface HistogramRequest {
+  start_time: string // ISO 8601
+  end_time: string // ISO 8601
+  interval_minutes: number
+}
+
+export interface HistogramBucket {
+  timestamp: string // ISO 8601
+  count: number
+}
+
+export interface HistogramResponse {
+  buckets: HistogramBucket[]
+  total_count: number
+  start_time: string
+  end_time: string
+  interval_minutes: number
+}

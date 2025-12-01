@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { getSessions } from '@/lib/api'
-import { SessionFlamechart } from './session-flamechart'
+import { SessionHistogram } from './session-histogram'
 
 interface SessionStatisticsProps {
   provider: string | null
@@ -87,20 +87,14 @@ export function SessionStatistics({ provider }: SessionStatisticsProps) {
 
   if (view === 'timeline') {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-background">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold">Session Timeline</h2>
-            <p className="text-sm text-muted-foreground">
-              Flamechart view{provider ? ` for ${provider}` : ' across all providers'}
-            </p>
-          </div>
+      <div className="flex-1 flex flex-col min-h-0 bg-background p-4 gap-4">
+        <div className="flex items-center justify-end">
           <Button variant="outline" onClick={() => setView('overview')} className="gap-2">
             <BarChart3 className="w-4 h-4" />
             Overview
           </Button>
         </div>
-        {/* <SessionFlamechart provider={provider} /> */}
+        <SessionHistogram />
       </div>
     )
   }

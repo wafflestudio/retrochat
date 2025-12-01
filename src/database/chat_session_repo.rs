@@ -265,6 +265,79 @@ impl ChatSessionRepository {
         Ok(sessions)
     }
 
+    /// Get histogram of active sessions within a time range
+    ///
+    /// Returns (timestamp, count) pairs for each time bucket.
+    /// A session is "active" if its (start_time, end_time) overlaps the bucket.
+    /// Buckets are aligned to midnight boundaries for cleaner grouping.
+    pub async fn get_active_sessions_histogram(
+        &self,
+        start_time: &DateTime<Utc>,
+        end_time: &DateTime<Utc>,
+        interval_minutes: i32,
+    ) -> AnyhowResult<Vec<(String, i32)>> {
+        // Find the midnight before end_time
+        let midnight = end_time
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc();
+
+        // Calculate aligned start time:
+        // Find the first bucket boundary at or before start_time
+        let minutes_since_midnight = (start_time.timestamp() - midnight.timestamp()) / 60;
+        let aligned_bucket_offset =
+            (minutes_since_midnight / interval_minutes as i64) * interval_minutes as i64;
+        let aligned_start = midnight + chrono::Duration::minutes(aligned_bucket_offset);
+
+        let start_str = aligned_start.to_rfc3339();
+        let end_str = end_time.to_rfc3339();
+
+        let rows = sqlx::query(
+            r#"
+            WITH RECURSIVE time_buckets AS (
+                -- Base: First bucket
+                SELECT ?1 as bucket_start,
+                       datetime(?1, '+' || ?2 || ' minutes') as bucket_end
+                UNION ALL
+                -- Recursive: Generate next buckets
+                SELECT bucket_end,
+                       datetime(bucket_end, '+' || ?2 || ' minutes')
+                FROM time_buckets
+                WHERE bucket_end < ?3
+            )
+            SELECT
+                tb.bucket_start as timestamp,
+                COUNT(DISTINCT cs.id) as count
+            FROM time_buckets tb
+            LEFT JOIN chat_sessions cs ON (
+                -- Session overlaps bucket if:
+                -- session.start_time < bucket_end AND
+                -- (session.end_time IS NULL OR session.end_time > bucket_start)
+                cs.start_time < tb.bucket_end AND
+                (cs.end_time IS NULL OR cs.end_time > tb.bucket_start)
+            )
+            GROUP BY tb.bucket_start
+            ORDER BY tb.bucket_start
+            "#,
+        )
+        .bind(&start_str)
+        .bind(interval_minutes)
+        .bind(&end_str)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch active sessions histogram")?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            let timestamp: String = row.try_get("timestamp")?;
+            let count: i64 = row.try_get("count")?;
+            result.push((timestamp, count as i32));
+        }
+
+        Ok(result)
+    }
+
     fn row_to_session(&self, row: &SqliteRow) -> AnyhowResult<ChatSession> {
         let id_str: String = row.try_get("id")?;
         let provider_str: String = row.try_get("provider")?;

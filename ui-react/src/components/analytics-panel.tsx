@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import {
   Activity,
@@ -11,25 +11,19 @@ import {
   Loader2,
   Target,
   Zap,
-} from "lucide-react";
-import { useTheme } from "next-themes";
-import { useCallback, useEffect, useState } from "react";
+} from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useCallback, useEffect, useState } from 'react'
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts'
 import {
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-} from "recharts";
-import {
-  ChartConfig,
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-} from "@/components/ui/chart";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from '@/components/ui/chart'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -37,149 +31,139 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  analyzeSession,
-  getAnalysisResult,
-  getAnalysisStatus,
-  listAnalyses,
-} from "@/lib/api";
-import type { Analytics, AnalyticsRequest } from "@/types";
+} from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { analyzeSession, getAnalysisResult, getAnalysisStatus, listAnalyses } from '@/lib/api'
+import type { Analytics, AnalyticsRequest } from '@/types'
 
 interface AnalyticsPanelProps {
-  sessionId: string;
+  sessionId: string
 }
 
 export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
-  const { theme } = useTheme();
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [currentRequest, setCurrentRequest] = useState<AnalyticsRequest | null>(
-    null
-  );
+  const { theme } = useTheme()
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [currentRequest, setCurrentRequest] = useState<AnalyticsRequest | null>(null)
 
-  const isDark = theme === "dark";
+  const isDark = theme === 'dark'
 
   // Chart configuration for shadcn pattern
   const chartConfig = {
     score: {
-      label: "Score",
-      color: "var(--chart-1)",
+      label: 'Score',
+      color: 'var(--chart-1)',
     },
-  } satisfies ChartConfig;
+  } satisfies ChartConfig
 
   // Check for existing completed analysis
   const checkExistingAnalysis = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const requests = await listAnalyses(sessionId);
+      const requests = await listAnalyses(sessionId)
       const completedRequest = requests
-        .filter((r) => r.status === "completed")
+        .filter((r) => r.status === 'completed')
         .sort((a, b) => {
-          const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
-          const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
-          return bTime - aTime;
-        })[0];
+          const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0
+          const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0
+          return bTime - aTime
+        })[0]
 
       if (completedRequest) {
-        const result = await getAnalysisResult(completedRequest.id);
+        const result = await getAnalysisResult(completedRequest.id)
         if (result) {
-          setAnalytics(result);
-          setLoading(false);
-          return true;
+          setAnalytics(result)
+          setLoading(false)
+          return true
         }
       }
-      setLoading(false);
-      return false;
+      setLoading(false)
+      return false
     } catch (err) {
-      console.error("[v0] Failed to check existing analysis:", err);
-      setLoading(false);
-      return false;
+      console.error('[v0] Failed to check existing analysis:', err)
+      setLoading(false)
+      return false
     }
-  }, [sessionId]);
+  }, [sessionId])
 
   // Poll for analysis completion when analyzing
   useEffect(() => {
-    if (!analyzing || !currentRequest) return;
+    if (!analyzing || !currentRequest) return
 
-    const requestId = currentRequest.id;
-    if (
-      currentRequest.status === "completed" ||
-      currentRequest.status === "failed"
-    ) {
-      return;
+    const requestId = currentRequest.id
+    if (currentRequest.status === 'completed' || currentRequest.status === 'failed') {
+      return
     }
 
     const pollInterval = setInterval(async () => {
       try {
-        const request = await getAnalysisStatus(requestId);
-        if (request.status === "completed") {
-          clearInterval(pollInterval);
-          const result = await getAnalysisResult(requestId);
+        const request = await getAnalysisStatus(requestId)
+        if (request.status === 'completed') {
+          clearInterval(pollInterval)
+          const result = await getAnalysisResult(requestId)
           if (result) {
-            setAnalytics(result);
-            setAnalyzing(false);
-            setCurrentRequest(null);
+            setAnalytics(result)
+            setAnalyzing(false)
+            setCurrentRequest(null)
           }
-        } else if (request.status === "failed") {
-          clearInterval(pollInterval);
-          setError(request.error_message || "Analysis failed");
-          setAnalyzing(false);
-          setCurrentRequest(null);
+        } else if (request.status === 'failed') {
+          clearInterval(pollInterval)
+          setError(request.error_message || 'Analysis failed')
+          setAnalyzing(false)
+          setCurrentRequest(null)
         }
       } catch (err) {
-        console.error("[v0] Failed to poll analysis status:", err);
+        console.error('[v0] Failed to poll analysis status:', err)
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000) // Poll every 2 seconds
 
-    return () => clearInterval(pollInterval);
-  }, [analyzing, currentRequest]);
+    return () => clearInterval(pollInterval)
+  }, [analyzing, currentRequest])
 
   // Start new analysis
   const startAnalysis = useCallback(async () => {
-    setShowConfirmDialog(false);
-    setAnalyzing(true);
-    setError(null);
+    setShowConfirmDialog(false)
+    setAnalyzing(true)
+    setError(null)
     try {
-      const request = await analyzeSession(sessionId);
-      setCurrentRequest(request);
+      const request = await analyzeSession(sessionId)
+      setCurrentRequest(request)
 
-      if (request.status === "completed") {
-        const result = await getAnalysisResult(request.id);
+      if (request.status === 'completed') {
+        const result = await getAnalysisResult(request.id)
         if (result) {
-          setAnalytics(result);
-          setAnalyzing(false);
-          setCurrentRequest(null);
+          setAnalytics(result)
+          setAnalyzing(false)
+          setCurrentRequest(null)
         }
-      } else if (request.status === "running" || request.status === "pending") {
+      } else if (request.status === 'running' || request.status === 'pending') {
         // Polling will be handled by useEffect
-      } else if (request.status === "failed") {
-        setError(request.error_message || "Analysis failed");
-        setAnalyzing(false);
-        setCurrentRequest(null);
+      } else if (request.status === 'failed') {
+        setError(request.error_message || 'Analysis failed')
+        setAnalyzing(false)
+        setCurrentRequest(null)
       }
     } catch (err) {
-      console.error("[v0] Failed to start analysis:", err);
-      setError("Failed to start analysis");
-      setAnalyzing(false);
-      setCurrentRequest(null);
+      console.error('[v0] Failed to start analysis:', err)
+      setError('Failed to start analysis')
+      setAnalyzing(false)
+      setCurrentRequest(null)
     }
-  }, [sessionId]);
+  }, [sessionId])
 
   // Initial load: check for existing analysis
   useEffect(() => {
     checkExistingAnalysis().then((hasExisting) => {
       if (!hasExisting) {
-        setShowConfirmDialog(true);
+        setShowConfirmDialog(true)
       }
-    });
-  }, [checkExistingAnalysis]);
+    })
+  }, [checkExistingAnalysis])
 
   if (loading) {
     return (
@@ -189,7 +173,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           <p className="text-muted-foreground">Loading analytics...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (analyzing) {
@@ -205,7 +189,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           )}
         </div>
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -217,7 +201,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           <Button onClick={startAnalysis}>Retry</Button>
         </div>
       </div>
-    );
+    )
   }
 
   if (!analytics) {
@@ -228,15 +212,15 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             <DialogHeader>
               <DialogTitle>Start Analysis</DialogTitle>
               <DialogDescription>
-                No existing analysis found for this session. Would you like to
-                generate a new analysis? This may take a few moments.
+                No existing analysis found for this session. Would you like to generate a new
+                analysis? This may take a few moments.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowConfirmDialog(false);
+                  setShowConfirmDialog(false)
                 }}
               >
                 Cancel
@@ -246,22 +230,18 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
           </DialogContent>
         </Dialog>
         <div className="flex-1 flex items-center justify-center">
-          {!showConfirmDialog && (
-            <p className="text-muted-foreground">No analytics available</p>
-          )}
+          {!showConfirmDialog && <p className="text-muted-foreground">No analytics available</p>}
         </div>
       </>
-    );
+    )
   }
 
-  const radarData = analytics.ai_quantitative_output.rubric_scores.map(
-    (rubric) => ({
-      metric: rubric.rubric_name,
-      score: (rubric.score / rubric.max_score) * 4 + 1, // 0~1을 1~5로 매핑
-    })
-  );
+  const radarData = analytics.ai_quantitative_output.rubric_scores.map((rubric) => ({
+    metric: rubric.rubric_name,
+    score: (rubric.score / rubric.max_score) * 4 + 1, // 0~1을 1~5로 매핑
+  }))
 
-  const qualitativeEntries = analytics.ai_qualitative_output.entries;
+  const qualitativeEntries = analytics.ai_qualitative_output.entries
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
@@ -276,47 +256,24 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               </CardTitle>
               {analytics.ai_quantitative_output.rubric_summary && (
                 <Badge variant="outline" className="text-base font-semibold">
-                  {analytics.ai_quantitative_output.rubric_summary.percentage.toFixed(
-                    1
-                  )}
-                  %
+                  {analytics.ai_quantitative_output.rubric_summary.percentage.toFixed(1)}%
                   <span className="text-muted-foreground ml-1 font-normal">
-                    (
-                    {
-                      analytics.ai_quantitative_output.rubric_summary
-                        .total_score
-                    }
-                    /{analytics.ai_quantitative_output.rubric_summary.max_score}
-                    )
+                    ({analytics.ai_quantitative_output.rubric_summary.total_score}/
+                    {analytics.ai_quantitative_output.rubric_summary.max_score})
                   </span>
                 </Badge>
               )}
             </div>
             {analytics.ai_quantitative_output.rubric_summary && (
               <p className="text-sm text-muted-foreground mt-3">
-                Evaluated{" "}
-                {
-                  analytics.ai_quantitative_output.rubric_summary
-                    .rubrics_evaluated
-                }{" "}
-                rubrics (
-                {
-                  analytics.ai_quantitative_output.rubric_summary
-                    .rubrics_version
-                }
-                )
+                Evaluated {analytics.ai_quantitative_output.rubric_summary.rubrics_evaluated}{' '}
+                rubrics ({analytics.ai_quantitative_output.rubric_summary.rubrics_version})
               </p>
             )}
           </CardHeader>
           <CardContent>
-            <ChartContainer
-              config={chartConfig}
-              className="mx-auto aspect-square max-h-[400px]"
-            >
-              <RadarChart
-                data={radarData}
-                margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
-              >
+            <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[400px]">
+              <RadarChart data={radarData} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent />}
@@ -324,12 +281,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                 />
                 <PolarAngleAxis dataKey="metric" />
                 <PolarGrid stroke="var(--border)" />
-                <PolarRadiusAxis
-                  angle={90}
-                  domain={[1, 5]}
-                  tick={false}
-                  axisLine={false}
-                />
+                <PolarRadiusAxis angle={90} domain={[1, 5]} tick={false} axisLine={false} />
                 <Radar
                   dataKey="score"
                   fill="var(--color-score)"
@@ -344,17 +296,12 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               {analytics.ai_quantitative_output.rubric_scores.map((rubric) => (
                 <div key={rubric.rubric_id} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">
-                      {rubric.rubric_name}
-                    </span>
+                    <span className="text-sm font-medium">{rubric.rubric_name}</span>
                     <Badge variant="secondary">
                       {rubric.score}/{rubric.max_score}
                     </Badge>
                   </div>
-                  <Progress
-                    value={(rubric.score / rubric.max_score) * 100}
-                    className="h-2"
-                  />
+                  <Progress value={(rubric.score / rubric.max_score) * 100} className="h-2" />
                   {rubric.reasoning && (
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       {rubric.reasoning}
@@ -379,48 +326,31 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Files Modified</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.file_changes
-                      .total_files_modified
-                  }
+                  {analytics.metric_quantitative_output.file_changes.total_files_modified}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Files Read</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.file_changes
-                      .total_files_read
-                  }
+                  {analytics.metric_quantitative_output.file_changes.total_files_read}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Lines Added</span>
                 <span className="font-semibold text-green-500">
-                  +
-                  {
-                    analytics.metric_quantitative_output.file_changes
-                      .lines_added
-                  }
+                  +{analytics.metric_quantitative_output.file_changes.lines_added}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Lines Removed</span>
                 <span className="font-semibold text-red-500">
-                  -
-                  {
-                    analytics.metric_quantitative_output.file_changes
-                      .lines_removed
-                  }
+                  -{analytics.metric_quantitative_output.file_changes.lines_removed}
                 </span>
               </div>
               <div className="flex justify-between text-sm border-t pt-3 mt-3">
                 <span className="text-muted-foreground">Net Growth</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.file_changes
-                      .net_code_growth
-                  }
+                  {analytics.metric_quantitative_output.file_changes.net_code_growth}
                 </span>
               </div>
             </CardContent>
@@ -437,20 +367,13 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Duration</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.time_metrics
-                      .total_session_time_minutes
-                  }{" "}
-                  min
+                  {analytics.metric_quantitative_output.time_metrics.total_session_time_minutes} min
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Peak Hours</span>
                 <span className="font-semibold">
-                  {analytics.metric_quantitative_output.time_metrics.peak_hours.join(
-                    ", "
-                  )}
-                  h
+                  {analytics.metric_quantitative_output.time_metrics.peak_hours.join(', ')}h
                 </span>
               </div>
             </CardContent>
@@ -486,8 +409,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                 <span className="text-muted-foreground">Efficiency</span>
                 <span className="font-semibold">
                   {(
-                    analytics.metric_quantitative_output.token_metrics
-                      .token_efficiency * 100
+                    analytics.metric_quantitative_output.token_metrics.token_efficiency * 100
                   ).toFixed(0)}
                   %
                 </span>
@@ -506,37 +428,25 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Ops</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.tool_usage
-                      .total_operations
-                  }
+                  {analytics.metric_quantitative_output.tool_usage.total_operations}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Success</span>
                 <span className="font-semibold text-green-500">
-                  {
-                    analytics.metric_quantitative_output.tool_usage
-                      .successful_operations
-                  }
+                  {analytics.metric_quantitative_output.tool_usage.successful_operations}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Failed</span>
                 <span className="font-semibold text-red-500">
-                  {
-                    analytics.metric_quantitative_output.tool_usage
-                      .failed_operations
-                  }
+                  {analytics.metric_quantitative_output.tool_usage.failed_operations}
                 </span>
               </div>
               <div className="flex justify-between text-sm border-t pt-3 mt-3">
                 <span className="text-muted-foreground">Avg Exec Time</span>
                 <span className="font-semibold">
-                  {
-                    analytics.metric_quantitative_output.tool_usage
-                      .average_execution_time_ms
-                  }
+                  {analytics.metric_quantitative_output.tool_usage.average_execution_time_ms}
                   ms
                 </span>
               </div>
@@ -553,32 +463,23 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {Object.entries(
-              analytics.metric_quantitative_output.tool_usage.tool_distribution
-            ).map(([tool, count]) => (
-              <div
-                key={tool}
-                className="flex items-center justify-between gap-4"
-              >
-                <span className="text-sm text-muted-foreground min-w-32">
-                  {tool}
-                </span>
-                <div className="flex-1 flex items-center gap-2">
-                  <Progress
-                    value={
-                      (count /
-                        analytics.metric_quantitative_output.tool_usage
-                          .total_operations) *
-                      100
-                    }
-                    className="h-2"
-                  />
-                  <span className="text-sm font-semibold min-w-12 text-right">
-                    {count}
-                  </span>
+            {Object.entries(analytics.metric_quantitative_output.tool_usage.tool_distribution).map(
+              ([tool, count]) => (
+                <div key={tool} className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-muted-foreground min-w-32">{tool}</span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <Progress
+                      value={
+                        (count / analytics.metric_quantitative_output.tool_usage.total_operations) *
+                        100
+                      }
+                      className="h-2"
+                    />
+                    <span className="text-sm font-semibold min-w-12 text-right">{count}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           </CardContent>
         </Card>
 
@@ -593,13 +494,8 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                 </CardTitle>
                 {analytics.ai_qualitative_output.summary && (
                   <Badge variant="outline">
-                    {analytics.ai_qualitative_output.summary.total_entries}{" "}
-                    entries •{" "}
-                    {
-                      analytics.ai_qualitative_output.summary
-                        .categories_evaluated
-                    }{" "}
-                    categories
+                    {analytics.ai_qualitative_output.summary.total_entries} entries •{' '}
+                    {analytics.ai_qualitative_output.summary.categories_evaluated} categories
                   </Badge>
                 )}
               </div>
@@ -610,10 +506,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
               )}
             </CardHeader>
             <CardContent>
-              <Tabs
-                defaultValue={qualitativeEntries[0]?.key || "entries"}
-                className="w-full"
-              >
+              <Tabs defaultValue={qualitativeEntries[0]?.key || 'entries'} className="w-full">
                 <TabsList
                   className="grid w-full"
                   style={{
@@ -621,11 +514,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                   }}
                 >
                   {qualitativeEntries.map((entry) => (
-                    <TabsTrigger
-                      key={entry.key}
-                      value={entry.key}
-                      className="capitalize"
-                    >
+                    <TabsTrigger key={entry.key} value={entry.key} className="capitalize">
                       {entry.title}
                     </TabsTrigger>
                   ))}
@@ -650,9 +539,7 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
                       <Card key={`${entryOutput.key}-item-${idx}`}>
                         <CardContent className="pt-5 pb-5">
                           <div
-                            className={`prose prose-sm max-w-none ${
-                              isDark ? "prose-invert" : ""
-                            }`}
+                            className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}
                           >
                             <p className="text-sm leading-relaxed">{item}</p>
                           </div>
@@ -683,27 +570,19 @@ export function AnalyticsPanel({ sessionId }: AnalyticsPanelProps) {
             </div>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Model Used</div>
-              <div className="font-semibold">
-                {analytics.model_used || "N/A"}
-              </div>
+              <div className="font-semibold">{analytics.model_used || 'N/A'}</div>
             </div>
             <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">
-                Analysis Duration
-              </div>
-              <div className="font-semibold">
-                {analytics.analysis_duration_ms}ms
-              </div>
+              <div className="text-sm text-muted-foreground">Analysis Duration</div>
+              <div className="font-semibold">{analytics.analysis_duration_ms}ms</div>
             </div>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Session ID</div>
-              <div className="font-mono text-xs">
-                {analytics.session_id.substring(0, 8)}...
-              </div>
+              <div className="font-mono text-xs">{analytics.session_id.substring(0, 8)}...</div>
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
-  );
+  )
 }

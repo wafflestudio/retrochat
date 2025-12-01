@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import type {
   Analytics,
   AnalyticsRequest,
+  HistogramRequest,
+  HistogramResponse,
   SearchResult,
   Session,
   SessionWithMessages,
@@ -998,4 +1000,22 @@ export async function cancelAnalysis(requestId: string): Promise<void> {
   } catch (_error) {
     console.log('[v0] Using mock data for cancelAnalysis - no action taken')
   }
+}
+
+/**
+ * Get histogram of active session counts over time
+ */
+export async function getSessionActivityHistogram(
+  request: HistogramRequest
+): Promise<HistogramResponse> {
+  return await invoke('get_session_activity_histogram', { request })
+}
+
+/**
+ * Get histogram of user message counts over time
+ */
+export async function getUserMessageHistogram(
+  request: HistogramRequest
+): Promise<HistogramResponse> {
+  return await invoke('get_user_message_histogram', { request })
 }
