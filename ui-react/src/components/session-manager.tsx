@@ -200,12 +200,9 @@ export function SessionManager() {
     return `${Math.round((bytes / k ** i) * 100) / 100} ${sizes[i]}`
   }
 
-  const onSessionsLoaded = useCallback(
-    (hasSessions: boolean) => {
-      setHasAnySessions(hasSessions)
-    },
-    [setHasAnySessions]
-  )
+  const onSessionsLoaded = useCallback((hasSessions: boolean) => {
+    setHasAnySessions(hasSessions)
+  }, [])
 
   return (
     <TooltipProvider>
