@@ -9,7 +9,10 @@ use commands::{
         analyze_session, cancel_analysis, create_analysis, get_analysis_result,
         get_analysis_status, list_analyses, run_analysis,
     },
-    file::{clear_opened_files, get_opened_files, handle_file_drop, import_sessions},
+    file::{
+        clear_opened_files, get_opened_files, handle_file_drop, import_from_provider,
+        import_sessions,
+    },
     histogram::{get_session_activity_histogram, get_user_message_histogram},
     session::{get_providers, get_session_detail, get_sessions, search_messages},
 };
@@ -170,6 +173,7 @@ pub async fn run() -> anyhow::Result<()> {
             get_opened_files,
             clear_opened_files,
             import_sessions,
+            import_from_provider,
             get_session_activity_histogram,
             get_user_message_histogram,
         ])

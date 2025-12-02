@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { stat } from '@tauri-apps/plugin-fs'
-import { FileText, History, Upload } from 'lucide-react'
+import { Database, FileText, FolderOpen, History, Upload } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useCallback, useEffect, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -38,6 +38,7 @@ export function SessionManager() {
   const [provider, setProvider] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const { theme, setTheme } = useTheme()
+  const [importMethodDialogOpen, setImportMethodDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [filesToImport, setFilesToImport] = useState<FileInfo[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -105,6 +106,13 @@ export function SessionManager() {
   }, [handleFilesImport])
 
   const handleImport = async () => {
+    // Show import method selection dialog
+    setImportMethodDialogOpen(true)
+  }
+
+  const handleFileImport = async () => {
+    setImportMethodDialogOpen(false)
+
     try {
       // Open file dialog to select files
       const files = await open({
@@ -132,6 +140,67 @@ export function SessionManager() {
       console.error('Failed to import files:', error)
       toast.error(`Failed to import: ${error}`)
     }
+  }
+
+  const handleProviderImport = async (providerName: string) => {
+    setImportMethodDialogOpen(false)
+
+    console.log('Importing from provider:', providerName)
+
+    // Use promise-based toast for better control
+    toast.promise(
+      invoke<{
+        total_files: number
+        successful_imports: number
+        failed_imports: number
+        total_sessions_imported: number
+        total_messages_imported: number
+        results: Array<{
+          file_path: string
+          sessions_imported: number
+          messages_imported: number
+          success: boolean
+          error?: string
+        }>
+      }>('import_from_provider', { provider: providerName, overwrite: false }),
+      {
+        loading: `Importing from ${providerName}...`,
+        success: async (response) => {
+          // Refresh the session list and select first session
+          setRefreshTrigger((prev) => prev + 1)
+
+          // Fetch the first session and select it
+          try {
+            const { getSessions } = await import('@/lib/api')
+            const sessions = await getSessions(1, 1, provider)
+            if (sessions.length > 0) {
+              setSelectedSession(sessions[0].id)
+            }
+          } catch (error) {
+            console.error('Failed to fetch first session:', error)
+          }
+
+          if (response.total_files === 0) {
+            return `No files found for ${providerName}`
+          }
+
+          if (response.failed_imports > 0) {
+            const failedFiles = response.results
+              .filter((r) => !r.success)
+              .map((r) => r.file_path.split('/').pop())
+              .join(', ')
+
+            return `Imported ${response.successful_imports}/${response.total_files} files. Failed: ${failedFiles}`
+          }
+
+          return `Successfully imported ${response.total_sessions_imported} sessions (${response.total_messages_imported} messages) from ${response.total_files} file(s)`
+        },
+        error: (error) => {
+          console.error('Failed to import from provider:', error)
+          return `Failed to import: ${error}`
+        },
+      }
+    )
   }
 
   const confirmImport = async () => {
@@ -312,6 +381,110 @@ export function SessionManager() {
           )}
         </div>
       </div>
+
+      {/* Import Method Selection Dialog */}
+      <Dialog open={importMethodDialogOpen} onOpenChange={setImportMethodDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Choose Import Method</DialogTitle>
+            <DialogDescription>Select how you want to import chat sessions</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* File Import Option */}
+            <button
+              type="button"
+              onClick={handleFileImport}
+              className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group"
+            >
+              <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <FolderOpen className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground mb-1">Import from Files</h3>
+                <p className="text-sm text-muted-foreground">
+                  Select specific JSON or JSONL files from your computer
+                </p>
+              </div>
+            </button>
+
+            {/* Provider Import Options */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">OR IMPORT FROM PRESET</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleProviderImport('all')}
+                className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group w-full"
+              >
+                <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground mb-1">All Providers</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Import from all configured provider directories
+                  </p>
+                </div>
+              </button>
+
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleProviderImport('claude')}
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                >
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-medium text-sm text-foreground">Claude</h3>
+                    <p className="text-xs text-muted-foreground">~/.claude</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleProviderImport('gemini')}
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                >
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-medium text-sm text-foreground">Gemini</h3>
+                    <p className="text-xs text-muted-foreground">~/.gemini</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleProviderImport('codex')}
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                >
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-medium text-sm text-foreground">Codex</h3>
+                    <p className="text-xs text-muted-foreground">Custom</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportMethodDialogOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Files Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>

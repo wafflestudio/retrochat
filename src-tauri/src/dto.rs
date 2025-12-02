@@ -370,15 +370,15 @@ impl From<retrochat::services::analytics::ToolUsageMetrics> for ToolUsageMetrics
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistogramRequest {
-    pub start_time: String,      // RFC3339 timestamp
-    pub end_time: String,        // RFC3339 timestamp
-    pub interval_minutes: i32,   // 5, 15, 60, 360
+    pub start_time: String,    // RFC3339 timestamp
+    pub end_time: String,      // RFC3339 timestamp
+    pub interval_minutes: i32, // 5, 15, 60, 360
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistogramBucket {
-    pub timestamp: String,       // Bucket start time (RFC3339)
-    pub count: i32,              // Count in this bucket
+    pub timestamp: String, // Bucket start time (RFC3339)
+    pub count: i32,        // Count in this bucket
 }
 
 #[derive(Debug, Serialize, Deserialize)]

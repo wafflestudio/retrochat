@@ -1,6 +1,8 @@
 use crate::dto::{ImportFileResult, ImportSessionsResponse};
 use crate::{AppState, OpenedFiles};
-use retrochat::services::ImportFileRequest;
+use retrochat::models::provider::config::{ClaudeCodeConfig, CodexConfig, GeminiCliConfig};
+use retrochat::models::Provider;
+use retrochat::services::{BatchImportRequest, ImportFileRequest};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -143,4 +145,203 @@ pub async fn import_sessions(
         total_messages_imported,
         results,
     })
+}
+
+// Helper struct to track import stats
+struct ImportStats {
+    results: Vec<ImportFileResult>,
+    total_sessions_imported: i32,
+    total_messages_imported: i32,
+    successful_imports: i32,
+    failed_imports: i32,
+    total_files: i32,
+}
+
+impl ImportStats {
+    fn new() -> Self {
+        Self {
+            results: Vec::new(),
+            total_sessions_imported: 0,
+            total_messages_imported: 0,
+            successful_imports: 0,
+            failed_imports: 0,
+            total_files: 0,
+        }
+    }
+}
+
+// Command to import sessions from preset providers
+#[tauri::command]
+pub async fn import_from_provider(
+    state: State<'_, Arc<Mutex<AppState>>>,
+    provider: String,
+    overwrite: bool,
+) -> Result<ImportSessionsResponse, String> {
+    log::info!(
+        "import_from_provider called with provider: {}, overwrite: {}",
+        provider,
+        overwrite
+    );
+
+    let state_guard = state.lock().await;
+    let import_service = &state_guard.import_service;
+
+    let mut stats = ImportStats::new();
+
+    // Parse provider string to Provider enum
+    let providers = match provider.to_lowercase().as_str() {
+        "all" => vec![Provider::All],
+        "claude" => vec![Provider::ClaudeCode],
+        "gemini" => vec![Provider::GeminiCLI],
+        "codex" => vec![Provider::Codex],
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    };
+
+    // Expand "All" to all specific providers
+    let expanded_providers = Provider::expand_all(providers);
+
+    for prov in expanded_providers {
+        match prov {
+            Provider::All => {
+                // Should not happen due to expansion above
+                unreachable!("Provider::All should have been expanded")
+            }
+            Provider::ClaudeCode => {
+                log::info!("Importing from Claude Code directories...");
+                if let Err(e) = import_provider_directories(
+                    &ClaudeCodeConfig::create(),
+                    import_service,
+                    overwrite,
+                    &mut stats,
+                )
+                .await
+                {
+                    log::error!("Error importing Claude directories: {}", e);
+                }
+            }
+            Provider::GeminiCLI => {
+                log::info!("Importing from Gemini directories...");
+                if let Err(e) = import_provider_directories(
+                    &GeminiCliConfig::create(),
+                    import_service,
+                    overwrite,
+                    &mut stats,
+                )
+                .await
+                {
+                    log::error!("Error importing Gemini directories: {}", e);
+                }
+            }
+            Provider::Codex => {
+                log::info!("Importing from Codex directories...");
+                if let Err(e) = import_provider_directories(
+                    &CodexConfig::create(),
+                    import_service,
+                    overwrite,
+                    &mut stats,
+                )
+                .await
+                {
+                    log::error!("Error importing Codex directories: {}", e);
+                }
+            }
+            Provider::Other(name) => {
+                log::error!("Unknown provider: {}", name);
+                return Err(format!("Unknown provider: {}", name));
+            }
+        }
+    }
+
+    log::info!(
+        "Provider import completed - {} successful, {} failed, total: {} sessions, {} messages",
+        stats.successful_imports,
+        stats.failed_imports,
+        stats.total_sessions_imported,
+        stats.total_messages_imported
+    );
+
+    Ok(ImportSessionsResponse {
+        total_files: stats.total_files,
+        successful_imports: stats.successful_imports,
+        failed_imports: stats.failed_imports,
+        total_sessions_imported: stats.total_sessions_imported,
+        total_messages_imported: stats.total_messages_imported,
+        results: stats.results,
+    })
+}
+
+// Helper function to import from a provider's directories
+async fn import_provider_directories(
+    config: &retrochat::models::provider::config::ProviderConfig,
+    import_service: &retrochat::services::ImportService,
+    overwrite: bool,
+    stats: &mut ImportStats,
+) -> Result<(), String> {
+    let directories = config.get_import_directories();
+
+    if directories.is_empty() {
+        log::info!("No directories found for provider: {}", config.name);
+        return Ok(());
+    }
+
+    for dir_path in directories {
+        let path = std::path::Path::new(&dir_path);
+        if !path.exists() {
+            log::warn!("Directory not found: {}", path.display());
+            continue;
+        }
+
+        log::info!("Importing from directory: {}", path.display());
+
+        let batch_request = BatchImportRequest {
+            directory_path: dir_path.clone(),
+            providers: None,
+            project_name: None,
+            overwrite_existing: Some(overwrite),
+            recursive: Some(true),
+        };
+
+        match import_service.import_batch(batch_request).await {
+            Ok(response) => {
+                log::info!(
+                    "Successfully imported from directory '{}': {} sessions, {} messages",
+                    dir_path,
+                    response.total_sessions_imported,
+                    response.total_messages_imported
+                );
+
+                stats.total_files += response.total_files_processed;
+                stats.successful_imports += response.successful_imports;
+                stats.failed_imports += response.failed_imports;
+                stats.total_sessions_imported += response.total_sessions_imported;
+                stats.total_messages_imported += response.total_messages_imported;
+
+                // Add directory-level result
+                stats.results.push(ImportFileResult {
+                    file_path: dir_path.clone(),
+                    sessions_imported: response.total_sessions_imported,
+                    messages_imported: response.total_messages_imported,
+                    success: response.failed_imports == 0,
+                    error: if response.errors.is_empty() {
+                        None
+                    } else {
+                        Some(response.errors.join("; "))
+                    },
+                });
+            }
+            Err(e) => {
+                log::error!("Failed to import from directory '{}': {}", dir_path, e);
+                stats.failed_imports += 1;
+                stats.results.push(ImportFileResult {
+                    file_path: dir_path.clone(),
+                    sessions_imported: 0,
+                    messages_imported: 0,
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
