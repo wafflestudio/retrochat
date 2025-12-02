@@ -194,21 +194,7 @@ export function SessionManager() {
             }
 
             if (response.failed_imports > 0) {
-              // Show detailed error information
-              const failedResults = response.results.filter((r) => !r.success)
-              const failedDetails = failedResults
-                .map((r) => {
-                  const fileName = r.file_path.split('/').pop() || r.file_path
-                  const errorMsg = r.error ? `: ${r.error}` : ''
-                  return `${fileName}${errorMsg}`
-                })
-                .slice(0, 3) // Show first 3 errors
-                .join('; ')
-
-              const moreErrors =
-                failedResults.length > 3 ? ` (+${failedResults.length - 3} more)` : ''
-
-              return `Imported ${response.successful_imports}/${response.total_files} files. Failed: ${failedDetails}${moreErrors}`
+              return `Imported ${response.successful_imports}/${response.total_files} files (${response.total_sessions_imported} sessions, ${response.total_messages_imported} messages)`
             }
 
             return `Successfully imported ${response.total_sessions_imported} sessions (${response.total_messages_imported} messages) from ${response.total_files} file(s)`
