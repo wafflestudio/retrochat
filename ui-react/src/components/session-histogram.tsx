@@ -13,14 +13,22 @@ import {
 import { getSessionActivityHistogram, getUserMessageHistogram } from '@/lib/api'
 import type { HistogramResponse, TimeRange } from '@/types'
 
-// Time range presets with auto-selected intervals
-const TIME_RANGE_CONFIG: Record<TimeRange, { hours: number; intervalMin: number; label: string }> =
-  {
-    '6h': { hours: 6, intervalMin: 5, label: 'Last 6 hours' },
-    '24h': { hours: 24, intervalMin: 15, label: 'Last 24 hours' },
-    '7d': { hours: 168, intervalMin: 60, label: 'Last 7 days' },
-    '30d': { hours: 720, intervalMin: 360, label: 'Last 30 days' },
-  }
+// Time range presets
+const TIME_RANGE_CONFIG: Record<TimeRange, { hours: number; label: string }> = {
+  '6h': { hours: 6, label: 'Last 6 hours' },
+  '24h': { hours: 24, label: 'Last 24 hours' },
+  '7d': { hours: 168, label: 'Last 7 days' },
+  '30d': { hours: 720, label: 'Last 30 days' },
+}
+
+// Interval options in minutes
+const INTERVAL_OPTIONS = [
+  { value: 30, label: '30m' },
+  { value: 60, label: '1h' },
+  { value: 360, label: '6h' },
+  { value: 1440, label: '1d' },
+  { value: 10080, label: '1w' },
+] as const
 
 const sessionsChartConfig = {
   sessions: {
@@ -37,10 +45,24 @@ const messagesChartConfig = {
 } satisfies ChartConfig
 
 export function SessionHistogram() {
-  const [timeRange, setTimeRange] = useState<TimeRange>('24h')
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d')
+  const [intervalMinutes, setIntervalMinutes] = useState(1440)
   const [loading, setLoading] = useState(false)
   const [sessionData, setSessionData] = useState<HistogramResponse | null>(null)
   const [messageData, setMessageData] = useState<HistogramResponse | null>(null)
+
+  // Get available intervals based on current time range
+  const durationMinutes = TIME_RANGE_CONFIG[timeRange].hours * 60
+  const availableIntervals = INTERVAL_OPTIONS.filter((option) => option.value < durationMinutes)
+
+  // Reset interval if it becomes longer than duration
+  useEffect(() => {
+    if (intervalMinutes >= durationMinutes) {
+      // Find the largest available interval that's smaller than duration
+      const validInterval = availableIntervals[availableIntervals.length - 1]?.value || 30
+      setIntervalMinutes(validInterval)
+    }
+  }, [durationMinutes, intervalMinutes, availableIntervals])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -52,7 +74,7 @@ export function SessionHistogram() {
       const request = {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
-        interval_minutes: config.intervalMin,
+        interval_minutes: intervalMinutes,
       }
 
       const [sessions, messages] = await Promise.all([
@@ -67,48 +89,58 @@ export function SessionHistogram() {
     } finally {
       setLoading(false)
     }
-  }, [timeRange])
+  }, [timeRange, intervalMinutes])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
-  // Prepare separate datasets
+  // Prepare separate datasets with centered timestamps
+  // Offset timestamp by half interval to center the bar on the x-axis
+  const halfIntervalMs = (intervalMinutes * 60 * 1000) / 2
+
   const sessionChartData =
-    sessionData?.buckets.map((bucket) => ({
-      timestamp: bucket.timestamp,
-      sessions: bucket.count,
-    })) || []
+    sessionData?.buckets.map((bucket) => {
+      const originalTime = new Date(bucket.timestamp)
+      const centeredTime = new Date(originalTime.getTime() + halfIntervalMs)
+      return {
+        timestamp: centeredTime.toISOString(),
+        sessions: bucket.count,
+      }
+    }) || []
 
   const messageChartData =
-    messageData?.buckets.map((bucket) => ({
-      timestamp: bucket.timestamp,
-      messages: bucket.count,
-    })) || []
+    messageData?.buckets.map((bucket) => {
+      const originalTime = new Date(bucket.timestamp)
+      const centeredTime = new Date(originalTime.getTime() + halfIntervalMs)
+      return {
+        timestamp: centeredTime.toISOString(),
+        messages: bucket.count,
+      }
+    }) || []
   // console.log("11", sessionChartData)
   // console.log("22", messageChartData)
 
   // Format timestamp for display (respects user's timezone and locale)
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp)
-    const config = TIME_RANGE_CONFIG[timeRange]
 
-    // For fine intervals (5-15 min), show time only
-    if (config.intervalMin <= 15) {
+    // For 30min intervals, show time only
+    if (intervalMinutes <= 30) {
       return date.toLocaleTimeString(undefined, {
         hour: '2-digit',
         minute: '2-digit',
       })
     }
-    // For hourly, show date and time
-    if (config.intervalMin === 60) {
+    // For 1h and 6h intervals, show date and time
+    if (intervalMinutes <= 360) {
       return date.toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
       })
     }
-    // For 6-hour intervals, show date only
+    // For 1d and 1w intervals, show date only
     return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -117,7 +149,7 @@ export function SessionHistogram() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4">
-      {/* Header with time range selector */}
+      {/* Header with time range and interval selectors */}
       <div className="flex items-center justify-between px-2">
         <div>
           <h3 className="text-lg font-semibold">Activity Timeline</h3>
@@ -129,18 +161,39 @@ export function SessionHistogram() {
                 } messages`}
           </p>
         </div>
-        <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
-          <SelectTrigger className="w-[160px] rounded-lg" aria-label="Select time range">
-            <SelectValue placeholder="Select range" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            {(['6h', '24h', '7d', '30d'] as TimeRange[]).map((range) => (
-              <SelectItem key={range} value={range} className="rounded-lg">
-                {TIME_RANGE_CONFIG[range].label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+            <SelectTrigger className="w-[160px] rounded-lg" aria-label="Select time range">
+              <SelectValue placeholder="Select range" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {(['6h', '24h', '7d', '30d'] as TimeRange[]).map((range) => (
+                <SelectItem key={range} value={range} className="rounded-lg">
+                  {TIME_RANGE_CONFIG[range].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={intervalMinutes.toString()}
+            onValueChange={(value) => setIntervalMinutes(Number(value))}
+          >
+            <SelectTrigger className="w-[140px] rounded-lg" aria-label="Select interval">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {availableIntervals.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value.toString()}
+                  className="rounded-lg"
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Two separate charts */}
