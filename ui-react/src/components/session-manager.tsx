@@ -43,6 +43,7 @@ export function SessionManager() {
   const [filesToImport, setFilesToImport] = useState<FileInfo[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [hasAnySessions, setHasAnySessions] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   // Keyboard shortcuts
   useHotkeys('meta+1', () => setActiveTab('sessions'), {
@@ -143,64 +144,84 @@ export function SessionManager() {
   }
 
   const handleProviderImport = async (providerName: string) => {
+    // Prevent concurrent imports
+    if (isImporting) {
+      toast.warning('Import already in progress')
+      return
+    }
+
+    setIsImporting(true)
     setImportMethodDialogOpen(false)
 
     console.log('Importing from provider:', providerName)
 
     // Use promise-based toast for better control
-    toast.promise(
-      invoke<{
-        total_files: number
-        successful_imports: number
-        failed_imports: number
-        total_sessions_imported: number
-        total_messages_imported: number
-        results: Array<{
-          file_path: string
-          sessions_imported: number
-          messages_imported: number
-          success: boolean
-          error?: string
-        }>
-      }>('import_from_provider', { provider: providerName, overwrite: false }),
-      {
-        loading: `Importing from ${providerName}...`,
-        success: async (response) => {
-          // Refresh the session list and select first session
-          setRefreshTrigger((prev) => prev + 1)
+    try {
+      await toast.promise(
+        invoke<{
+          total_files: number
+          successful_imports: number
+          failed_imports: number
+          total_sessions_imported: number
+          total_messages_imported: number
+          results: Array<{
+            file_path: string
+            sessions_imported: number
+            messages_imported: number
+            success: boolean
+            error?: string
+          }>
+        }>('import_from_provider', { provider: providerName, overwrite: false }),
+        {
+          loading: `Importing from ${providerName}...`,
+          success: async (response) => {
+            // Refresh the session list and select first session
+            setRefreshTrigger((prev) => prev + 1)
 
-          // Fetch the first session and select it
-          try {
-            const { getSessions } = await import('@/lib/api')
-            const sessions = await getSessions(1, 1, provider)
-            if (sessions.length > 0) {
-              setSelectedSession(sessions[0].id)
+            // Fetch the first session and select it
+            try {
+              const { getSessions } = await import('@/lib/api')
+              const sessions = await getSessions(1, 1, provider)
+              if (sessions.length > 0) {
+                setSelectedSession(sessions[0].id)
+              }
+            } catch (error) {
+              console.error('Failed to fetch first session:', error)
             }
-          } catch (error) {
-            console.error('Failed to fetch first session:', error)
-          }
 
-          if (response.total_files === 0) {
-            return `No files found for ${providerName}`
-          }
+            if (response.total_files === 0) {
+              return `No files found for ${providerName}`
+            }
 
-          if (response.failed_imports > 0) {
-            const failedFiles = response.results
-              .filter((r) => !r.success)
-              .map((r) => r.file_path.split('/').pop())
-              .join(', ')
+            if (response.failed_imports > 0) {
+              // Show detailed error information
+              const failedResults = response.results.filter((r) => !r.success)
+              const failedDetails = failedResults
+                .map((r) => {
+                  const fileName = r.file_path.split('/').pop() || r.file_path
+                  const errorMsg = r.error ? `: ${r.error}` : ''
+                  return `${fileName}${errorMsg}`
+                })
+                .slice(0, 3) // Show first 3 errors
+                .join('; ')
 
-            return `Imported ${response.successful_imports}/${response.total_files} files. Failed: ${failedFiles}`
-          }
+              const moreErrors =
+                failedResults.length > 3 ? ` (+${failedResults.length - 3} more)` : ''
 
-          return `Successfully imported ${response.total_sessions_imported} sessions (${response.total_messages_imported} messages) from ${response.total_files} file(s)`
-        },
-        error: (error) => {
-          console.error('Failed to import from provider:', error)
-          return `Failed to import: ${error}`
-        },
-      }
-    )
+              return `Imported ${response.successful_imports}/${response.total_files} files. Failed: ${failedDetails}${moreErrors}`
+            }
+
+            return `Successfully imported ${response.total_sessions_imported} sessions (${response.total_messages_imported} messages) from ${response.total_files} file(s)`
+          },
+          error: (error) => {
+            console.error('Failed to import from provider:', error)
+            return `Failed to import: ${error}`
+          },
+        }
+      )
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   const confirmImport = async () => {
@@ -395,7 +416,9 @@ export function SessionManager() {
             <button
               type="button"
               onClick={handleFileImport}
-              className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group"
+              disabled={isImporting}
+              aria-label="Import chat sessions from JSON or JSONL files on your computer"
+              className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <FolderOpen className="w-6 h-6" />
@@ -419,7 +442,9 @@ export function SessionManager() {
               <button
                 type="button"
                 onClick={() => handleProviderImport('all')}
-                className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group w-full"
+                disabled={isImporting}
+                aria-label="Import chat sessions from all configured provider directories (Claude, Gemini, Codex)"
+                className="flex items-start gap-4 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors text-left group w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <Database className="w-6 h-6" />
@@ -436,7 +461,9 @@ export function SessionManager() {
                 <button
                   type="button"
                   onClick={() => handleProviderImport('claude')}
-                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                  disabled={isImporting}
+                  aria-label="Import chat sessions from Claude Code provider directory at ~/.claude/projects"
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <Database className="w-5 h-5" />
@@ -450,7 +477,9 @@ export function SessionManager() {
                 <button
                   type="button"
                   onClick={() => handleProviderImport('gemini')}
-                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                  disabled={isImporting}
+                  aria-label="Import chat sessions from Gemini CLI provider directory at ~/.gemini/tmp"
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <Database className="w-5 h-5" />
@@ -464,7 +493,9 @@ export function SessionManager() {
                 <button
                   type="button"
                   onClick={() => handleProviderImport('codex')}
-                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group"
+                  disabled={isImporting}
+                  aria-label="Import chat sessions from Codex provider directory"
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <Database className="w-5 h-5" />
