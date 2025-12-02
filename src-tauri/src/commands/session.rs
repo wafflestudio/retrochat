@@ -122,10 +122,8 @@ pub async fn get_session_detail(
 
     // Create a map of tool_operation_id -> tool_operation for efficient lookup
     log::debug!("Building tool operation lookup map");
-    let tool_op_by_id: std::collections::HashMap<_, _> = tool_operations
-        .into_iter()
-        .map(|op| (op.id, op))
-        .collect();
+    let tool_op_by_id: std::collections::HashMap<_, _> =
+        tool_operations.into_iter().map(|op| (op.id, op)).collect();
 
     // Create a map of message_id -> tool_operation
     log::debug!("Building message -> tool operation map");
