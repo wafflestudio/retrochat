@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>LLM Agent Chat History Retrospect Application</strong><br>
-  A powerful tool for analyzing and exploring your LLM conversation history from multiple providers.
+  A powerful desktop application for analyzing and exploring your LLM conversation history from multiple providers.
 </p>
 
 > **⚠️ Project Status Warning**
@@ -11,37 +11,32 @@
 
 ## Features
 
+- **Desktop GUI Application**: Modern desktop interface built with Tauri 2.0, React 19, and shadcn/ui
 - **Multi-Provider Support**: Import chat histories from Claude Code, Gemini, and other LLM providers
-- **Terminal User Interface (TUI)**: Interactive terminal-based interface for browsing sessions
-- **Advanced Analytics**: Generate detailed usage insights and statistics
-- **Multiple Export Formats**: Export data to JSON, CSV, or text formats
-- **Session Management**: Browse, search, and analyze individual chat sessions
+- **Advanced Analytics & Visualizations**: Interactive charts and histograms showing session activity, message timelines, and usage patterns
+- **AI-Powered Insights**: Generate comprehensive session analysis using Google AI
+- **Real-time Sync**: Watch mode for automatic import of new chat files
+- **Session Management**: Browse, search, filter, and analyze individual chat sessions
+- **Multiple Export Formats**: Export data to JSON, JSONL, or text formats
 - **SQLite Database**: Persistent storage for all your chat data
+- **Command Line Interface**: Full-featured CLI for automation and advanced users
+
+> **Note**: The Terminal User Interface (TUI) is being phased out in favor of the desktop GUI application.
 
 ## Installation
 
-### Quick Install (npm)
+### Desktop Application (Recommended)
 
-The fastest way to install RetroChat:
+The desktop application provides a modern GUI experience with rich visualizations and interactive features.
 
-```bash
-npm install -g @sanggggg/retrochat
-```
+#### Prerequisites
 
-After installation, you can run:
-```bash
-retrochat --help
-```
+- Rust 1.75 or later
+- Node.js 18 or later (for frontend development)
+- pnpm (for package management)
+- Tauri CLI: `cargo install tauri-cli`
 
-**Note**: The npm package includes pre-built binaries. Make sure you have Node.js 16 or later installed.
-
-### Prerequisites
-
-- For npm installation: Node.js 16 or later
-- For building from source: Rust 1.75 or later
-- mise (for version management, optional but recommended)
-
-### From Source
+#### Building the Desktop App
 
 1. Clone the repository:
 ```bash
@@ -49,7 +44,49 @@ git clone <repository-url>
 cd retrochat
 ```
 
-2. Build the project:
+2. Install frontend dependencies:
+```bash
+cd ui-react
+pnpm install
+cd ..
+```
+
+3. Build and run the Tauri application:
+```bash
+cd src-tauri
+cargo tauri build  # For production build
+# or
+cargo tauri dev    # For development mode with hot reload
+```
+
+The desktop application will be available in `src-tauri/target/release/`.
+
+### Command Line Tool
+
+#### Quick Install (npm)
+
+Install the CLI tool via npm:
+
+```bash
+npm install -g @sanggggg/retrochat
+```
+
+After installation:
+```bash
+retrochat --help
+```
+
+**Note**: The npm package includes pre-built CLI binaries.
+
+#### Building CLI from Source
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd retrochat
+```
+
+2. Build the CLI:
 ```bash
 cargo build --release
 ```
@@ -62,23 +99,33 @@ If you have mise installed, it will automatically use the correct Rust version s
 
 ## Usage
 
-RetroChat provides several command-line interfaces and a TUI for different use cases.
+RetroChat provides both a desktop GUI application and a command-line interface for different use cases.
 
 **Note**: On first run, RetroChat automatically initializes the database and runs a setup wizard.
 
-### Terminal User Interface (TUI)
+### Desktop GUI Application
 
-Launch the interactive terminal interface (default mode):
+Launch the desktop application for the full visual experience:
 
 ```bash
-retrochat
+cd src-tauri
+cargo tauri dev  # Development mode
+# or use the built application from your applications folder
 ```
 
-This opens an interactive interface where you can:
-- Browse all imported chat sessions
-- View detailed session information
-- Navigate through messages
-- View analytics and insights
+The GUI provides:
+- **Session Browser**: Browse and filter all imported chat sessions
+- **Session Details**: View full conversation threads with syntax highlighting
+- **Analytics Dashboard**: Interactive charts showing:
+  - Session activity histograms
+  - Message timeline visualizations
+  - Provider usage statistics
+  - Session duration and message count metrics
+- **Provider Management**: Configure and import from multiple LLM providers
+- **Search & Filter**: Advanced search with multiple criteria
+- **Dark/Light Theme**: System-aware theme with manual toggle
+
+### Command Line Interface
 
 ### Sync Commands
 
@@ -235,6 +282,37 @@ RetroChat currently supports importing from:
 - **File Format**: Various formats
 - **Environment Variable**: `RETROCHAT_CODEX_DIRS`
 
+## Desktop GUI Features
+
+The desktop application provides a rich visual interface built with modern web technologies:
+
+### Session Management
+- **Session Browser**: Grid or list view of all imported sessions
+- **Advanced Filtering**: Filter by provider, project, date range, and custom criteria
+- **Quick Search**: Instant search across session titles and content
+- **Session Details**: Full conversation view with message threading
+- **Syntax Highlighting**: Code blocks and technical content rendered beautifully
+
+### Analytics Dashboard
+- **Session Activity Histogram**: Visualize chat activity over time
+- **Message Timeline**: Track message patterns and conversation flow
+- **Provider Statistics**: Compare usage across different LLM providers
+- **Usage Metrics**: Session counts, message volumes, and duration analysis
+- **Interactive Charts**: Built with Recharts and Plotly.js for rich data visualization
+
+### User Experience
+- **Dark/Light Theme**: System-aware theme with manual toggle
+- **Responsive Layout**: Adaptive UI that works at any window size
+- **Keyboard Shortcuts**: Navigate efficiently with hotkeys
+- **Real-time Updates**: Live sync status and progress indicators
+- **Modern UI**: Built with shadcn/ui components and Tailwind CSS
+
+### Provider Management
+- **Multi-Provider Support**: Configure multiple LLM providers simultaneously
+- **Custom Directories**: Set custom import paths for each provider
+- **Preset Import**: Import provider presets for quick setup
+- **Watch Mode**: Auto-import new conversations as they're created
+
 ## Database
 
 RetroChat uses SQLite for data persistence. The database file (`retrochat.db`) is created in `~/.retrochat/` directory on first use.
@@ -256,7 +334,51 @@ The application stores:
 
 ## Development
 
-### Build and Test
+### Desktop GUI Development
+
+#### Frontend (React)
+
+```bash
+cd ui-react
+
+# Install dependencies
+pnpm install
+
+# Start development server (UI only)
+pnpm dev
+
+# Code quality
+pnpm biome:format      # Format code with Biome
+pnpm biome:lint        # Lint code
+pnpm biome:lint:fix    # Fix linting issues
+pnpm biome:ci          # Run CI checks (format + lint)
+
+# Build
+pnpm build             # Build production bundle
+```
+
+**Note**: Use Biome for code formatting and linting, not Prettier or ESLint.
+
+#### Tauri Application
+
+```bash
+cd src-tauri
+
+# Development (runs both frontend and backend with hot reload)
+cargo tauri dev
+
+# Build production application
+cargo tauri build
+
+# Icon generation
+cargo tauri icon path/to/icon.png
+
+# Testing
+cargo test
+cargo clippy
+```
+
+### CLI/Core Development
 
 The project uses cargo aliases and shell scripts for development workflows:
 
@@ -300,7 +422,7 @@ cargo tui            # Launch TUI interface (same as: cargo run)
 ./scripts/e2e.sh
 ```
 
-You can also use cargo commands directly:
+#### Direct Cargo Commands
 
 ```bash
 # Check code quality
@@ -317,27 +439,87 @@ cargo fmt
 cargo clippy
 ```
 
+### Technology Stack
+
+#### Desktop Application
+- **Backend**: Tauri 2.0 (Rust)
+- **Frontend**: React 19 with TypeScript
+- **UI Components**: shadcn/ui (Radix UI primitives)
+- **Styling**: Tailwind CSS v4
+- **Charts**: Recharts, Plotly.js
+- **Build Tool**: Vite
+- **Code Quality**: Biome (formatting & linting)
+- **Package Manager**: pnpm
+
+#### CLI/Core
+- **Language**: Rust 1.75+
+- **TUI Framework**: Ratatui (being phased out)
+- **Database**: SQLite with SQLx
+- **Async Runtime**: Tokio
+- **CLI Framework**: Clap
+- **Serialization**: Serde
+
 ### Project Structure
 
 ```
-src/
-├── models/       # Data structures and database models
-├── services/     # Business logic and file processing
-├── cli/          # Command-line interface
-├── tui/          # Terminal user interface
-├── parsers/      # Chat file format parsers
-├── database/     # Database repositories and schema
-└── lib/          # Shared utilities
+src/                    # Rust core library
+├── models/             # Data structures and database models
+├── services/           # Business logic and file processing
+├── cli/                # Command-line interface
+├── tui/                # Terminal user interface (being phased out)
+├── parsers/            # Chat file format parsers
+├── database/           # Database repositories and schema
+└── lib/                # Shared utilities
+
+src-tauri/              # Tauri desktop application backend
+├── src/                # Tauri Rust application code
+├── Cargo.toml          # Tauri dependencies
+└── tauri.conf.json     # Tauri configuration
+
+ui-react/               # React frontend for desktop app
+├── src/
+│   ├── components/     # React components (session manager, analytics, charts)
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utilities and helpers
+│   └── types/          # TypeScript type definitions
+├── package.json        # Frontend dependencies
+├── biome.json          # Biome configuration
+└── vite.config.ts      # Vite build configuration
 
 tests/
-├── contract/     # API contract tests
-├── integration/  # Integration tests
-└── unit/         # Unit tests
+├── contract/           # API contract tests
+├── integration/        # Integration tests
+└── unit/               # Unit tests
 ```
 
 ## Examples
 
 ### Quick Start Workflow
+
+#### Using the Desktop GUI (Recommended)
+
+1. **Build and launch the application:**
+   ```bash
+   cd src-tauri
+   cargo tauri dev
+   ```
+
+2. **First-time setup:**
+   - The GUI will automatically initialize the database on first run
+   - Configure provider directories in the settings panel
+   - Import your first chat history using the sync feature
+
+3. **Explore your chat history:**
+   - Browse sessions in the session manager
+   - View detailed conversations with syntax highlighting
+   - Analyze usage patterns in the analytics dashboard
+   - Use interactive charts to understand your LLM usage
+
+4. **Real-time sync:**
+   - Enable watch mode to automatically import new conversations
+   - Monitor file changes in real-time
+
+#### Using the CLI
 
 1. **First run (automatic setup):**
    ```bash
@@ -356,14 +538,12 @@ tests/
    # Or import from a specific path
    retrochat sync --path ~/.claude/projects
    retrochat sync --path /path/to/chat/files
+
+   # Watch mode for real-time sync
+   retrochat sync all --watch --verbose
    ```
 
-3. **Launch the TUI to explore:**
-   ```bash
-   retrochat
-   ```
-
-4. **Search and query:**
+3. **Search and query:**
    ```bash
    # List all sessions
    retrochat list
@@ -375,7 +555,7 @@ tests/
    retrochat show SESSION_ID
    ```
 
-5. **Run AI analysis (requires GOOGLE_AI_API_KEY):**
+4. **Run AI analysis (requires GOOGLE_AI_API_KEY):**
    ```bash
    # Analyze specific session
    retrochat analysis run SESSION_ID
@@ -387,17 +567,19 @@ tests/
    retrochat analysis show --all
    ```
 
-6. **Export data:**
+5. **Export data:**
    ```bash
    retrochat export --format json --provider claude
    ```
 
 ### Typical Use Cases
 
-- **Personal Usage Tracking**: Monitor your LLM usage patterns across different providers
-- **Project Analysis**: Understand which projects generate the most AI conversations
+- **Personal Usage Tracking**: Monitor your LLM usage patterns across different providers with interactive charts
+- **Project Analysis**: Understand which projects generate the most AI conversations using visual analytics
 - **Historical Research**: Search through past conversations for specific topics or solutions
 - **Data Migration**: Consolidate chat histories from multiple LLM tools into one database
+- **Session Insights**: Generate AI-powered analysis and summaries of your conversations
+- **Real-time Monitoring**: Watch and auto-import new conversations as they happen
 
 ## License
 
