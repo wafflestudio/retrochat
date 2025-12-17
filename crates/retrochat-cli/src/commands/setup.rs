@@ -490,6 +490,7 @@ pub fn is_first_time_user() -> bool {
 }
 
 /// Quick check if user needs setup
+#[allow(dead_code)]
 pub fn needs_setup() -> Result<bool> {
     // Check if database exists
     let db_path = config::get_default_db_path()?;

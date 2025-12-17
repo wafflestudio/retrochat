@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 mod commands;
-use commands::{AnalysisCommands, Cli, Commands};
+use commands::{Cli, Commands};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();

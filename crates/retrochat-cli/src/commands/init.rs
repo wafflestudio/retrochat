@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use crate::commands::help;
 use retrochat_core::database::{config, DatabaseManager};
 
+#[allow(dead_code)]
 pub async fn handle_init_command() -> Result<()> {
     // Ensure config directory exists
     config::ensure_config_dir()?;

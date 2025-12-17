@@ -231,8 +231,8 @@ impl Message {
     ///
     /// # Example
     /// ```no_run
-    /// # use retrochat::database::ToolOperationRepository;
-    /// # async fn example(message: retrochat::models::Message, repo: &ToolOperationRepository) {
+    /// # use retrochat_core::database::ToolOperationRepository;
+    /// # async fn example(message: retrochat_core::models::Message, repo: &ToolOperationRepository) {
     /// if let Some(operation) = message.get_tool_operation(repo).await.unwrap() {
     ///     if operation.is_file_operation() {
     ///         if let Some(file_meta) = &operation.file_metadata {

@@ -12,7 +12,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 ///
 /// # Example
 /// ```
-/// use retrochat::tui::utils::layout::centered_rect;
+/// use retrochat_tui::utils::layout::centered_rect;
 /// use ratatui::layout::Rect;
 ///
 /// let frame_area = Rect::new(0, 0, 100, 100);

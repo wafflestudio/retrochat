@@ -52,6 +52,7 @@ fn provider_default_dir(p: &Provider) -> Option<String> {
 }
 
 /// Print getting started guide with import examples
+#[allow(dead_code)]
 pub fn print_getting_started() {
     println!();
     println!("Next steps:");
@@ -116,6 +117,7 @@ pub fn print_import_usage() {
 }
 
 /// Print import command usage examples
+#[allow(dead_code)]
 pub fn print_import_help() {
     println!("  1. Import your chat files:");
     println!();
@@ -146,6 +148,7 @@ pub fn print_import_help() {
 }
 
 /// Print supported file formats
+#[allow(dead_code)]
 pub fn print_supported_formats() {
     println!("Supported formats:");
     for provider in supported_providers() {
@@ -155,6 +158,7 @@ pub fn print_supported_formats() {
 }
 
 /// Print environment variable configuration
+#[allow(dead_code)]
 pub fn print_environment_config() {
     println!("Environment Variables:");
     for provider in supported_providers() {
@@ -174,6 +178,7 @@ pub fn print_environment_config() {
 }
 
 /// Print full getting started guide for TUI
+#[allow(dead_code)]
 pub fn print_full_getting_started() {
     use console::style;
 

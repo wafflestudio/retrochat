@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 ///
 /// # Example
 /// ```
-/// use retrochat::tui::utils::text::truncate_text;
+/// use retrochat_tui::utils::text::truncate_text;
 ///
 /// let short = truncate_text("Hello, world!", 8);
 /// assert_eq!(short, "Hello...");
@@ -44,7 +44,7 @@ pub fn truncate_text(text: &str, max_len: usize) -> String {
 ///
 /// # Example
 /// ```
-/// use retrochat::tui::utils::text::wrap_text;
+/// use retrochat_tui::utils::text::wrap_text;
 ///
 /// let lines = wrap_text("This is a long line that needs wrapping", 10);
 /// assert!(!lines.is_empty());
@@ -132,7 +132,7 @@ fn wrap_single_line(text: &str, width: usize) -> Vec<String> {
 ///
 /// # Example
 /// ```
-/// use retrochat::tui::utils::text::get_spinner_char;
+/// use retrochat_tui::utils::text::get_spinner_char;
 ///
 /// let spinner = get_spinner_char();
 /// assert!("⠋⠙⠹⠸⠼⠴⠦⠧".contains(spinner));
