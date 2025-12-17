@@ -1,14 +1,26 @@
 [alias]
-# Development aliases
-t = "test --verbose"
-c = "check --verbose"
-b = "build"
-br = "build --release"
+# Test aliases
+t = "test --workspace --verbose"
+tc = "test -p retrochat-core --verbose"
+tt = "test -p retrochat-tui --verbose"
+tcli = "test -p retrochat-cli --verbose"
+tgui = "test -p retrochat-gui --verbose"
 
-# Code quality aliases
+# Build aliases
+c = "check --workspace --verbose"
+b = "build --workspace"
+br = "build --release --workspace"
+
+# Code quality
 fmt-check = "fmt --all -- --check"
 fmt-fix = "fmt --all"
-clippy-strict = "clippy -- -D warnings"
+clippy-strict = "clippy --workspace -- -D warnings"
 
-# Application run aliases
-tui = "run"
+# Package-specific run commands
+core = "run -p retrochat-core"
+cli = "run -p retrochat-cli"
+tui = "run -p retrochat-cli"  # TUI is embedded in CLI
+gui = "run -p retrochat-gui"
+
+# Clean commands
+clean-all = "clean --workspace"

@@ -20,7 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --workspace --verbose
 
   clippy:
     name: Clippy
@@ -32,7 +32,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
 
   fmt:
     name: Rustfmt
@@ -53,7 +53,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.91.1
       - uses: Swatinem/rust-cache@v2
       - name: Check compilation
-        run: cargo check --verbose
+        run: cargo check --workspace --verbose
 
   biome:
     name: Biome (UI React)

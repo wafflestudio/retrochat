@@ -17,29 +17,36 @@
 - pnpm for package management
 
 ## Project Structure
+
+The project uses a Cargo workspace with 4 separate packages:
+
 ```
-src/
-├── models/       # Data structures and database models
-├── services/     # Business logic and file processing
-├── cli/          # Command-line interface
-├── tui/          # Terminal user interface
-└── lib/          # Shared utilities
+crates/
+├── retrochat-core/       # Core library
+│   ├── src/              # Database, models, services, parsers, tools, utils
+│   ├── migrations/       # SQL migrations
+│   ├── .sqlx/            # SQLx metadata
+│   └── tests/            # Unit and integration tests
+│
+├── retrochat-tui/        # Terminal UI library
+│   └── src/              # TUI components, events, state
+│
+├── retrochat-cli/        # CLI binary (default, includes TUI)
+│   ├── src/
+│   │   ├── main.rs       # Entry point (launches TUI or CLI)
+│   │   └── commands/     # CLI command handlers
+│   └── tests/contract/   # CLI contract tests
+│
+└── retrochat-gui/        # Tauri desktop application
+    ├── src/              # Tauri Rust backend
+    ├── icons/            # App icons
+    └── tauri.conf.json   # Tauri configuration
 
-src-tauri/        # Tauri desktop application backend
-├── src/          # Tauri Rust application code
-├── Cargo.toml    # Tauri dependencies
-└── tauri.conf.json # Tauri configuration
-
-ui-react/         # React frontend for Tauri desktop app
-├── src/          # React components and application code
-├── package.json  # Frontend dependencies
-├── biome.json    # Biome configuration for linting/formatting
-└── vite.config.js # Vite build configuration
-
-tests/
-├── contract/     # API contract tests
-├── integration/  # Integration tests
-└── unit/         # Unit tests
+ui-react/                 # React frontend for Tauri desktop app
+├── src/                  # React components and application code
+├── package.json          # Frontend dependencies
+├── biome.json            # Biome configuration
+└── vite.config.js        # Vite build configuration
 ```
 
 ## Commands
@@ -48,19 +55,25 @@ tests/
 
 #### Cargo Aliases (defined in .cargo/config.toml)
 ```bash
-# Short aliases for common commands
-cargo t              # Run test suite (test --verbose)
-cargo c              # Cargo check (check --verbose)
-cargo b              # Cargo build
-cargo br             # Cargo build --release
+# Test aliases
+cargo t              # Run test suite (test --workspace --verbose)
+cargo tc             # Test core package (test -p retrochat-core --verbose)
+cargo tcli           # Test CLI package (test -p retrochat-cli --verbose)
+
+# Build aliases
+cargo c              # Cargo check (check --workspace --verbose)
+cargo b              # Cargo build (build --workspace)
+cargo br             # Cargo build --release (build --release --workspace)
 
 # Code quality
 cargo fmt-check      # Check formatting (fmt --all -- --check)
 cargo fmt-fix        # Apply formatting (fmt --all)
-cargo clippy-strict  # Run clippy with -D warnings
+cargo clippy-strict  # Run clippy with -D warnings (clippy --workspace -- -D warnings)
 
-# Application shortcuts
-cargo tui            # Launch TUI interface (run -- same as cargo run)
+# Package-specific run commands
+cargo cli            # Run CLI (run -p retrochat-cli)
+cargo tui            # Launch TUI (run -p retrochat-cli, same as cli)
+cargo gui            # Run GUI (run -p retrochat-gui)
 ```
 
 #### Shell Scripts (in ./scripts)
@@ -73,31 +86,31 @@ cargo tui            # Launch TUI interface (run -- same as cargo run)
 ### Direct Cargo Commands
 ```bash
 # Build and test commands
-cargo check && cargo test && cargo clippy
-cargo run                                             # Launch TUI interface (default)
+cargo check --workspace && cargo test --workspace && cargo clippy --workspace
+cargo run -p retrochat-cli                            # Launch TUI interface (default)
 
 # Sync commands
-cargo run -- sync claude gemini                       # Import from provider directories
-cargo run -- sync all                                 # Import from all providers
-cargo run -- sync --path /path/to/files               # Import from specific path
-cargo run -- sync --path /path/to/file.jsonl          # Import a single file
-cargo run -- sync claude -w --verbose                 # Watch mode with detailed output
-cargo run -- sync all --watch --verbose               # Watch all providers
+cargo run -p retrochat-cli -- sync claude gemini      # Import from provider directories
+cargo run -p retrochat-cli -- sync all                # Import from all providers
+cargo run -p retrochat-cli -- sync --path /path/to/files  # Import from specific path
+cargo run -p retrochat-cli -- sync --path /path/to/file.jsonl  # Import a single file
+cargo run -p retrochat-cli -- sync claude -w --verbose     # Watch mode with detailed output
+cargo run -p retrochat-cli -- sync all --watch --verbose   # Watch all providers
 
 # Query commands
-cargo run -- list                                     # List all sessions
-cargo run -- list --provider claude                   # List sessions by provider
-cargo run -- show SESSION_ID                          # Show session details
-cargo run -- search "query"                           # Search messages
+cargo run -p retrochat-cli -- list                    # List all sessions
+cargo run -p retrochat-cli -- list --provider claude  # List sessions by provider
+cargo run -p retrochat-cli -- show SESSION_ID         # Show session details
+cargo run -p retrochat-cli -- search "query"          # Search messages
 
 # Analysis commands (requires GOOGLE_AI_API_KEY env var)
-cargo run -- analysis run [SESSION_ID] [--all] # Analyze sessions
-cargo run -- analysis show [SESSION_ID] [--all] [--format text|json|markdown]  # View results
-cargo run -- analysis status [--all|--history|--watch]      # Check analysis status
-cargo run -- analysis cancel [REQUEST_ID] [--all]    # Cancel operations
+cargo run -p retrochat-cli -- analysis run [SESSION_ID] [--all]  # Analyze sessions
+cargo run -p retrochat-cli -- analysis show [SESSION_ID] [--all]  # View results
+cargo run -p retrochat-cli -- analysis status [--all|--history|--watch]  # Check status
+cargo run -p retrochat-cli -- analysis cancel [REQUEST_ID] [--all]  # Cancel operations
 
 # Export commands
-cargo run -- export --format json                     # Export to JSON
+cargo run -p retrochat-cli -- export --format json    # Export to JSON
 cargo run -- export --format jsonl                    # Export to JSONL
 ```
 

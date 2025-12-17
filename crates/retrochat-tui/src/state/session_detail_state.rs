@@ -1,0 +1,453 @@
+use ratatui::widgets::ScrollbarState;
+
+use retrochat_core::models::{ChatSession, Message};
+use retrochat_core::services::SessionAnalytics;
+
+/// Which analytics panel is currently focused for scrolling
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AnalyticsPanelFocus {
+    #[default]
+    Quantitative,
+    Qualitative,
+}
+
+/// State for the session detail view
+#[derive(Debug)]
+pub struct SessionDetailState {
+    /// The session being displayed
+    pub session: Option<ChatSession>,
+    /// Messages in this session
+    pub messages: Vec<Message>,
+    /// Currently selected session ID
+    pub session_id: Option<String>,
+    /// Analytics data for this session
+    pub analytics: Option<SessionAnalytics>,
+    /// Scrollbar state for messages
+    pub scroll_state: ScrollbarState,
+    /// Current scroll position (line number) for messages
+    pub current_scroll: usize,
+    /// Loading indicator
+    pub loading: bool,
+    /// Whether to show detailed tool output (expanded view)
+    pub show_tool_details: bool,
+    /// Whether to show analytics panel
+    pub show_analytics: bool,
+    /// Whether to show thinking/reasoning messages
+    pub show_thinking: bool,
+    /// Last known viewport height for messages (used for scroll calculations)
+    pub viewport_height: usize,
+
+    // Analytics panel state
+    /// Which analytics panel is focused for scrolling
+    pub analytics_panel_focus: AnalyticsPanelFocus,
+    /// Scrollbar state for quantitative analytics panel
+    pub quantitative_scroll_state: ScrollbarState,
+    /// Current scroll position for quantitative panel
+    pub quantitative_scroll: usize,
+    /// Viewport height for quantitative panel
+    pub quantitative_viewport_height: usize,
+    /// Scrollbar state for qualitative analytics panel
+    pub qualitative_scroll_state: ScrollbarState,
+    /// Current scroll position for qualitative panel
+    pub qualitative_scroll: usize,
+    /// Viewport height for qualitative panel
+    pub qualitative_viewport_height: usize,
+}
+
+impl SessionDetailState {
+    /// Create a new session detail state with default values
+    pub fn new() -> Self {
+        Self {
+            session: None,
+            messages: Vec::new(),
+            session_id: None,
+            analytics: None,
+            scroll_state: ScrollbarState::default(),
+            current_scroll: 0,
+            loading: false,
+            show_tool_details: false,
+            show_analytics: false,
+            show_thinking: true, // Show thinking messages by default
+            viewport_height: 20, // Default fallback
+
+            // Analytics panel state
+            analytics_panel_focus: AnalyticsPanelFocus::default(),
+            quantitative_scroll_state: ScrollbarState::default(),
+            quantitative_scroll: 0,
+            quantitative_viewport_height: 20,
+            qualitative_scroll_state: ScrollbarState::default(),
+            qualitative_scroll: 0,
+            qualitative_viewport_height: 20,
+        }
+    }
+
+    /// Set the session ID and clear current data
+    pub fn set_session_id(&mut self, session_id: Option<String>) {
+        self.session_id = session_id;
+        if self.session_id.is_some() {
+            // Clear old data when switching sessions
+            self.session = None;
+            self.messages.clear();
+            self.current_scroll = 0;
+        }
+    }
+
+    /// Update the session data from query result
+    pub fn update_session(&mut self, session: ChatSession, messages: Vec<Message>) {
+        // Only reset scroll if we're switching to a different session
+        let is_same_session = self
+            .session
+            .as_ref()
+            .map(|s| s.id == session.id)
+            .unwrap_or(false);
+
+        self.session = Some(session);
+        self.messages = messages;
+
+        // Only reset scroll position when switching to a different session
+        if !is_same_session {
+            self.current_scroll = 0;
+        }
+    }
+
+    /// Scroll up one line
+    pub fn scroll_up(&mut self) {
+        if self.current_scroll > 0 {
+            self.current_scroll -= 1;
+        }
+    }
+
+    /// Scroll down one line
+    pub fn scroll_down(&mut self, max_scroll: usize) {
+        if self.current_scroll < max_scroll {
+            self.current_scroll += 1;
+        }
+    }
+
+    /// Scroll up by a page
+    pub fn scroll_page_up(&mut self, page_size: usize) {
+        self.current_scroll = self.current_scroll.saturating_sub(page_size);
+    }
+
+    /// Scroll down by a page
+    pub fn scroll_page_down(&mut self, page_size: usize, max_scroll: usize) {
+        self.current_scroll = (self.current_scroll + page_size).min(max_scroll);
+    }
+
+    /// Scroll to the top
+    pub fn scroll_to_top(&mut self) {
+        self.current_scroll = 0;
+    }
+
+    /// Scroll to the bottom
+    pub fn scroll_to_bottom(&mut self, max_scroll: usize) {
+        self.current_scroll = max_scroll;
+    }
+
+    /// Toggle tool details visibility
+    pub fn toggle_tool_details(&mut self) {
+        self.show_tool_details = !self.show_tool_details;
+    }
+
+    /// Toggle analytics panel visibility
+    pub fn toggle_analytics(&mut self) {
+        self.show_analytics = !self.show_analytics;
+    }
+
+    /// Toggle thinking messages visibility
+    pub fn toggle_thinking(&mut self) {
+        self.show_thinking = !self.show_thinking;
+    }
+
+    /// Update analytics data
+    pub fn update_analytics(&mut self, analytics: Option<SessionAnalytics>) {
+        self.analytics = analytics;
+    }
+
+    /// Update the scrollbar state
+    pub fn update_scroll_state(&mut self, total_lines: usize) {
+        self.scroll_state = self.scroll_state.content_length(total_lines);
+        self.scroll_state = self
+            .scroll_state
+            .viewport_content_length(self.viewport_height);
+        self.scroll_state = self.scroll_state.position(self.current_scroll);
+    }
+
+    // Dual panel analytics methods
+
+    /// Switch focus between quantitative and qualitative panels
+    pub fn toggle_analytics_panel_focus(&mut self) {
+        self.analytics_panel_focus = match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => AnalyticsPanelFocus::Qualitative,
+            AnalyticsPanelFocus::Qualitative => AnalyticsPanelFocus::Quantitative,
+        };
+    }
+
+    /// Scroll up in the currently focused analytics panel
+    pub fn focused_panel_scroll_up(&mut self) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                if self.quantitative_scroll > 0 {
+                    self.quantitative_scroll -= 1;
+                }
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                if self.qualitative_scroll > 0 {
+                    self.qualitative_scroll -= 1;
+                }
+            }
+        }
+    }
+
+    /// Scroll down in the currently focused analytics panel
+    pub fn focused_panel_scroll_down(&mut self, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                if self.quantitative_scroll < quant_max {
+                    self.quantitative_scroll += 1;
+                }
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                if self.qualitative_scroll < qual_max {
+                    self.qualitative_scroll += 1;
+                }
+            }
+        }
+    }
+
+    /// Page up in the currently focused analytics panel
+    pub fn focused_panel_page_up(&mut self, page_size: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                self.quantitative_scroll = self.quantitative_scroll.saturating_sub(page_size);
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                self.qualitative_scroll = self.qualitative_scroll.saturating_sub(page_size);
+            }
+        }
+    }
+
+    /// Page down in the currently focused analytics panel
+    pub fn focused_panel_page_down(&mut self, page_size: usize, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => {
+                self.quantitative_scroll = (self.quantitative_scroll + page_size).min(quant_max);
+            }
+            AnalyticsPanelFocus::Qualitative => {
+                self.qualitative_scroll = (self.qualitative_scroll + page_size).min(qual_max);
+            }
+        }
+    }
+
+    /// Scroll to top in the currently focused analytics panel
+    pub fn focused_panel_scroll_to_top(&mut self) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => self.quantitative_scroll = 0,
+            AnalyticsPanelFocus::Qualitative => self.qualitative_scroll = 0,
+        }
+    }
+
+    /// Scroll to bottom in the currently focused analytics panel
+    pub fn focused_panel_scroll_to_bottom(&mut self, quant_max: usize, qual_max: usize) {
+        match self.analytics_panel_focus {
+            AnalyticsPanelFocus::Quantitative => self.quantitative_scroll = quant_max,
+            AnalyticsPanelFocus::Qualitative => self.qualitative_scroll = qual_max,
+        }
+    }
+
+    /// Update quantitative panel scrollbar state
+    pub fn update_quantitative_scroll_state(&mut self, total_lines: usize) {
+        self.quantitative_scroll_state = self.quantitative_scroll_state.content_length(total_lines);
+        self.quantitative_scroll_state = self
+            .quantitative_scroll_state
+            .viewport_content_length(self.quantitative_viewport_height);
+        self.quantitative_scroll_state = self
+            .quantitative_scroll_state
+            .position(self.quantitative_scroll);
+    }
+
+    /// Update qualitative panel scrollbar state
+    pub fn update_qualitative_scroll_state(&mut self, total_lines: usize) {
+        self.qualitative_scroll_state = self.qualitative_scroll_state.content_length(total_lines);
+        self.qualitative_scroll_state = self
+            .qualitative_scroll_state
+            .viewport_content_length(self.qualitative_viewport_height);
+        self.qualitative_scroll_state = self
+            .qualitative_scroll_state
+            .position(self.qualitative_scroll);
+    }
+}
+
+impl Default for SessionDetailState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_session_detail_state_default() {
+        let state = SessionDetailState::new();
+        assert!(state.session.is_none());
+        assert!(state.messages.is_empty());
+        assert_eq!(state.current_scroll, 0);
+        assert!(!state.show_tool_details);
+        assert!(!state.loading);
+        assert!(state.show_thinking); // Thinking messages shown by default
+    }
+
+    #[test]
+    fn test_set_session_id_clears_data() {
+        let mut state = SessionDetailState::new();
+        state.current_scroll = 10;
+
+        state.set_session_id(Some("new_session".to_string()));
+
+        assert_eq!(state.session_id, Some("new_session".to_string()));
+        assert_eq!(state.current_scroll, 0);
+    }
+
+    #[test]
+    fn test_scrolling() {
+        let mut state = SessionDetailState::new();
+        let max_scroll = 100;
+
+        // Scroll down
+        state.scroll_down(max_scroll);
+        assert_eq!(state.current_scroll, 1);
+
+        // Scroll up
+        state.scroll_up();
+        assert_eq!(state.current_scroll, 0);
+
+        // Can't scroll up past 0
+        state.scroll_up();
+        assert_eq!(state.current_scroll, 0);
+
+        // Scroll to bottom
+        state.scroll_to_bottom(max_scroll);
+        assert_eq!(state.current_scroll, 100);
+
+        // Can't scroll down past max
+        state.scroll_down(max_scroll);
+        assert_eq!(state.current_scroll, 100);
+
+        // Scroll to top
+        state.scroll_to_top();
+        assert_eq!(state.current_scroll, 0);
+    }
+
+    #[test]
+    fn test_page_scrolling() {
+        let mut state = SessionDetailState::new();
+        let max_scroll = 100;
+        let page_size = 10;
+
+        state.scroll_page_down(page_size, max_scroll);
+        assert_eq!(state.current_scroll, 10);
+
+        state.scroll_page_down(page_size, max_scroll);
+        assert_eq!(state.current_scroll, 20);
+
+        state.scroll_page_up(page_size);
+        assert_eq!(state.current_scroll, 10);
+    }
+
+    #[test]
+    fn test_toggle_thinking() {
+        let mut state = SessionDetailState::new();
+        assert!(state.show_thinking); // Default is true
+
+        state.toggle_thinking();
+        assert!(!state.show_thinking); // Toggled to false
+
+        state.toggle_thinking();
+        assert!(state.show_thinking); // Toggled back to true
+    }
+
+    #[test]
+    fn test_update_session_preserves_scroll_for_same_session() {
+        use chrono::Utc;
+        use retrochat_core::models::{Provider, SessionState as ModelSessionState};
+
+        let mut state = SessionDetailState::new();
+
+        // Create first session and set scroll position
+        let session1 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 5,
+            token_count: Some(100),
+            file_path: "/test/path.jsonl".to_string(),
+            file_hash: "test_hash".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session1.clone(), vec![]);
+        state.current_scroll = 42;
+
+        // Update with same session - scroll should be preserved
+        state.update_session(session1, vec![]);
+        assert_eq!(
+            state.current_scroll, 42,
+            "Scroll position should be preserved for same session"
+        );
+    }
+
+    #[test]
+    fn test_update_session_resets_scroll_for_different_session() {
+        use chrono::Utc;
+        use retrochat_core::models::{Provider, SessionState as ModelSessionState};
+
+        let mut state = SessionDetailState::new();
+
+        // Create first session and set scroll position
+        let session1 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 5,
+            token_count: Some(100),
+            file_path: "/test/path1.jsonl".to_string(),
+            file_hash: "test_hash_1".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session1, vec![]);
+        state.current_scroll = 42;
+
+        // Update with different session - scroll should be reset
+        let session2 = ChatSession {
+            id: uuid::Uuid::new_v4(),
+            provider: Provider::ClaudeCode,
+            project_name: None,
+            start_time: Utc::now(),
+            end_time: None,
+            message_count: 3,
+            token_count: Some(50),
+            file_path: "/test/path2.jsonl".to_string(),
+            file_hash: "test_hash_2".to_string(),
+            state: ModelSessionState::Imported,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        state.update_session(session2, vec![]);
+        assert_eq!(
+            state.current_scroll, 0,
+            "Scroll position should be reset for different session"
+        );
+    }
+}
