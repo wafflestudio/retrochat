@@ -5,6 +5,7 @@ tc = "test -p retrochat-core --verbose"
 tt = "test -p retrochat-tui --verbose"
 tcli = "test -p retrochat-cli --verbose"
 tgui = "test -p retrochat-gui --verbose"
+tmcp = "test -p retrochat-mcp --verbose"
 
 # Build aliases
 c = "check --workspace --verbose"
@@ -21,6 +22,7 @@ core = "run -p retrochat-core"
 cli = "run -p retrochat-cli"
 tui = "run -p retrochat-cli"  # TUI is embedded in CLI
 gui = "run -p retrochat-gui"
+mcp = "run -p retrochat-mcp"
 
 # Clean commands
 clean-all = "clean --workspace"
