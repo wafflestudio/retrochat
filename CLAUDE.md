@@ -18,7 +18,7 @@
 
 ## Project Structure
 
-The project uses a Cargo workspace with 4 separate packages:
+The project uses a Cargo workspace with 5 separate packages:
 
 ```
 crates/
@@ -37,10 +37,17 @@ crates/
 │   │   └── commands/     # CLI command handlers
 │   └── tests/contract/   # CLI contract tests
 │
-└── retrochat-gui/        # Tauri desktop application
-    ├── src/              # Tauri Rust backend
-    ├── icons/            # App icons
-    └── tauri.conf.json   # Tauri configuration
+├── retrochat-gui/        # Tauri desktop application
+│   ├── src/              # Tauri Rust backend
+│   ├── icons/            # App icons
+│   └── tauri.conf.json   # Tauri configuration
+│
+└── retrochat-mcp/        # MCP server
+    ├── src/
+    │   ├── main.rs       # MCP server entry point
+    │   ├── server.rs     # Server handler implementation
+    │   └── tools/        # MCP tool implementations
+    └── tests/            # Unit and integration tests
 
 ui-react/                 # React frontend for Tauri desktop app
 ├── src/                  # React components and application code
@@ -74,6 +81,7 @@ cargo clippy-strict  # Run clippy with -D warnings (clippy --workspace -- -D war
 cargo cli            # Run CLI (run -p retrochat-cli)
 cargo tui            # Launch TUI (run -p retrochat-cli, same as cli)
 cargo gui            # Run GUI (run -p retrochat-gui)
+cargo mcp            # Run MCP server (run -p retrochat-mcp)
 ```
 
 #### Shell Scripts (in ./scripts)
@@ -239,5 +247,95 @@ Rust: Follow standard rustfmt conventions, use constitutional TDD approach
 - **Backend Communication**: Use Tauri commands to communicate with the Rust backend
 - **Shared Types**: Keep TypeScript types in sync with Rust types when communicating between frontend and backend
 - **Error Handling**: Handle Tauri command errors gracefully in the UI
+
+### MCP Server (retrochat-mcp/)
+
+The project includes a Model Context Protocol (MCP) server that exposes RetroChat's query and analytics capabilities to AI assistants like Claude, Cursor, and others.
+
+#### What is the MCP Server?
+The MCP server provides a read-only interface for AI assistants to:
+- Query and filter chat sessions
+- Search messages across all sessions
+- Retrieve detailed session information including messages
+- Access analytics data for sessions
+
+#### Running the MCP Server
+```bash
+# Using cargo alias
+cargo mcp
+
+# Or directly
+cargo run -p retrochat-mcp
+
+# With logging (logs go to stderr, won't interfere with stdio transport)
+RUST_LOG=debug cargo mcp
+```
+
+#### Available Tools
+The server exposes 4 MCP tools:
+
+1. **list_sessions**: Query and filter chat sessions
+   - Supports filtering by provider, project, date range, message count
+   - Pagination support
+   - Sortable by various fields
+
+2. **get_session_detail**: Get full session details including all messages
+   - Requires session UUID
+   - Returns complete message history
+
+3. **search_messages**: Full-text search across all messages
+   - Supports filtering by providers, projects, date range
+   - Pagination support
+   - Returns message snippets with context
+
+4. **get_session_analytics**: Get analytics for a specific session
+   - Requires session UUID
+   - Returns completed analytics or pending status
+
+#### AI Assistant Configuration
+
+**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "retrochat": {
+      "command": "/absolute/path/to/retrochat-mcp",
+      "args": [],
+      "env": {
+        "RUST_LOG": "info"
+      }
+    }
+  }
+}
+```
+
+**For Cursor** (`.cursor/mcp.json` in project):
+```json
+{
+  "mcpServers": {
+    "retrochat": {
+      "command": "cargo",
+      "args": ["run", "-p", "retrochat-mcp"],
+      "cwd": "/absolute/path/to/retrochat"
+    }
+  }
+}
+```
+
+#### Development Notes
+- The MCP server is read-only (no write operations)
+- Uses stdio transport for communication
+- Logs to stderr to avoid interfering with MCP protocol
+- Shares the same database as CLI/TUI (uses default database path)
+- All responses are pretty-printed JSON for easy AI consumption
+
+#### Testing
+```bash
+# Run MCP server tests
+cargo tmcp
+
+# Or full test command
+cargo test -p retrochat-mcp --verbose
+```
 
 <!-- MANUAL ADDITIONS END -->
