@@ -1,0 +1,37 @@
+[package]
+name = "retrochat-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Retrochat Desktop Application"
+license.workspace = true
+
+[lib]
+name = "retrochat_tauri_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "RetroChat"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri dependencies
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Workspace dependencies - reuse from parent
+retrochat-core = { path = "../retrochat-core" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tauri-plugin-fs = "2"
+tauri-plugin-log = "2"
+log = "0.4.28"
+tauri-plugin-updater = "2.9.0"

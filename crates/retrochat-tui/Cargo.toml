@@ -1,0 +1,27 @@
+[package]
+name = "retrochat-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Terminal UI for RetroChat"
+
+[lib]
+name = "retrochat_tui"
+path = "src/lib.rs"
+
+[dependencies]
+retrochat-core = { path = "../retrochat-core" }
+
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+syntect = { workspace = true }
+terminal_size = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+atty = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }

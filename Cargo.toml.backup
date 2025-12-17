@@ -1,0 +1,149 @@
+[package]
+name = "retrochat"
+version = "0.1.0"
+edition = "2021"
+authors = ["retrochat"]
+description = "LLM Agent Chat History Retrospect Application"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.24"
+crossterm = "0.27"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1.35", features = ["full"] }
+rusqlite = { version = "0.30", features = ["bundled", "backup"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "migrate", "chrono", "uuid"] }
+anyhow = "1.0"
+thiserror = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "std", "clock"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+futures = "0.3"
+async-trait = "0.1"
+flate2 = "1.0"
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"], optional = true }
+backoff = "0.4"
+tokio-util = "0.7"
+atty = "0.2"
+hex = "0.4"
+prost = "0.12"
+bytes = "1.5"
+dirs = "5.0"
+notify = "8.1.0"
+similar = "2.7"
+num_cpus = "1.16"
+indicatif = "0.17"
+inquire = "0.7"
+console = "0.15"
+regex = "1.10"
+lazy_static = "1.4"
+syntect = "5.2"
+terminal_size = "0.3"
+toml = "0.8"
+
+[features]
+default = ["reqwest"]
+reqwest = ["dep:reqwest"]
+
+[dev-dependencies]
+tempfile = "3.8"
+mockall = "0.12"
+criterion = "0.5"
+
+[[bin]]
+name = "retrochat"
+path = "src/main.rs"
+
+[[test]]
+name = "test_import_file"
+path = "tests/contract/test_import_file.rs"
+
+[[test]]
+name = "test_import_batch"
+path = "tests/contract/test_import_batch.rs"
+
+[[test]]
+name = "test_sessions_query"
+path = "tests/contract/test_sessions_query.rs"
+
+[[test]]
+name = "test_session_detail"
+path = "tests/contract/test_session_detail.rs"
+
+[[test]]
+name = "test_search"
+path = "tests/contract/test_search.rs"
+
+[[test]]
+name = "test_google_ai_api"
+path = "tests/contract/test_google_ai_api.rs"
+
+[[test]]
+name = "test_cli_analytics_execute"
+path = "tests/contract/test_cli_analytics_execute.rs"
+
+[[test]]
+name = "test_cli_analytics_show"
+path = "tests/contract/test_cli_analytics_show.rs"
+
+[[test]]
+name = "test_cli_analytics_status"
+path = "tests/contract/test_cli_analytics_status.rs"
+
+[[test]]
+name = "test_cli_analytics_cancel"
+path = "tests/contract/test_cli_analytics_cancel.rs"
+
+[[test]]
+name = "test_gemini_cli_parser"
+path = "tests/unit/test_gemini_cli_parser.rs"
+
+[[test]]
+name = "test_claude_code_parser"
+path = "tests/unit/test_claude_code_parser.rs"
+
+[[test]]
+name = "test_codex_parser"
+path = "tests/unit/test_codex_parser.rs"
+
+[[test]]
+name = "test_message_pairing"
+path = "tests/unit/test_message_pairing.rs"
+
+[[test]]
+name = "test_auto_detect"
+path = "tests/unit/test_auto_detect.rs"
+
+[[test]]
+name = "test_first_time_setup"
+path = "tests/integration/test_first_time_setup.rs"
+
+
+[[test]]
+name = "test_session_detail_integration"
+path = "tests/integration/test_session_detail.rs"
+
+[[test]]
+name = "test_single_session_analysis"
+path = "tests/integration/test_single_session_analysis.rs"
+
+[[test]]
+name = "test_error_handling"
+path = "tests/integration/test_error_handling.rs"
+
+[[test]]
+name = "test_setup_wizard"
+path = "tests/integration/test_setup_wizard.rs"
+
+[[test]]
+name = "test_cli_add_command"
+path = "tests/contract/test_cli_add_command.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

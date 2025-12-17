@@ -1,0 +1,37 @@
+[package]
+name = "retrochat-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line interface for RetroChat"
+
+[[bin]]
+name = "retrochat"
+path = "src/main.rs"
+
+[dependencies]
+retrochat-core = { path = "../retrochat-core" }
+retrochat-tui = { path = "../retrochat-tui" }
+
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+inquire = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+notify = { workspace = true }
+similar = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+crossterm = { workspace = true }
+regex = { workspace = true }
+lazy_static = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"
