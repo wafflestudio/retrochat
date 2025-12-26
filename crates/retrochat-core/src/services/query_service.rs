@@ -13,11 +13,11 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum MessageGroup {
     /// A single standalone message
-    Single(Message),
+    Single(Box<Message>),
     /// A tool use message paired with its corresponding tool result message
     ToolPair {
-        tool_use_message: Message,
-        tool_result_message: Message,
+        tool_use_message: Box<Message>,
+        tool_result_message: Box<Message>,
     },
 }
 
@@ -70,8 +70,8 @@ impl MessageGroup {
                         if has_matching_result {
                             // Create a ToolPair and skip the next message
                             groups.push(MessageGroup::ToolPair {
-                                tool_use_message: current.clone(),
-                                tool_result_message: next.clone(),
+                                tool_use_message: Box::new(current.clone()),
+                                tool_result_message: Box::new(next.clone()),
                             });
                             i += 2; // Skip both messages
                             continue;
@@ -81,7 +81,7 @@ impl MessageGroup {
             }
 
             // Not a pair, add as single
-            groups.push(MessageGroup::Single(current.clone()));
+            groups.push(MessageGroup::Single(Box::new(current.clone())));
             i += 1;
         }
 

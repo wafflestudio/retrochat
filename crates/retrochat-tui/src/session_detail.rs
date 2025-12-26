@@ -352,8 +352,9 @@ impl SessionDetailWidget {
 
     /// Renders a single message block
     fn render_message_block(&self, message: &Message, width: usize, lines: &mut Vec<Line<'_>>) {
-        // Check if this is a thinking message
+        // Check message types
         let is_thinking = message.is_thinking();
+        let is_slash_command = message.is_slash_command();
 
         // Message header
         let role_style = if is_thinking {
@@ -361,6 +362,11 @@ impl SessionDetailWidget {
             Style::default()
                 .fg(Color::Magenta)
                 .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+        } else if is_slash_command {
+            // Slash command messages have yellow/amber styling
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             match message.role {
                 MessageRole::User => Style::default()
@@ -378,6 +384,8 @@ impl SessionDetailWidget {
         let timestamp = &message.timestamp.format("%H:%M:%S").to_string(); // Just show time
         let header = if is_thinking {
             format!("[{timestamp}] Thinking")
+        } else if is_slash_command {
+            format!("[{timestamp}] Slash Command")
         } else {
             format!("[{timestamp}] {:?}", message.role)
         };
@@ -390,11 +398,13 @@ impl SessionDetailWidget {
         // Message content - wrap text and preserve newlines
         let content_lines = wrap_text(&message.content, width.saturating_sub(2));
 
-        // Use different styling for thinking content
+        // Use different styling for thinking and slash command content
         let content_style = if is_thinking {
             Style::default()
                 .fg(Color::Rgb(180, 140, 200)) // Light purple for thinking
                 .add_modifier(Modifier::ITALIC)
+        } else if is_slash_command {
+            Style::default().fg(Color::Rgb(200, 180, 100)) // Golden/amber for slash commands
         } else {
             Style::default().fg(Color::White)
         };

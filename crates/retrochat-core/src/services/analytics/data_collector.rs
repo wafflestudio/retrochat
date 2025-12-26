@@ -143,6 +143,7 @@ fn get_message_type_string(
             format!("tool_result({})", tool_name)
         }
         MessageType::Thinking => "thinking".to_string(),
+        MessageType::SlashCommand => "slash_command".to_string(),
         MessageType::SimpleMessage => "simple_message".to_string(),
     }
 }

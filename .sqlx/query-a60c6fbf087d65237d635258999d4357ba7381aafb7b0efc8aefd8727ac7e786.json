@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM analytics_requests WHERE started_at >= ? ORDER BY started_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "session_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "completed_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "custom_prompt",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a60c6fbf087d65237d635258999d4357ba7381aafb7b0efc8aefd8727ac7e786"
+}
