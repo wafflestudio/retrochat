@@ -15,8 +15,22 @@ pub enum MessageType {
     ToolRequest,
     ToolResult,
     Thinking,
+    SlashCommand,
     #[default]
     SimpleMessage,
+}
+
+/// Parsed slash command from XML blocks (e.g., /clear, /help)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlashCommandData {
+    /// The command name (e.g., "/clear", "/help")
+    pub command_name: String,
+    /// The command message/description
+    pub command_message: Option<String>,
+    /// Command arguments if any
+    pub command_args: Option<String>,
+    /// Command stdout result
+    pub stdout: Option<String>,
 }
 
 impl std::fmt::Display for MessageRole {
@@ -48,6 +62,7 @@ impl std::fmt::Display for MessageType {
             MessageType::ToolRequest => write!(f, "tool_request"),
             MessageType::ToolResult => write!(f, "tool_result"),
             MessageType::Thinking => write!(f, "thinking"),
+            MessageType::SlashCommand => write!(f, "slash_command"),
             MessageType::SimpleMessage => write!(f, "simple_message"),
         }
     }
@@ -61,6 +76,7 @@ impl std::str::FromStr for MessageType {
             "tool_request" => Ok(MessageType::ToolRequest),
             "tool_result" => Ok(MessageType::ToolResult),
             "thinking" => Ok(MessageType::Thinking),
+            "slash_command" => Ok(MessageType::SlashCommand),
             "simple_message" => Ok(MessageType::SimpleMessage),
             _ => Err(format!("Unknown message type: {s}")),
         }
@@ -217,6 +233,11 @@ impl Message {
     /// Check if this message is thinking
     pub fn is_thinking(&self) -> bool {
         matches!(self.message_type, MessageType::Thinking)
+    }
+
+    /// Check if this message is a slash command
+    pub fn is_slash_command(&self) -> bool {
+        matches!(self.message_type, MessageType::SlashCommand)
     }
 
     /// Check if this message has an associated tool operation

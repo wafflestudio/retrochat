@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::File;
@@ -7,11 +9,23 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::models::message::{MessageType, ToolResult, ToolUse};
+use crate::models::message::{MessageType, SlashCommandData, ToolResult, ToolUse};
 use crate::models::{ChatSession, Message, MessageRole};
 use crate::models::{Provider, SessionState};
 
 use super::project_inference::ProjectInference;
+
+lazy_static! {
+    /// Regex patterns for parsing XML command blocks
+    static ref COMMAND_NAME_RE: Regex =
+        Regex::new(r"<command-name>(.*?)</command-name>").unwrap();
+    static ref COMMAND_MESSAGE_RE: Regex =
+        Regex::new(r"<command-message>(.*?)</command-message>").unwrap();
+    static ref COMMAND_ARGS_RE: Regex =
+        Regex::new(r"<command-args>(.*?)</command-args>").unwrap();
+    static ref COMMAND_STDOUT_RE: Regex =
+        Regex::new(r"(?s)<local-command-stdout>(.*?)</local-command-stdout>").unwrap();
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClaudeCodeMessage {
@@ -231,7 +245,7 @@ impl ClaudeCodeParser {
                         .and_then(|ts| self.parse_timestamp(ts).ok())
                         .unwrap_or(start_time);
 
-                    let (content, tool_uses, mut tool_results, thinking_content) =
+                    let (content, tool_uses, mut tool_results, thinking_content, is_slash_command) =
                         self.extract_tools_and_content(&conv_message.content);
 
                     // If there's thinking content, create a separate message for it first
@@ -265,8 +279,11 @@ impl ClaudeCodeParser {
                         }
                     }
 
-                    // Skip messages with no meaningful content and no tools
-                    if content == "[No content]" && tool_uses.is_empty() && tool_results.is_empty()
+                    // Skip messages with no meaningful content and no tools and no slash command
+                    if content == "[No content]"
+                        && tool_uses.is_empty()
+                        && tool_results.is_empty()
+                        && !is_slash_command
                     {
                         continue;
                     }
@@ -274,6 +291,11 @@ impl ClaudeCodeParser {
                     let mut message = Message::new(session_id, role, content, timestamp, sequence);
 
                     message.id = message_id;
+
+                    // Set message type for slash commands
+                    if is_slash_command {
+                        message = message.with_message_type(MessageType::SlashCommand);
+                    }
 
                     // Attach tool uses and results if any
                     if !tool_uses.is_empty() {
@@ -306,12 +328,61 @@ impl ClaudeCodeParser {
         Ok((chat_session, messages))
     }
 
+    /// Parse XML slash command blocks from message content
+    /// Returns (is_slash_command, SlashCommandData if found)
+    fn parse_slash_command(&self, content: &str) -> Option<SlashCommandData> {
+        // Check if content contains command-name tag
+        let command_name = COMMAND_NAME_RE
+            .captures(content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())?;
+
+        let command_message = COMMAND_MESSAGE_RE
+            .captures(content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
+
+        let command_args = COMMAND_ARGS_RE
+            .captures(content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
+
+        let stdout = COMMAND_STDOUT_RE
+            .captures(content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
+
+        Some(SlashCommandData {
+            command_name,
+            command_message,
+            command_args,
+            stdout,
+        })
+    }
+
+    /// Formats SlashCommandData into a clean, human-readable string
+    fn format_slash_command_content(&self, cmd: &SlashCommandData) -> String {
+        let mut parts = vec![cmd.command_name.clone()];
+
+        if let Some(ref stdout) = cmd.stdout {
+            let trimmed = stdout.trim();
+            if !trimmed.is_empty() {
+                parts.push(trimmed.to_string());
+            }
+        }
+
+        parts.join("\n")
+    }
+
     /// Extract tools and content from a Claude Code message value
-    /// Returns (content_string, tool_uses, tool_results, thinking_content)
+    /// Returns (content_string, tool_uses, tool_results, thinking_content, is_slash_command)
     fn extract_tools_and_content(
         &self,
         value: &Value,
-    ) -> (String, Vec<ToolUse>, Vec<ToolResult>, Option<String>) {
+    ) -> (String, Vec<ToolUse>, Vec<ToolResult>, Option<String>, bool) {
         let mut tool_uses = Vec::new();
         let mut tool_results = Vec::new();
         let mut thinking_content: Option<String> = None;
@@ -418,14 +489,25 @@ impl ClaudeCodeParser {
             _ => value.to_string(),
         };
 
-        // Ensure content is never empty to satisfy database constraint
-        let final_content = if content.trim().is_empty() {
+        // Check for slash command blocks and format content if found
+        let slash_command = self.parse_slash_command(&content);
+
+        // Format content: use formatted slash command or original content
+        let final_content = if let Some(ref cmd) = slash_command {
+            self.format_slash_command_content(cmd)
+        } else if content.trim().is_empty() {
             "[No content]".to_string()
         } else {
             content
         };
 
-        (final_content, tool_uses, tool_results, thinking_content)
+        (
+            final_content,
+            tool_uses,
+            tool_results,
+            thinking_content,
+            slash_command.is_some(),
+        )
     }
 
     fn convert_session(
@@ -508,7 +590,7 @@ impl ClaudeCodeParser {
             _ => return Err(anyhow!("Unknown message role: {}", claude_message.role)),
         };
 
-        let (content, tool_uses, tool_results, _thinking_content) =
+        let (content, tool_uses, tool_results, _thinking_content, is_slash_command) =
             self.extract_tools_and_content(&claude_message.content);
         // Note: thinking_content is ignored for legacy format
 
@@ -517,6 +599,11 @@ impl ClaudeCodeParser {
         let mut message = Message::new(session_id, role, content, timestamp, sequence as u32);
 
         message.id = message_id;
+
+        // Set message type for slash commands
+        if is_slash_command {
+            message = message.with_message_type(MessageType::SlashCommand);
+        }
 
         // Attach tool uses and results if any
         if !tool_uses.is_empty() {
@@ -889,5 +976,99 @@ mod tests {
 
         // Should have inferred the project name from the path
         assert_eq!(session.project_name, Some("testproject".to_string()));
+    }
+
+    #[test]
+    fn test_parse_slash_command_clear() {
+        let content = "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>\n<local-command-stdout>Cleared conversation history.</local-command-stdout>";
+        let parser = ClaudeCodeParser::new(std::path::Path::new("test.jsonl"));
+        let result = parser.parse_slash_command(content);
+
+        assert!(result.is_some());
+        let cmd = result.unwrap();
+        assert_eq!(cmd.command_name, "/clear");
+        assert_eq!(cmd.command_message, Some("clear".to_string()));
+        assert!(cmd.command_args.is_none()); // Empty args should be None
+        assert_eq!(
+            cmd.stdout,
+            Some("Cleared conversation history.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_slash_command_help() {
+        let content = "<command-name>/help</command-name>\n<command-message>help</command-message>\n<command-args></command-args>";
+        let parser = ClaudeCodeParser::new(std::path::Path::new("test.jsonl"));
+        let result = parser.parse_slash_command(content);
+
+        assert!(result.is_some());
+        let cmd = result.unwrap();
+        assert_eq!(cmd.command_name, "/help");
+        assert_eq!(cmd.command_message, Some("help".to_string()));
+        assert!(cmd.command_args.is_none());
+        assert!(cmd.stdout.is_none());
+    }
+
+    #[test]
+    fn test_parse_slash_command_with_args() {
+        let content = "<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args>opus</command-args>";
+        let parser = ClaudeCodeParser::new(std::path::Path::new("test.jsonl"));
+        let result = parser.parse_slash_command(content);
+
+        assert!(result.is_some());
+        let cmd = result.unwrap();
+        assert_eq!(cmd.command_name, "/model");
+        assert_eq!(cmd.command_message, Some("model".to_string()));
+        assert_eq!(cmd.command_args, Some("opus".to_string()));
+        assert!(cmd.stdout.is_none());
+    }
+
+    #[test]
+    fn test_parse_slash_command_multiline_stdout() {
+        let content = "<command-name>/doctor</command-name>\n<command-message>doctor</command-message>\n<command-args></command-args>\n<local-command-stdout>Line 1\nLine 2\nLine 3</local-command-stdout>";
+        let parser = ClaudeCodeParser::new(std::path::Path::new("test.jsonl"));
+        let result = parser.parse_slash_command(content);
+
+        assert!(result.is_some());
+        let cmd = result.unwrap();
+        assert_eq!(cmd.command_name, "/doctor");
+        assert!(cmd.stdout.is_some());
+        assert!(cmd.stdout.unwrap().contains('\n'));
+    }
+
+    #[test]
+    fn test_parse_slash_command_no_command() {
+        let content = "This is just regular text without any command blocks.";
+        let parser = ClaudeCodeParser::new(std::path::Path::new("test.jsonl"));
+        let result = parser.parse_slash_command(content);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_message_type_slash_command_display() {
+        use crate::models::message::MessageType;
+        let mt = MessageType::SlashCommand;
+        assert_eq!(mt.to_string(), "slash_command");
+    }
+
+    #[test]
+    fn test_message_type_slash_command_from_str() {
+        use crate::models::message::MessageType;
+        use std::str::FromStr;
+
+        let mt = MessageType::from_str("slash_command").unwrap();
+        assert_eq!(mt, MessageType::SlashCommand);
+    }
+
+    #[test]
+    fn test_message_type_slash_command_roundtrip() {
+        use crate::models::message::MessageType;
+        use std::str::FromStr;
+
+        let original = MessageType::SlashCommand;
+        let serialized = original.to_string();
+        let deserialized = MessageType::from_str(&serialized).unwrap();
+        assert_eq!(original, deserialized);
     }
 }

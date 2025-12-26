@@ -6,7 +6,16 @@ import {
   ReloadIcon,
 } from '@radix-ui/react-icons'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Bot, Brain, Check, Copy, FileCode, MessageSquare, TrendingUp } from 'lucide-react'
+import {
+  Bot,
+  Brain,
+  Check,
+  Copy,
+  FileCode,
+  MessageSquare,
+  Terminal,
+  TrendingUp,
+} from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import ReactMarkdown from 'react-markdown'
@@ -149,6 +158,10 @@ function MessageRenderer({ message }: { message: SessionWithMessages['messages']
     return <ToolResultMessage message={message} />
   }
 
+  if (messageType === 'slash_command') {
+    return <SlashCommandMessage message={message} />
+  }
+
   return <SimpleMessage message={message} />
 }
 
@@ -183,6 +196,57 @@ function ThinkingMessage({ message }: { message: SessionWithMessages['messages']
             <CollapsibleContent className="mt-2">
               <div className="rounded-lg p-4 bg-card border border-border text-card-foreground">
                 <p className="whitespace-pre-wrap leading-relaxed text-sm text-muted-foreground italic">
+                  {message.content}
+                </p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SlashCommandMessage({ message }: { message: SessionWithMessages['messages'][0] }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  // Extract command name from content if available
+  const commandName =
+    message.content.match(/\[Slash Command: (.*?)\]/)?.[1] ||
+    message.content.match(/<command-name>(.*?)<\/command-name>/)?.[1] ||
+    'Command'
+
+  return (
+    <div className="flex gap-4 justify-start">
+      <div className="flex gap-3 max-w-[80%]">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+          <Terminal className="w-4 h-4" />
+        </div>
+        <div className="flex flex-col items-start flex-1">
+          <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between p-3 h-auto bg-yellow-500/5 hover:bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-medium text-yellow-300">{commandName}</span>
+                  <Badge variant="outline" className="text-xs border-yellow-500/30 text-yellow-400">
+                    Local
+                  </Badge>
+                </div>
+                <ChevronDownIcon
+                  className={`w-4 h-4 text-yellow-400 transition-transform ${
+                    isOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="rounded-lg p-4 bg-card border border-border text-card-foreground">
+                <p className="whitespace-pre-wrap leading-relaxed text-sm text-muted-foreground">
                   {message.content}
                 </p>
               </div>
