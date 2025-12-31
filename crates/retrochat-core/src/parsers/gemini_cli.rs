@@ -7,6 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use uuid::Uuid;
 
+use crate::models::message::MessageType;
 use crate::models::{ChatSession, Message, MessageRole, ToolResult, ToolUse};
 use crate::models::{Provider, SessionState};
 use crate::parsers::project_inference::ProjectInference;
@@ -279,15 +280,19 @@ impl GeminiCLIParser {
         // Convert messages
         let mut converted_messages = Vec::new();
         let mut total_tokens = 0u32;
+        let mut sequence = 1usize;
 
-        for (index, session_message) in messages.iter().enumerate() {
-            let message = self.convert_session_message(session_message, session_id, index + 1)?;
+        for session_message in messages.iter() {
+            let new_messages =
+                self.convert_session_message(session_message, session_id, sequence)?;
 
-            if let Some(token_count) = message.token_count {
-                total_tokens += token_count;
+            for message in new_messages {
+                if let Some(token_count) = message.token_count {
+                    total_tokens += token_count;
+                }
+                sequence += 1;
+                converted_messages.push(message);
             }
-
-            converted_messages.push(message);
         }
 
         chat_session.message_count = converted_messages.len() as u32;
@@ -342,15 +347,19 @@ impl GeminiCLIParser {
 
         let mut messages = Vec::new();
         let mut total_tokens = 0u32;
+        let mut sequence = 1usize;
 
-        for (index, session_message) in session.messages.iter().enumerate() {
-            let message = self.convert_session_message(session_message, session_id, index + 1)?;
+        for session_message in session.messages.iter() {
+            let new_messages =
+                self.convert_session_message(session_message, session_id, sequence)?;
 
-            if let Some(token_count) = message.token_count {
-                total_tokens += token_count;
+            for message in new_messages {
+                if let Some(token_count) = message.token_count {
+                    total_tokens += token_count;
+                }
+                sequence += 1;
+                messages.push(message);
             }
-
-            messages.push(message);
         }
 
         chat_session.message_count = messages.len() as u32;
@@ -555,12 +564,14 @@ impl GeminiCLIParser {
         (tool_uses, tool_results)
     }
 
+    /// Convert a Gemini session message to one or more Messages.
+    /// Returns multiple messages when thoughts are present (thinking messages + main message).
     fn convert_session_message(
         &self,
         session_message: &GeminiSessionMessage,
         session_id: Uuid,
-        sequence: usize,
-    ) -> Result<Message> {
+        start_sequence: usize,
+    ) -> Result<Vec<Message>> {
         let role = match session_message.message_type.as_str() {
             "user" => MessageRole::User,
             "gemini" => MessageRole::Assistant,
@@ -579,7 +590,49 @@ impl GeminiCLIParser {
 
         let timestamp = self.parse_timestamp(&session_message.timestamp)?;
 
-        // Generate a deterministic UUID for the message
+        let mut messages = Vec::new();
+        let mut current_sequence = start_sequence;
+
+        // Create separate thinking messages for each thought (only for assistant messages)
+        if role == MessageRole::Assistant {
+            if let Some(thoughts) = &session_message.thoughts {
+                for (idx, thought) in thoughts.iter().enumerate() {
+                    let thinking_content =
+                        format!("**{}**\n\n{}", thought.subject, thought.description);
+                    let thinking_timestamp = self
+                        .parse_timestamp(&thought.timestamp)
+                        .unwrap_or(timestamp);
+
+                    // Generate deterministic UUID for thinking message using index to avoid collision
+                    let thinking_id = self.generate_uuid_from_string(&format!(
+                        "{session_id}-thought-{}-{}",
+                        session_message.id, idx
+                    ));
+
+                    let mut thinking_message = Message::new(
+                        session_id,
+                        MessageRole::Assistant,
+                        thinking_content,
+                        thinking_timestamp,
+                        current_sequence as u32,
+                    )
+                    .with_message_type(MessageType::Thinking);
+
+                    thinking_message.id = thinking_id;
+
+                    // Token estimation for thinking content
+                    let thinking_tokens = (thinking_message.content.len() / 4) as u32;
+                    if thinking_tokens > 0 {
+                        thinking_message = thinking_message.with_token_count(thinking_tokens);
+                    }
+
+                    messages.push(thinking_message);
+                    current_sequence += 1;
+                }
+            }
+        }
+
+        // Generate a deterministic UUID for the main message
         let message_id = if let Ok(uuid) = Uuid::parse_str(&session_message.id) {
             uuid
         } else {
@@ -591,7 +644,7 @@ impl GeminiCLIParser {
             role,
             session_message.content.clone(),
             timestamp,
-            sequence as u32,
+            current_sequence as u32,
         );
 
         message.id = message_id;
@@ -608,13 +661,15 @@ impl GeminiCLIParser {
             message = message.with_token_count(tokens.total);
         } else {
             // Estimate token count based on content length
-            let estimated_tokens = (message.content.len() / 4) as u32; // Rough estimate: 4 chars per token
+            let estimated_tokens = (message.content.len() / 4) as u32;
             if estimated_tokens > 0 {
                 message = message.with_token_count(estimated_tokens);
             }
         }
 
-        Ok(message)
+        messages.push(message);
+
+        Ok(messages)
     }
 
     async fn convert_conversation(
@@ -1026,5 +1081,229 @@ mod tests {
         let count = parser.get_conversation_count().unwrap();
 
         assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_parse_gemini_session_with_thoughts() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("session-test-thoughts.json");
+
+        let sample_data = r#"{
+            "sessionId": "test-session-123",
+            "projectHash": "abc123",
+            "startTime": "2024-01-01T10:00:00Z",
+            "lastUpdated": "2024-01-01T10:05:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "timestamp": "2024-01-01T10:00:00Z",
+                    "type": "user",
+                    "content": "Hello"
+                },
+                {
+                    "id": "msg-2",
+                    "timestamp": "2024-01-01T10:01:00Z",
+                    "type": "gemini",
+                    "content": "Hi there!",
+                    "thoughts": [
+                        {
+                            "subject": "Analyzing Request",
+                            "description": "I'm analyzing the user's greeting.",
+                            "timestamp": "2024-01-01T10:00:30Z"
+                        },
+                        {
+                            "subject": "Formulating Response",
+                            "description": "I'll respond with a friendly greeting.",
+                            "timestamp": "2024-01-01T10:00:45Z"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        fs::write(&file_path, sample_data).unwrap();
+
+        let parser = GeminiCLIParser::new(&file_path);
+        let result = parser.parse().await;
+
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 1);
+
+        let (session, messages) = &sessions[0];
+
+        // Should have 4 messages: 1 user + 2 thinking + 1 main assistant
+        assert_eq!(messages.len(), 4);
+        assert_eq!(session.message_count, 4);
+
+        // First message: user
+        assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(messages[0].content, "Hello");
+        assert_eq!(messages[0].sequence_number, 1);
+
+        // Second message: thinking 1
+        assert_eq!(messages[1].role, MessageRole::Assistant);
+        assert_eq!(messages[1].message_type, MessageType::Thinking);
+        assert!(messages[1].content.contains("**Analyzing Request**"));
+        assert!(messages[1]
+            .content
+            .contains("analyzing the user's greeting"));
+        assert_eq!(messages[1].sequence_number, 2);
+
+        // Third message: thinking 2
+        assert_eq!(messages[2].role, MessageRole::Assistant);
+        assert_eq!(messages[2].message_type, MessageType::Thinking);
+        assert!(messages[2].content.contains("**Formulating Response**"));
+        assert_eq!(messages[2].sequence_number, 3);
+
+        // Fourth message: main assistant response
+        assert_eq!(messages[3].role, MessageRole::Assistant);
+        assert_eq!(messages[3].message_type, MessageType::SimpleMessage);
+        assert_eq!(messages[3].content, "Hi there!");
+        assert_eq!(messages[3].sequence_number, 4);
+    }
+
+    #[tokio::test]
+    async fn test_parse_gemini_session_no_thoughts() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("session-no-thoughts.json");
+
+        let sample_data = r#"{
+            "sessionId": "test-session-456",
+            "projectHash": "def456",
+            "startTime": "2024-01-01T10:00:00Z",
+            "lastUpdated": "2024-01-01T10:02:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "timestamp": "2024-01-01T10:00:00Z",
+                    "type": "user",
+                    "content": "Hello"
+                },
+                {
+                    "id": "msg-2",
+                    "timestamp": "2024-01-01T10:01:00Z",
+                    "type": "gemini",
+                    "content": "Hi there!"
+                }
+            ]
+        }"#;
+
+        fs::write(&file_path, sample_data).unwrap();
+
+        let parser = GeminiCLIParser::new(&file_path);
+        let result = parser.parse().await;
+
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        let (session, messages) = &sessions[0];
+
+        // Should have 2 messages: 1 user + 1 assistant (no thinking)
+        assert_eq!(messages.len(), 2);
+        assert_eq!(session.message_count, 2);
+
+        assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(messages[1].role, MessageRole::Assistant);
+        assert_eq!(messages[1].message_type, MessageType::SimpleMessage);
+    }
+
+    #[tokio::test]
+    async fn test_parse_gemini_session_user_message_ignores_thoughts() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("session-user-thoughts.json");
+
+        // Even if user messages somehow have thoughts, they should be ignored
+        let sample_data = r#"{
+            "sessionId": "test-session-789",
+            "projectHash": "ghi789",
+            "startTime": "2024-01-01T10:00:00Z",
+            "lastUpdated": "2024-01-01T10:01:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "timestamp": "2024-01-01T10:00:00Z",
+                    "type": "user",
+                    "content": "Hello",
+                    "thoughts": [
+                        {
+                            "subject": "Should Be Ignored",
+                            "description": "This thought should not create a message.",
+                            "timestamp": "2024-01-01T10:00:00Z"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        fs::write(&file_path, sample_data).unwrap();
+
+        let parser = GeminiCLIParser::new(&file_path);
+        let result = parser.parse().await;
+
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        let (session, messages) = &sessions[0];
+
+        // Should have only 1 message (user thoughts are ignored)
+        assert_eq!(messages.len(), 1);
+        assert_eq!(session.message_count, 1);
+        assert_eq!(messages[0].role, MessageRole::User);
+    }
+
+    #[tokio::test]
+    async fn test_parse_gemini_session_empty_thoughts_array() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("session-empty-thoughts.json");
+
+        // Empty thoughts array should not create any thinking messages
+        let sample_data = r#"{
+            "sessionId": "test-session-empty",
+            "projectHash": "empty123",
+            "startTime": "2024-01-01T10:00:00Z",
+            "lastUpdated": "2024-01-01T10:01:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "timestamp": "2024-01-01T10:00:00Z",
+                    "type": "user",
+                    "content": "Hello"
+                },
+                {
+                    "id": "msg-2",
+                    "timestamp": "2024-01-01T10:01:00Z",
+                    "type": "gemini",
+                    "content": "Hi there!",
+                    "thoughts": []
+                }
+            ]
+        }"#;
+
+        fs::write(&file_path, sample_data).unwrap();
+
+        let parser = GeminiCLIParser::new(&file_path);
+        let result = parser.parse().await;
+
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        let (session, messages) = &sessions[0];
+
+        // Should have only 2 messages (no thinking for empty array)
+        assert_eq!(messages.len(), 2);
+        assert_eq!(session.message_count, 2);
+        assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(messages[1].role, MessageRole::Assistant);
+        assert_eq!(messages[1].message_type, MessageType::SimpleMessage);
     }
 }
