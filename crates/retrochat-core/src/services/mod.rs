@@ -6,6 +6,7 @@ pub mod google_ai;
 pub mod import_service;
 pub mod parser_service;
 pub mod query_service;
+pub mod turn_detection;
 pub mod watch_service;
 
 pub use analytics::{
@@ -26,7 +27,8 @@ pub use import_service::{
 pub use parser_service::ParserService;
 pub use query_service::{
     DateRange, MessageGroup, QueryService, SearchRequest, SearchResponse, SearchResult,
-    SessionAnalytics, SessionDetailRequest, SessionDetailResponse, SessionFilters, SessionSummary,
-    SessionsQueryRequest, SessionsQueryResponse,
+    SessionAnalytics, SessionDetailRequest, SessionDetailResponse, SessionFilters,
+    SessionSummary as QuerySessionSummary, SessionsQueryRequest, SessionsQueryResponse,
 };
+pub use turn_detection::TurnDetector;
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};

@@ -1,0 +1,290 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Session outcome classification
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SessionOutcome {
+    /// All goals were completed successfully
+    Completed,
+    /// Some goals were completed
+    Partial,
+    /// Session was abandoned before completion
+    Abandoned,
+    /// Session is still ongoing
+    Ongoing,
+}
+
+impl std::fmt::Display for SessionOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SessionOutcome::Completed => write!(f, "completed"),
+            SessionOutcome::Partial => write!(f, "partial"),
+            SessionOutcome::Abandoned => write!(f, "abandoned"),
+            SessionOutcome::Ongoing => write!(f, "ongoing"),
+        }
+    }
+}
+
+impl std::str::FromStr for SessionOutcome {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "completed" => Ok(SessionOutcome::Completed),
+            "partial" => Ok(SessionOutcome::Partial),
+            "abandoned" => Ok(SessionOutcome::Abandoned),
+            "ongoing" => Ok(SessionOutcome::Ongoing),
+            _ => Err(format!("Unknown session outcome: {s}")),
+        }
+    }
+}
+
+/// LLM-generated session-level summary.
+/// Generated from aggregated turn_summaries (not raw messages).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: Uuid,
+    pub session_id: Uuid,
+
+    // LLM-generated content
+    pub title: String,                // "JWT Authentication Implementation"
+    pub summary: String,              // 100-200 word overview
+    pub primary_goal: Option<String>, // Main user objective
+    pub outcome: Option<SessionOutcome>,
+
+    // Extracted entities (stored as JSON arrays)
+    #[serde(default)]
+    pub key_decisions: Vec<String>, // ["Used JWT over sessions", "RS256 signing"]
+    #[serde(default)]
+    pub technologies_used: Vec<String>, // ["JWT", "bcrypt", "axum"]
+    #[serde(default)]
+    pub files_affected: Vec<String>, // ["src/auth.rs", "src/middleware.rs"]
+
+    // Aggregated metrics (computed from detected_turns, not LLM)
+    pub total_turns: i32,
+    pub total_tool_calls: i32,
+    pub successful_tool_calls: i32,
+    pub failed_tool_calls: i32,
+    pub total_lines_changed: i32,
+
+    // Generation metadata
+    pub model_used: Option<String>,
+    pub prompt_version: i32,
+    pub generated_at: DateTime<Utc>,
+}
+
+impl SessionSummary {
+    pub fn new(session_id: Uuid, title: String, summary: String) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            session_id,
+            title,
+            summary,
+            primary_goal: None,
+            outcome: None,
+            key_decisions: Vec::new(),
+            technologies_used: Vec::new(),
+            files_affected: Vec::new(),
+            total_turns: 0,
+            total_tool_calls: 0,
+            successful_tool_calls: 0,
+            failed_tool_calls: 0,
+            total_lines_changed: 0,
+            model_used: None,
+            prompt_version: 1,
+            generated_at: Utc::now(),
+        }
+    }
+
+    /// Builder method: set primary goal
+    pub fn with_primary_goal(mut self, goal: String) -> Self {
+        self.primary_goal = Some(goal);
+        self
+    }
+
+    /// Builder method: set outcome
+    pub fn with_outcome(mut self, outcome: SessionOutcome) -> Self {
+        self.outcome = Some(outcome);
+        self
+    }
+
+    /// Builder method: set key decisions
+    pub fn with_key_decisions(mut self, decisions: Vec<String>) -> Self {
+        self.key_decisions = decisions;
+        self
+    }
+
+    /// Builder method: set technologies used
+    pub fn with_technologies(mut self, technologies: Vec<String>) -> Self {
+        self.technologies_used = technologies;
+        self
+    }
+
+    /// Builder method: set files affected
+    pub fn with_files_affected(mut self, files: Vec<String>) -> Self {
+        self.files_affected = files;
+        self
+    }
+
+    /// Builder method: set computed metrics from detected_turns
+    pub fn with_metrics(
+        mut self,
+        total_turns: i32,
+        total_tool_calls: i32,
+        successful_tool_calls: i32,
+        failed_tool_calls: i32,
+        total_lines_changed: i32,
+    ) -> Self {
+        self.total_turns = total_turns;
+        self.total_tool_calls = total_tool_calls;
+        self.successful_tool_calls = successful_tool_calls;
+        self.failed_tool_calls = failed_tool_calls;
+        self.total_lines_changed = total_lines_changed;
+        self
+    }
+
+    /// Builder method: set model metadata
+    pub fn with_model(mut self, model: String, prompt_version: i32) -> Self {
+        self.model_used = Some(model);
+        self.prompt_version = prompt_version;
+        self
+    }
+
+    /// Check if this summary was generated by an LLM
+    pub fn is_llm_generated(&self) -> bool {
+        self.model_used.is_some()
+    }
+
+    /// Check if this session was successful (completed or partial with high success rate)
+    pub fn is_successful(&self) -> bool {
+        match &self.outcome {
+            Some(SessionOutcome::Completed) => true,
+            Some(SessionOutcome::Partial) => {
+                // Consider partial successful if >70% of tool calls succeeded
+                if self.total_tool_calls > 0 {
+                    let success_rate =
+                        self.successful_tool_calls as f64 / self.total_tool_calls as f64;
+                    success_rate > 0.7
+                } else {
+                    true
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if this session had significant code changes
+    pub fn has_significant_changes(&self) -> bool {
+        self.total_lines_changed > 100 || self.files_affected.len() > 5
+    }
+
+    /// Get tool success rate as a percentage
+    pub fn tool_success_rate(&self) -> Option<f64> {
+        if self.total_tool_calls > 0 {
+            Some(self.successful_tool_calls as f64 / self.total_tool_calls as f64 * 100.0)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_session_summary() {
+        let session_id = Uuid::new_v4();
+        let summary = SessionSummary::new(
+            session_id,
+            "JWT Implementation".to_string(),
+            "Implemented JWT authentication".to_string(),
+        );
+
+        assert_eq!(summary.session_id, session_id);
+        assert_eq!(summary.title, "JWT Implementation");
+        assert!(!summary.is_llm_generated());
+    }
+
+    #[test]
+    fn test_outcome_display() {
+        assert_eq!(SessionOutcome::Completed.to_string(), "completed");
+        assert_eq!(SessionOutcome::Partial.to_string(), "partial");
+        assert_eq!(SessionOutcome::Abandoned.to_string(), "abandoned");
+        assert_eq!(SessionOutcome::Ongoing.to_string(), "ongoing");
+    }
+
+    #[test]
+    fn test_outcome_from_str() {
+        assert_eq!(
+            "completed".parse::<SessionOutcome>().unwrap(),
+            SessionOutcome::Completed
+        );
+        assert_eq!(
+            "PARTIAL".parse::<SessionOutcome>().unwrap(),
+            SessionOutcome::Partial
+        );
+        assert!("invalid".parse::<SessionOutcome>().is_err());
+    }
+
+    #[test]
+    fn test_is_successful() {
+        let session_id = Uuid::new_v4();
+
+        let completed = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_outcome(SessionOutcome::Completed);
+        assert!(completed.is_successful());
+
+        let partial_success = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_outcome(SessionOutcome::Partial)
+            .with_metrics(5, 10, 8, 2, 100); // 80% success rate
+        assert!(partial_success.is_successful());
+
+        let partial_failure = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_outcome(SessionOutcome::Partial)
+            .with_metrics(5, 10, 5, 5, 100); // 50% success rate
+        assert!(!partial_failure.is_successful());
+
+        let abandoned = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_outcome(SessionOutcome::Abandoned);
+        assert!(!abandoned.is_successful());
+    }
+
+    #[test]
+    fn test_has_significant_changes() {
+        let session_id = Uuid::new_v4();
+
+        let small = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_metrics(1, 5, 5, 0, 50);
+        assert!(!small.has_significant_changes());
+
+        let large_lines = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_metrics(1, 5, 5, 0, 150);
+        assert!(large_lines.has_significant_changes());
+
+        let many_files = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_files_affected(vec![
+                "a.rs".to_string(),
+                "b.rs".to_string(),
+                "c.rs".to_string(),
+                "d.rs".to_string(),
+                "e.rs".to_string(),
+                "f.rs".to_string(),
+            ]);
+        assert!(many_files.has_significant_changes());
+    }
+
+    #[test]
+    fn test_tool_success_rate() {
+        let session_id = Uuid::new_v4();
+
+        let no_tools = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_metrics(1, 0, 0, 0, 0);
+        assert!(no_tools.tool_success_rate().is_none());
+
+        let with_tools = SessionSummary::new(session_id, "t".to_string(), "s".to_string())
+            .with_metrics(1, 10, 8, 2, 0);
+        assert_eq!(with_tools.tool_success_rate(), Some(80.0));
+    }
+}

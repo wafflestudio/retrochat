@@ -3,22 +3,28 @@ pub mod analytics_request_repo;
 pub mod chat_session_repo;
 pub mod config;
 pub mod connection;
+pub mod detected_turn_repo;
 pub mod message_repo;
 pub mod migrations;
 pub mod project_repo;
 pub mod schema;
+pub mod session_summary_repo;
 pub mod tool_operation_repo;
+pub mod turn_summary_repo;
 
 // Main repositories (now using SQLx)
 pub use analytics_repo::AnalyticsRepository;
 pub use analytics_request_repo::AnalyticsRequestRepository;
 pub use chat_session_repo::ChatSessionRepository;
 pub use connection::DatabaseManager;
+pub use detected_turn_repo::DetectedTurnRepository;
 pub use message_repo::MessageRepository;
 pub use migrations::{MigrationManager, MigrationStatus};
 pub use project_repo::ProjectRepository;
 pub use schema::{create_schema, SCHEMA_VERSION};
+pub use session_summary_repo::SessionSummaryRepository;
 pub use tool_operation_repo::ToolOperationRepository;
+pub use turn_summary_repo::TurnSummaryRepository;
 
 // Main database structure (now using SQLx by default)
 pub struct Database {
@@ -65,6 +71,18 @@ impl Database {
 
     pub fn tool_operation_repo(&self) -> ToolOperationRepository {
         ToolOperationRepository::new(&self.manager)
+    }
+
+    pub fn detected_turn_repo(&self) -> DetectedTurnRepository {
+        DetectedTurnRepository::new(&self.manager)
+    }
+
+    pub fn turn_summary_repo(&self) -> TurnSummaryRepository {
+        TurnSummaryRepository::new(&self.manager)
+    }
+
+    pub fn session_summary_repo(&self) -> SessionSummaryRepository {
+        SessionSummaryRepository::new(&self.manager)
     }
 
     pub fn migration_manager(&self) -> MigrationManager {
