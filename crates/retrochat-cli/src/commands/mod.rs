@@ -169,6 +169,9 @@ pub enum AnalysisCommands {
         /// Process in background (simplified - just shows progress)
         #[arg(long)]
         background: bool,
+        /// LLM provider to use (google_ai, claude_code, gemini_cli)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
     },
 
     /// Show analysis results
@@ -201,6 +204,9 @@ pub enum AnalysisCommands {
         #[arg(long)]
         all: bool,
     },
+
+    /// List available LLM providers
+    Providers,
 }
 
 #[derive(Subcommand)]
@@ -282,9 +288,16 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
                 custom_prompt,
                 all,
                 background,
+                provider,
             } => {
-                self::analytics::handle_execute_command(session_id, custom_prompt, all, background)
-                    .await
+                self::analytics::handle_execute_command(
+                    session_id,
+                    custom_prompt,
+                    all,
+                    background,
+                    provider,
+                )
+                .await
             }
 
             AnalysisCommands::Show { session_id, all } => {
@@ -300,6 +313,8 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
             AnalysisCommands::Cancel { request_id, all } => {
                 self::analytics::handle_cancel_command(request_id, all).await
             }
+
+            AnalysisCommands::Providers => self::analytics::handle_providers_command().await,
         },
 
         // ═══════════════════════════════════════════════════

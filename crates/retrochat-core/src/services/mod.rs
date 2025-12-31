@@ -4,6 +4,7 @@ pub mod analytics_service;
 pub mod auto_detect;
 pub mod google_ai;
 pub mod import_service;
+pub mod llm;
 pub mod parser_service;
 pub mod query_service;
 pub mod watch_service;
@@ -30,3 +31,10 @@ pub use query_service::{
     SessionsQueryRequest, SessionsQueryResponse,
 };
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};
+
+// LLM provider abstraction layer
+pub use llm::{
+    create_provider, list_available_providers, ClaudeCodeProvider, GeminiCliProvider,
+    GoogleAiProvider, LlmError, LlmProvider, LlmProviderConfig, LlmProviderType, LlmRequest,
+    LlmResponse, TokenUsage,
+};

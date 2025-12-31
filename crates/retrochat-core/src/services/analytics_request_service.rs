@@ -5,7 +5,7 @@ use crate::database::{
 };
 use crate::models::{Analytics, AnalyticsRequest, OperationStatus};
 use crate::services::analytics_service::AnalyticsService;
-use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::LlmProvider;
 
 pub struct AnalyticsRequestService {
     analytics_service: AnalyticsService,
@@ -14,10 +14,10 @@ pub struct AnalyticsRequestService {
 }
 
 impl AnalyticsRequestService {
-    pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>, llm_provider: Arc<dyn LlmProvider>) -> Self {
         let request_repo = AnalyticsRequestRepository::new(db_manager.clone());
         let analytics_service =
-            AnalyticsService::new(db_manager.clone()).with_google_ai(google_ai_client);
+            AnalyticsService::new(db_manager.clone()).with_llm_provider(llm_provider);
 
         Self {
             analytics_service,
@@ -333,7 +333,13 @@ impl Drop for AnalyticsRequestCleanupHandler {
 mod tests {
     use super::*;
     use crate::database::Database;
-    use crate::services::google_ai::GoogleAiConfig;
+    use crate::services::llm::{GoogleAiProvider, LlmProviderConfig};
+
+    fn create_test_provider() -> Arc<dyn LlmProvider> {
+        Arc::new(
+            GoogleAiProvider::from_api_key("test-api-key").expect("Failed to create test provider"),
+        )
+    }
 
     #[tokio::test]
     async fn test_create_analysis_request() {
@@ -356,10 +362,8 @@ mod tests {
         .with_project("test_project".to_string());
         session_repo.create(&test_session).await.unwrap();
 
-        let service = AnalyticsRequestService::new(
-            Arc::new(database.manager),
-            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
-        );
+        let service =
+            AnalyticsRequestService::new(Arc::new(database.manager), create_test_provider());
 
         let session_id = test_session.id.to_string();
         let request = service
@@ -392,10 +396,8 @@ mod tests {
         .with_project("test_project2".to_string());
         session_repo.create(&test_session).await.unwrap();
 
-        let service = AnalyticsRequestService::new(
-            Arc::new(database.manager),
-            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
-        );
+        let service =
+            AnalyticsRequestService::new(Arc::new(database.manager), create_test_provider());
 
         let session_id = test_session.id.to_string();
         let request = service
@@ -434,7 +436,7 @@ mod tests {
 
         let service = AnalyticsRequestService::new(
             Arc::new(database.manager.clone()),
-            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
+            create_test_provider(),
         );
 
         let session_id = test_session.id.to_string();
@@ -488,7 +490,7 @@ mod tests {
 
         let service = AnalyticsRequestService::new(
             Arc::new(database.manager.clone()),
-            GoogleAiClient::new(GoogleAiConfig::new("test-api-key".to_string())).unwrap(),
+            create_test_provider(),
         );
 
         let session_id = test_session.id.to_string();

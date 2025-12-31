@@ -1,7 +1,7 @@
-use super::google_ai::GoogleAiClient;
 use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
 };
+use crate::services::llm::LlmProvider;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -14,20 +14,31 @@ use crate::models::Analytics;
 
 pub struct AnalyticsService {
     db_manager: Arc<DatabaseManager>,
-    google_ai_client: Option<GoogleAiClient>,
+    llm_provider: Option<Arc<dyn LlmProvider>>,
 }
 
 impl AnalyticsService {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
-            google_ai_client: None,
+            llm_provider: None,
         }
     }
 
-    pub fn with_google_ai(mut self, google_ai_client: GoogleAiClient) -> Self {
-        self.google_ai_client = Some(google_ai_client);
+    /// Set the LLM provider to use for analysis
+    pub fn with_llm_provider(mut self, provider: Arc<dyn LlmProvider>) -> Self {
+        self.llm_provider = Some(provider);
         self
+    }
+
+    /// Get the LLM provider, if configured
+    pub fn llm_provider(&self) -> Option<&Arc<dyn LlmProvider>> {
+        self.llm_provider.as_ref()
+    }
+
+    /// Get the model name being used, if a provider is configured
+    pub fn model_name(&self) -> Option<&str> {
+        self.llm_provider.as_ref().map(|p| p.model_name())
     }
 
     // =============================================================================
@@ -66,17 +77,23 @@ impl AnalyticsService {
         let qualitative_input =
             collect_qualitative_data(&tool_operations, &messages, &session).await?;
 
-        // Generate analysis (requires AI client)
-        let ai_client = self
-            .google_ai_client
+        // Generate analysis (requires LLM provider)
+        let llm_provider = self
+            .llm_provider
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
+            .ok_or_else(|| anyhow::anyhow!("LLM provider is required for analysis"))?
+            .clone();
+
+        let model_name = llm_provider.model_name().to_string();
 
         // Run qualitative and quantitative analysis in parallel
         // try_join! cancels remaining futures immediately if one fails
+        let provider_for_qualitative = llm_provider.clone();
+        let provider_for_quantitative = llm_provider;
+
         let (ai_qualitative_output, ai_quantitative_output) = tokio::try_join!(
-            generate_qualitative_analysis_ai(&qualitative_input, ai_client, None),
-            generate_quantitative_analysis_ai(&qualitative_input, ai_client, None)
+            generate_qualitative_analysis_ai(&qualitative_input, provider_for_qualitative, None),
+            generate_quantitative_analysis_ai(&qualitative_input, provider_for_quantitative, None)
         )?;
 
         // Create Analytics directly
@@ -86,7 +103,7 @@ impl AnalyticsService {
             ai_qualitative_output,
             ai_quantitative_output,
             metric_quantitative_output,
-            None, // model_used - will be set later if available
+            Some(model_name),
             None, // analysis_duration_ms - will be set later
         ))
     }

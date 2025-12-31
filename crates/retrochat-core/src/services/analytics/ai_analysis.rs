@@ -5,10 +5,11 @@ use super::models::{
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
-use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::{LlmProvider, LlmRequest};
 use anyhow::Result;
 use futures::future::join_all;
 use regex::Regex;
+use std::sync::Arc;
 
 // =============================================================================
 // AI Analysis Functions
@@ -16,7 +17,7 @@ use regex::Regex;
 
 pub async fn generate_qualitative_analysis_ai(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_provider: Arc<dyn LlmProvider>,
     entries: Option<&QualitativeEntryList>,
 ) -> Result<AIQualitativeOutput> {
     // Use provided entries or load defaults
@@ -32,8 +33,9 @@ pub async fn generate_qualitative_analysis_ai(
         .map(|entry| {
             let entry = entry.clone();
             let qualitative_input = qualitative_input.clone();
+            let provider = llm_provider.clone();
             async move {
-                let result = generate_single_entry(&qualitative_input, &entry, ai_client).await;
+                let result = generate_single_entry(&qualitative_input, &entry, provider).await;
                 (entry, result)
             }
         })
@@ -72,17 +74,15 @@ pub async fn generate_qualitative_analysis_ai(
 async fn generate_single_entry(
     qualitative_input: &QualitativeInput,
     entry: &QualitativeEntry,
-    ai_client: &GoogleAiClient,
+    llm_provider: Arc<dyn LlmProvider>,
 ) -> Result<QualitativeEntryOutput> {
     let prompt = build_single_entry_prompt(qualitative_input, entry);
 
-    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-        prompt,
-        max_tokens: Some(1024),
-        temperature: Some(0.7),
-    };
+    let request = LlmRequest::new(prompt)
+        .with_max_tokens(1024)
+        .with_temperature(0.7);
 
-    let response = ai_client.analytics(analysis_request).await?;
+    let response = llm_provider.generate(request).await?;
     parse_entry_response(&response.text, entry)
 }
 
@@ -356,17 +356,15 @@ fn parse_rubric_score_response(response: &str) -> (Option<f64>, String) {
 async fn score_rubric(
     rubric: &Rubric,
     formatted_session: &str,
-    ai_client: &GoogleAiClient,
+    llm_provider: Arc<dyn LlmProvider>,
 ) -> Result<RubricScore> {
     let prompt = build_rubric_judge_prompt(rubric, formatted_session);
 
-    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-        prompt: prompt.clone(),
-        max_tokens: Some(512),
-        temperature: Some(0.3), // Lower temperature for more consistent scoring
-    };
+    let request = LlmRequest::new(prompt.clone())
+        .with_max_tokens(512)
+        .with_temperature(0.3); // Lower temperature for more consistent scoring
 
-    let (score, reasoning) = match ai_client.analytics(analysis_request).await {
+    let (score, reasoning) = match llm_provider.generate(request).await {
         Ok(response) => {
             let (parsed_score, parsed_reasoning) = parse_rubric_score_response(&response.text);
 
@@ -381,13 +379,11 @@ async fn score_rubric(
                     prompt
                 );
 
-                let retry_request = crate::services::google_ai::models::AnalysisRequest {
-                    prompt: retry_prompt,
-                    max_tokens: Some(512),
-                    temperature: Some(0.3),
-                };
+                let retry_request = LlmRequest::new(retry_prompt)
+                    .with_max_tokens(512)
+                    .with_temperature(0.3);
 
-                match ai_client.analytics(retry_request).await {
+                match llm_provider.generate(retry_request).await {
                     Ok(retry_response) => parse_rubric_score_response(&retry_response.text),
                     Err(_) => (None, String::new()),
                 }
@@ -427,10 +423,10 @@ async fn score_rubric(
 
 pub async fn generate_quantitative_analysis_ai(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_provider: Arc<dyn LlmProvider>,
     rubrics: Option<&RubricList>,
 ) -> Result<AIQuantitativeOutput> {
-    return match score_all_rubrics(qualitative_input, ai_client, rubrics).await {
+    return match score_all_rubrics(qualitative_input, llm_provider, rubrics).await {
         Ok((rubric_scores, rubric_summary)) => Ok(AIQuantitativeOutput {
             rubric_scores,
             rubric_summary: Some(rubric_summary),
@@ -445,7 +441,7 @@ pub async fn generate_quantitative_analysis_ai(
 /// Score a session against all rubrics
 async fn score_all_rubrics(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_provider: Arc<dyn LlmProvider>,
     rubrics: Option<&RubricList>,
 ) -> Result<(Vec<RubricScore>, RubricEvaluationSummary)> {
     // Use provided rubrics or load defaults
@@ -464,8 +460,9 @@ async fn score_all_rubrics(
         .map(|rubric| {
             let rubric = rubric.clone();
             let session = formatted_session.clone();
+            let provider = llm_provider.clone();
             async move {
-                let result = score_rubric(&rubric, &session, ai_client).await;
+                let result = score_rubric(&rubric, &session, provider).await;
                 (rubric, result)
             }
         })

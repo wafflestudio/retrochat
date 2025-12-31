@@ -3,11 +3,10 @@ use clap::Subcommand;
 use std::sync::Arc;
 
 use retrochat_core::database::DatabaseManager;
-use retrochat_core::env::apis as env_vars;
 use retrochat_core::models::OperationStatus;
 use retrochat_core::services::{
-    google_ai::{GoogleAiClient, GoogleAiConfig},
-    AnalyticsRequestService,
+    create_provider, list_available_providers, AnalyticsRequestService, LlmProvider,
+    LlmProviderConfig, LlmProviderType,
 };
 
 #[derive(Subcommand)]
@@ -31,6 +30,9 @@ pub enum AnalyticsCommands {
         /// Use plain text format (alias for --format=plain)
         #[arg(long)]
         plain: bool,
+        /// LLM provider to use (google_ai, claude_code, gemini_cli)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
     },
     /// Show analysis results
     Show {
@@ -63,6 +65,34 @@ pub enum AnalyticsCommands {
         #[arg(long)]
         all: bool,
     },
+    /// List available LLM providers
+    Providers,
+}
+
+/// Create an LLM provider based on the given provider string or environment configuration
+fn create_llm_provider(provider_str: Option<String>) -> Result<Arc<dyn LlmProvider>> {
+    let provider_type = match provider_str {
+        Some(s) => s
+            .parse::<LlmProviderType>()
+            .map_err(|e| anyhow::anyhow!(e))?,
+        None => {
+            // Try to get from environment variable, default to Google AI
+            std::env::var(retrochat_core::env::llm::LLM_PROVIDER)
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(LlmProviderType::GoogleAi)
+        }
+    };
+
+    let config = LlmProviderConfig::from_env();
+
+    // Override the provider type if explicitly specified
+    let config = LlmProviderConfig {
+        provider_type,
+        ..config
+    };
+
+    create_provider(config).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 pub async fn handle_execute_command(
@@ -70,18 +100,21 @@ pub async fn handle_execute_command(
     custom_prompt: Option<String>,
     all: bool,
     background: bool,
+    provider_str: Option<String>,
 ) -> Result<()> {
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // Initialize Google AI client
-    let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY)
-        .context("GOOGLE_AI_API_KEY environment variable is required")?;
+    // Create LLM provider
+    let llm_provider = create_llm_provider(provider_str)?;
 
-    let config = GoogleAiConfig::new(api_key);
-    let google_ai_client = GoogleAiClient::new(config)?;
+    println!(
+        "Using LLM provider: {} (model: {})",
+        llm_provider.provider_type(),
+        llm_provider.model_name()
+    );
 
-    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
+    let service = AnalyticsRequestService::new(db_manager, llm_provider);
 
     if all {
         execute_analysis_for_all_sessions(&service, custom_prompt, background).await
@@ -213,11 +246,13 @@ pub async fn handle_show_command(session_id: Option<String>, all: bool) -> Resul
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // For show command, we don't need Google AI - just create a dummy client
-    // since we're only reading from database
-    let config = GoogleAiConfig::new("dummy-key-for-read-only".to_string());
-    let google_ai_client = GoogleAiClient::new(config)?;
-    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
+    // For show command, we still need a provider for regeneration if needed
+    // Use default configuration
+    let llm_provider = create_llm_provider(None).context(
+        "Failed to create LLM provider. Set GOOGLE_AI_API_KEY or configure another provider.",
+    )?;
+
+    let service = AnalyticsRequestService::new(db_manager, llm_provider);
 
     if all {
         show_all_results(&service).await
@@ -308,11 +343,12 @@ pub async fn handle_status_command(all: bool, watch: bool, history: bool) -> Res
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // For status command, we don't need Google AI - just create a dummy client
-    // since we're only reading from database
-    let config = GoogleAiConfig::new("dummy-key-for-read-only".to_string());
-    let google_ai_client = GoogleAiClient::new(config)?;
-    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
+    // For status command, we need a provider
+    let llm_provider = create_llm_provider(None).context(
+        "Failed to create LLM provider. Set GOOGLE_AI_API_KEY or configure another provider.",
+    )?;
+
+    let service = AnalyticsRequestService::new(db_manager, llm_provider);
 
     if watch {
         println!("Watching for status changes... (Press Ctrl+C to exit)");
@@ -392,11 +428,12 @@ pub async fn handle_cancel_command(request_id: Option<String>, all: bool) -> Res
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // For cancel command, we don't need Google AI - just create a dummy client
-    // since we're only updating database status
-    let config = GoogleAiConfig::new("dummy-key-for-cancel".to_string());
-    let google_ai_client = GoogleAiClient::new(config)?;
-    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
+    // For cancel command, we need a provider
+    let llm_provider = create_llm_provider(None).context(
+        "Failed to create LLM provider. Set GOOGLE_AI_API_KEY or configure another provider.",
+    )?;
+
+    let service = AnalyticsRequestService::new(db_manager, llm_provider);
 
     if all {
         cancel_all_requests(&service).await
@@ -485,6 +522,34 @@ async fn list_cancellable_requests(service: &AnalyticsRequestService) -> Result<
     println!();
     println!("Use 'retrochat analytics cancel <request_id>' to cancel a specific request");
     println!("Use 'retrochat analytics cancel --all' to cancel all active requests");
+
+    Ok(())
+}
+
+/// Handle the providers subcommand to list available LLM providers
+pub async fn handle_providers_command() -> Result<()> {
+    println!("=== Available LLM Providers ===\n");
+
+    let providers = list_available_providers().await;
+
+    for (provider_type, available, reason) in providers {
+        let status = if available { "✓" } else { "✗" };
+        let status_text = if available {
+            "Available"
+        } else {
+            "Unavailable"
+        };
+
+        println!("{} {} - {}", status, provider_type, status_text);
+        println!("   {}", reason);
+        println!();
+    }
+
+    println!("To use a specific provider, either:");
+    println!("  - Set RETROCHAT_LLM_PROVIDER environment variable");
+    println!("  - Use --provider flag with analytics execute command");
+    println!();
+    println!("Valid provider values: google_ai, claude_code, gemini_cli");
 
     Ok(())
 }

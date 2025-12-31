@@ -14,9 +14,9 @@ use tokio::task;
 use tokio::time::timeout;
 
 use retrochat_core::database::DatabaseManager;
-use retrochat_core::env::apis as env_vars;
-use retrochat_core::services::google_ai::{GoogleAiClient, GoogleAiConfig};
-use retrochat_core::services::{AnalyticsRequestService, AnalyticsService, QueryService};
+use retrochat_core::services::{
+    create_provider, AnalyticsRequestService, AnalyticsService, LlmProviderConfig, QueryService,
+};
 
 use super::{
     components::dialog::{Dialog, DialogType},
@@ -151,18 +151,16 @@ impl App {
         let query_service = QueryService::with_database(db_manager.clone());
         let analytics_service = AnalyticsService::new(db_manager.clone());
 
-        // Try to create analytics request service if Google AI API key is available
-        let analytics_request_service = if std::env::var(env_vars::GOOGLE_AI_API_KEY).is_ok() {
-            let config = GoogleAiConfig::default();
-            match GoogleAiClient::new(config) {
-                Ok(client) => Some(Arc::new(AnalyticsRequestService::new(
+        // Try to create analytics request service with configured LLM provider
+        let analytics_request_service = {
+            let config = LlmProviderConfig::from_env();
+            match create_provider(config) {
+                Ok(provider) => Some(Arc::new(AnalyticsRequestService::new(
                     db_manager.clone(),
-                    client,
+                    provider,
                 ))),
                 Err(_) => None,
             }
-        } else {
-            None
         };
 
         Ok(Self {
@@ -399,11 +397,11 @@ impl App {
                 }
             }
         } else {
-            // Show message that Google AI API key is required
-            self.state.show_error(format!(
-                "Google AI API key not configured. Set {} environment variable.",
-                env_vars::GOOGLE_AI_API_KEY
-            ));
+            // Show message that LLM provider is not configured
+            self.state.show_error(
+                "LLM provider not configured. Set GOOGLE_AI_API_KEY or configure another provider."
+                    .to_string(),
+            );
         }
 
         Ok(())

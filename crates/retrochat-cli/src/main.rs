@@ -103,26 +103,21 @@ fn create_analytics_request_cleanup_handler(
 ) -> anyhow::Result<retrochat_core::services::AnalyticsRequestCleanupHandler> {
     use retrochat_core::database::DatabaseManager;
     use retrochat_core::services::{
-        google_ai::{GoogleAiClient, GoogleAiConfig},
-        AnalyticsRequestCleanupHandler, AnalyticsRequestService,
+        create_provider, AnalyticsRequestCleanupHandler, AnalyticsRequestService, LlmProviderConfig,
     };
 
     // Create the necessary components synchronously
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = rt.block_on(async { DatabaseManager::new(&db_path).await })?;
 
-    // Get API key with priority: environment variable > config file
-    let api_key = retrochat_core::config::get_google_ai_api_key()?.unwrap_or_default();
+    // Create LLM provider from environment configuration
+    let llm_config = LlmProviderConfig::from_env();
+    let llm_provider = create_provider(llm_config)
+        .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
 
-    let google_ai_config = if api_key.is_empty() {
-        GoogleAiConfig::default()
-    } else {
-        GoogleAiConfig::new(api_key)
-    };
-    let google_ai_client = GoogleAiClient::new(google_ai_config)?;
     let service = Arc::new(AnalyticsRequestService::new(
         Arc::new(db_manager),
-        google_ai_client,
+        llm_provider,
     ));
 
     Ok(AnalyticsRequestCleanupHandler::new(service, rt.clone()))
