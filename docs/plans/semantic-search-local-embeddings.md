@@ -118,13 +118,19 @@ Schema:
 - id: String (primary key, matches turn_summaries.id)
 - session_id: String (for filtering)
 - turn_number: Int32 (for filtering)
-- turn_type: String (nullable, for filtering)
+- turn_type: String (nullable, for filtering: task, question, error_fix, etc.)
+- started_at: Timestamp (turn start time, for time-range queries)
+- ended_at: Timestamp (turn end time)
 - embedding: FixedSizeList<Float32>[384] (vector column)
 - text_hash: String (SHA256 of embedded text for change detection)
-- embedded_at: Timestamp
+- embedded_at: Timestamp (when embedding was generated)
 - model_name: String (e.g., "BGESmallENV15")
 
-Index: IVF_PQ on embedding column (created after sufficient data)
+Indexes:
+- IVF_PQ on embedding column (vector index, created after sufficient data)
+- Scalar index on started_at (for time-range filtering)
+- Scalar index on turn_type (for type filtering)
+- Scalar index on session_id (for session filtering)
 ```
 
 #### session_embeddings
@@ -132,13 +138,45 @@ Index: IVF_PQ on embedding column (created after sufficient data)
 Schema:
 - id: String (primary key, matches session_summaries.id)
 - session_id: String (unique, for joining)
-- outcome: String (nullable, for filtering)
+- outcome: String (nullable, for filtering: completed, partial, abandoned, ongoing)
+- created_at: Timestamp (session creation time, from chat_sessions)
+- updated_at: Timestamp (last message time)
+- provider: String (claude, gemini, chatgpt - for filtering)
+- project: String (nullable, project name for filtering)
 - embedding: FixedSizeList<Float32>[384] (vector column)
 - text_hash: String
 - embedded_at: Timestamp
 - model_name: String
 
-Index: IVF_PQ on embedding column
+Indexes:
+- IVF_PQ on embedding column (vector index)
+- Scalar index on created_at (for time-range filtering)
+- Scalar index on provider (for provider filtering)
+- Scalar index on outcome (for outcome filtering)
+```
+
+### SQL Filter Examples
+
+LanceDB supports full SQL WHERE clause syntax via DataFusion:
+
+```rust
+// Time range query
+table.vector_search(query_vec)
+    .only_if("started_at >= timestamp '2025-01-01' AND started_at < timestamp '2025-02-01'")
+    .limit(10)
+    .execute().await?;
+
+// Combined filters
+table.vector_search(query_vec)
+    .only_if("provider = 'claude' AND turn_type IN ('task', 'error_fix') AND started_at > timestamp '2025-06-01'")
+    .limit(20)
+    .execute().await?;
+
+// Pattern matching
+table.vector_search(query_vec)
+    .only_if("session_id LIKE 'proj-%' AND outcome IS NOT NULL")
+    .limit(10)
+    .execute().await?;
 ```
 
 ### Text to Embed
@@ -277,10 +315,16 @@ impl VectorStore {
 pub struct TurnFilter {
     pub session_id: Option<String>,
     pub turn_types: Option<Vec<TurnType>>,
+    pub started_after: Option<DateTime<Utc>>,
+    pub started_before: Option<DateTime<Utc>>,
 }
 
 pub struct SessionFilter {
     pub outcomes: Option<Vec<SessionOutcome>>,
+    pub providers: Option<Vec<String>>,
+    pub projects: Option<Vec<String>>,
+    pub created_after: Option<DateTime<Utc>>,
+    pub created_before: Option<DateTime<Utc>>,
 }
 
 pub struct TurnSearchResult {
@@ -388,6 +432,11 @@ semantic-search = ["lancedb", "arrow", "arrow-array", "arrow-schema", "fastembed
 cargo cli -- search --semantic "how to handle errors in async code"
 cargo cli -- search --hybrid "authentication implementation" --semantic-weight 0.7
 
+# Semantic search with metadata filters
+cargo cli -- search --semantic "database migrations" --from 2025-01-01 --to 2025-06-30
+cargo cli -- search --semantic "error handling" --provider claude --turn-type error_fix
+cargo cli -- search --semantic "API design" --project my-project --outcome completed
+
 # Index management
 cargo cli -- index status           # Show indexing status
 cargo cli -- index rebuild          # Rebuild entire vector index
@@ -397,8 +446,10 @@ cargo cli -- index rebuild --session SESSION_ID  # Rebuild specific session
 ### Updated Commands
 
 ```bash
-# Enhanced search with semantic option
+# Enhanced search with semantic option and filters
 cargo cli -- search "query" [--semantic] [--hybrid] [--limit N]
+cargo cli -- search "query" --semantic --from DATE --to DATE
+cargo cli -- search "query" --semantic --provider NAME --project NAME
 ```
 
 ## Implementation Phases
