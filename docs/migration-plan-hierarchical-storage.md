@@ -20,20 +20,45 @@ Add hierarchical summarization layer on top of existing message storage without 
 │            │ 1:N                              │ 1:N                  │
 │            ▼                                  ▼                      │
 │   ┌──────────────────┐               ┌──────────────────┐           │
-│   │ detected_turns   │               │ messages         │           │
-│   │ (rule-based +    │──────────────►│ (unchanged)      │           │
-│   │  computed metrics)│  references  └──────────────────┘           │
-│   └────────┬─────────┘                       │                      │
-│            │                                  │ 1:1                  │
-│            │ 1:1                              ▼                      │
-│            ▼                          ┌──────────────────┐           │
-│   ┌──────────────────┐               │ tool_operations  │           │
-│   │ turn_summaries   │               │ (unchanged)      │           │
-│   │ (LLM-generated)  │               └──────────────────┘           │
-│   └──────────────────┘                                              │
+│   │ turn_summaries   │──────────────►│ messages         │           │
+│   │ (LLM-generated)  │  references   │ (unchanged)      │           │
+│   │                  │  via sequence │                  │           │
+│   └──────────────────┘               └──────────────────┘           │
+│                                               │                      │
+│                                               │ 1:1                  │
+│                                               ▼                      │
+│                                       ┌──────────────────┐           │
+│                                       │ tool_operations  │           │
+│                                       │ (unchanged)      │           │
+│                                       └──────────────────┘           │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+## Key Design Decision: No Precomputed Metrics Table
+
+This plan intentionally **removes the `detected_turns` table** from the original design.
+
+### Why No Precomputed Metrics?
+
+1. **Core problem is semantic search**: Turn summaries solve this directly. Computed metrics are secondary.
+
+2. **Metrics can be computed on-demand**: Given a turn's `start_sequence` and `end_sequence`, we can always query:
+   ```sql
+   SELECT
+       COUNT(*) as message_count,
+       SUM(CASE WHEN message_type = 'tool_request' THEN 1 ELSE 0 END) as tool_requests
+   FROM messages
+   WHERE session_id = ? AND sequence_number BETWEEN ? AND ?
+   ```
+
+3. **Single source of truth**: Messages remain canonical. No risk of metrics becoming stale.
+
+4. **Less code to maintain**: Fewer tables, fewer migrations, simpler mental model.
+
+5. **YAGNI**: If metrics performance becomes an issue later, add materialized views or caching.
+
+---
 
 ## Turn Detection Rules
 
@@ -87,109 +112,25 @@ Messages:                              Turn Assignment:
 -- Migration: 018_add_hierarchical_storage.sql
 
 -- =============================================================================
--- Table: detected_turns
--- Purpose: Rule-based turn boundaries with computed metrics (no LLM required)
--- Lifecycle: Created during import, never modified
--- Data Sources: messages, tool_operations, bash_metadata tables
+-- Table: turn_summaries
+-- Purpose: LLM-generated summaries with direct references to messages
+-- Lifecycle: Created async by background job, can be regenerated
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS detected_turns (
+CREATE TABLE IF NOT EXISTS turn_summaries (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     turn_number INTEGER NOT NULL,           -- 0-indexed within session
 
     -- =========================================================================
-    -- BOUNDARIES (references to messages table)
+    -- MESSAGE BOUNDARIES (references to messages table)
     -- =========================================================================
-    start_sequence INTEGER NOT NULL,
-    end_sequence INTEGER NOT NULL,
+    start_sequence INTEGER NOT NULL,        -- First message sequence in turn
+    end_sequence INTEGER NOT NULL,          -- Last message sequence in turn
     user_message_id TEXT,                   -- FK to first user message (nullable for turn 0)
 
     -- =========================================================================
-    -- MESSAGE METRICS (computed from messages table)
+    -- LLM-GENERATED CONTENT
     -- =========================================================================
-    message_count INTEGER NOT NULL DEFAULT 0,
-    user_message_count INTEGER NOT NULL DEFAULT 0,
-    assistant_message_count INTEGER NOT NULL DEFAULT 0,
-    system_message_count INTEGER NOT NULL DEFAULT 0,
-
-    -- By message type
-    simple_message_count INTEGER NOT NULL DEFAULT 0,
-    tool_request_count INTEGER NOT NULL DEFAULT 0,
-    tool_result_count INTEGER NOT NULL DEFAULT 0,
-    thinking_count INTEGER NOT NULL DEFAULT 0,
-    slash_command_count INTEGER NOT NULL DEFAULT 0,
-
-    -- =========================================================================
-    -- TOKEN METRICS (aggregated from messages.token_count)
-    -- =========================================================================
-    total_token_count INTEGER,              -- Sum of all message tokens
-    user_token_count INTEGER,               -- User message tokens
-    assistant_token_count INTEGER,          -- Assistant message tokens
-
-    -- =========================================================================
-    -- TOOL OPERATION METRICS (from tool_operations table)
-    -- =========================================================================
-    tool_call_count INTEGER NOT NULL DEFAULT 0,
-    tool_success_count INTEGER NOT NULL DEFAULT 0,
-    tool_error_count INTEGER NOT NULL DEFAULT 0,
-
-    -- Tool breakdown by name (JSON object)
-    tool_usage TEXT,                        -- {"Read": 5, "Write": 3, "Bash": 2, "Edit": 1}
-
-    -- =========================================================================
-    -- FILE METRICS (extracted from tool_operations.file_metadata)
-    -- =========================================================================
-    files_read TEXT,                        -- JSON array: ["src/main.rs", "Cargo.toml"]
-    files_written TEXT,                     -- JSON array: ["src/auth.rs"]
-    files_modified TEXT,                    -- JSON array: ["src/lib.rs"] (Edit operations)
-
-    unique_files_touched INTEGER DEFAULT 0, -- Count of distinct files across all operations
-
-    -- Line change metrics (aggregated from tool_operations.file_metadata)
-    total_lines_added INTEGER DEFAULT 0,
-    total_lines_removed INTEGER DEFAULT 0,
-    total_lines_changed INTEGER DEFAULT 0,  -- added + removed
-
-    -- =========================================================================
-    -- BASH METRICS (from bash_metadata table)
-    -- =========================================================================
-    bash_command_count INTEGER DEFAULT 0,
-    bash_success_count INTEGER DEFAULT 0,
-    bash_error_count INTEGER DEFAULT 0,
-
-    -- Commands executed (JSON array)
-    commands_executed TEXT,                 -- ["cargo test", "git status", "npm install"]
-
-    -- =========================================================================
-    -- CONTENT PREVIEW (for quick display without reading messages)
-    -- =========================================================================
-    user_message_preview TEXT,              -- First 500 chars of user message
-    assistant_message_preview TEXT,         -- First 500 chars of final assistant message
-
-    -- =========================================================================
-    -- TIMESTAMPS
-    -- =========================================================================
-    started_at TEXT NOT NULL,
-    ended_at TEXT NOT NULL,
-    duration_seconds INTEGER,               -- ended_at - started_at
-
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
-
-    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_message_id) REFERENCES messages(id) ON DELETE SET NULL,
-    UNIQUE(session_id, turn_number)
-);
-
--- =============================================================================
--- Table: turn_summaries
--- Purpose: LLM-generated summaries for detected turns
--- Lifecycle: Created async by background job, can be regenerated
--- =============================================================================
-CREATE TABLE IF NOT EXISTS turn_summaries (
-    id TEXT PRIMARY KEY,
-    turn_id TEXT NOT NULL,                  -- FK to detected_turns.id
-
-    -- LLM-generated content
     user_intent TEXT NOT NULL,              -- "User wanted to add JWT authentication"
     assistant_action TEXT NOT NULL,         -- "Created auth module with JWT support"
     summary TEXT NOT NULL,                  -- Combined summary sentence
@@ -198,13 +139,27 @@ CREATE TABLE IF NOT EXISTS turn_summaries (
     turn_type TEXT,                         -- 'task', 'question', 'error_fix', 'clarification', 'discussion'
     complexity_score REAL,                  -- 0.0 - 1.0 (optional)
 
-    -- Generation metadata
+    -- Extracted entities (JSON arrays)
+    key_topics TEXT,                        -- ["authentication", "JWT", "middleware"]
+    decisions_made TEXT,                    -- ["Used RS256 over HS256", "Added refresh tokens"]
+    code_concepts TEXT,                     -- ["error handling", "async/await", "middleware pattern"]
+
+    -- =========================================================================
+    -- CACHED TIMESTAMPS (derived from messages, cached for convenience)
+    -- =========================================================================
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+
+    -- =========================================================================
+    -- GENERATION METADATA
+    -- =========================================================================
     model_used TEXT,
     prompt_version INTEGER NOT NULL DEFAULT 1,
     generated_at TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
 
-    FOREIGN KEY (turn_id) REFERENCES detected_turns(id) ON DELETE CASCADE,
-    UNIQUE(turn_id)                         -- 1:1 relationship
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+    UNIQUE(session_id, turn_number)
 );
 
 -- =============================================================================
@@ -228,13 +183,6 @@ CREATE TABLE IF NOT EXISTS session_summaries (
     technologies_used TEXT,                 -- ["JWT", "bcrypt", "axum"]
     files_affected TEXT,                    -- ["src/auth.rs", "src/middleware.rs"]
 
-    -- Aggregated metrics (computed from detected_turns, not LLM)
-    total_turns INTEGER NOT NULL DEFAULT 0,
-    total_tool_calls INTEGER NOT NULL DEFAULT 0,
-    successful_tool_calls INTEGER NOT NULL DEFAULT 0,
-    failed_tool_calls INTEGER NOT NULL DEFAULT 0,
-    total_lines_changed INTEGER NOT NULL DEFAULT 0,
-
     -- Generation metadata
     model_used TEXT,
     prompt_version INTEGER NOT NULL DEFAULT 1,
@@ -247,12 +195,9 @@ CREATE TABLE IF NOT EXISTS session_summaries (
 -- =============================================================================
 -- Indexes
 -- =============================================================================
-CREATE INDEX IF NOT EXISTS idx_detected_turns_session ON detected_turns(session_id);
-CREATE INDEX IF NOT EXISTS idx_detected_turns_started ON detected_turns(started_at);
-CREATE INDEX IF NOT EXISTS idx_detected_turns_tool_count ON detected_turns(tool_call_count);
-CREATE INDEX IF NOT EXISTS idx_detected_turns_lines_changed ON detected_turns(total_lines_changed);
-CREATE INDEX IF NOT EXISTS idx_turn_summaries_turn ON turn_summaries(turn_id);
+CREATE INDEX IF NOT EXISTS idx_turn_summaries_session ON turn_summaries(session_id);
 CREATE INDEX IF NOT EXISTS idx_turn_summaries_type ON turn_summaries(turn_type);
+CREATE INDEX IF NOT EXISTS idx_turn_summaries_started ON turn_summaries(started_at);
 CREATE INDEX IF NOT EXISTS idx_session_summaries_session ON session_summaries(session_id);
 CREATE INDEX IF NOT EXISTS idx_session_summaries_outcome ON session_summaries(outcome);
 
@@ -281,21 +226,21 @@ CREATE VIRTUAL TABLE IF NOT EXISTS session_summaries_fts USING fts5(
 CREATE TRIGGER IF NOT EXISTS turn_summaries_fts_insert
 AFTER INSERT ON turn_summaries BEGIN
     INSERT INTO turn_summaries_fts(rowid, summary, user_intent, assistant_action, turn_id)
-    VALUES (NEW.rowid, NEW.summary, NEW.user_intent, NEW.assistant_action, NEW.turn_id);
+    VALUES (NEW.rowid, NEW.summary, NEW.user_intent, NEW.assistant_action, NEW.id);
 END;
 
 CREATE TRIGGER IF NOT EXISTS turn_summaries_fts_delete
 AFTER DELETE ON turn_summaries BEGIN
     INSERT INTO turn_summaries_fts(turn_summaries_fts, rowid, summary, user_intent, assistant_action, turn_id)
-    VALUES ('delete', OLD.rowid, OLD.summary, OLD.user_intent, OLD.assistant_action, OLD.turn_id);
+    VALUES ('delete', OLD.rowid, OLD.summary, OLD.user_intent, OLD.assistant_action, OLD.id);
 END;
 
 CREATE TRIGGER IF NOT EXISTS turn_summaries_fts_update
 AFTER UPDATE ON turn_summaries BEGIN
     INSERT INTO turn_summaries_fts(turn_summaries_fts, rowid, summary, user_intent, assistant_action, turn_id)
-    VALUES ('delete', OLD.rowid, OLD.summary, OLD.user_intent, OLD.assistant_action, OLD.turn_id);
+    VALUES ('delete', OLD.rowid, OLD.summary, OLD.user_intent, OLD.assistant_action, OLD.id);
     INSERT INTO turn_summaries_fts(rowid, summary, user_intent, assistant_action, turn_id)
-    VALUES (NEW.rowid, NEW.summary, NEW.user_intent, NEW.assistant_action, NEW.turn_id);
+    VALUES (NEW.rowid, NEW.summary, NEW.user_intent, NEW.assistant_action, NEW.id);
 END;
 
 -- FTS triggers for session_summaries
@@ -332,179 +277,123 @@ END;
 
 ---
 
-## detected_turns: Data Extraction
+## On-Demand Metrics Computation
 
-The `detected_turns` table contains computed metrics extracted from existing tables without LLM.
+Instead of storing precomputed metrics in a `detected_turns` table, compute them on-demand from messages.
 
-### Data Sources
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    detected_turns Data Sources                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  messages table                                                      │
-│  ──────────────                                                      │
-│  → message_count, user/assistant/system counts                       │
-│  → message type counts (tool_request, tool_result, thinking, etc)    │
-│  → token counts (aggregated from messages.token_count)               │
-│  → user_message_preview, assistant_message_preview                   │
-│  → timestamps (started_at, ended_at from first/last message)         │
-│                                                                      │
-│  tool_operations table                                               │
-│  ─────────────────────                                               │
-│  → tool_call_count, success/error counts                             │
-│  → tool_usage breakdown {"Read": 5, "Write": 3}                      │
-│  → files_read, files_written, files_modified (from file_metadata)    │
-│  → lines_added, lines_removed (from file_metadata)                   │
-│                                                                      │
-│  bash_metadata table                                                 │
-│  ───────────────────                                                 │
-│  → bash_command_count, success/error counts                          │
-│  → commands_executed                                                 │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Extraction Logic
+### Metrics Helper Functions
 
 ```rust
-pub struct TurnMetricsExtractor;
+/// Compute metrics for a turn by querying messages within the turn boundaries
+pub struct TurnMetrics {
+    // Message counts
+    pub message_count: usize,
+    pub user_message_count: usize,
+    pub assistant_message_count: usize,
+    pub system_message_count: usize,
 
-impl TurnMetricsExtractor {
-    /// Extract all computed metrics for a turn from related tables
-    pub fn extract(
-        messages: &[Message],
-        tool_ops: &[ToolOperation],
-        bash_meta: &[BashMetadata],
-    ) -> TurnMetrics {
-        // Message counts by role
-        let user_message_count = messages.iter()
-            .filter(|m| m.role == MessageRole::User)
-            .count();
-        let assistant_message_count = messages.iter()
-            .filter(|m| m.role == MessageRole::Assistant)
-            .count();
-        let system_message_count = messages.iter()
-            .filter(|m| m.role == MessageRole::System)
-            .count();
+    // By message type
+    pub tool_request_count: usize,
+    pub tool_result_count: usize,
+    pub thinking_count: usize,
 
-        // Message counts by type
-        let tool_request_count = messages.iter()
-            .filter(|m| m.message_type == MessageType::ToolRequest)
-            .count();
-        let tool_result_count = messages.iter()
-            .filter(|m| m.message_type == MessageType::ToolResult)
-            .count();
-        let thinking_count = messages.iter()
-            .filter(|m| m.message_type == MessageType::Thinking)
-            .count();
+    // Token metrics
+    pub total_token_count: Option<u32>,
+    pub user_token_count: Option<u32>,
+    pub assistant_token_count: Option<u32>,
 
-        // Token aggregation
-        let total_token_count: u32 = messages.iter()
-            .filter_map(|m| m.token_count)
-            .sum();
-        let user_token_count: u32 = messages.iter()
-            .filter(|m| m.role == MessageRole::User)
-            .filter_map(|m| m.token_count)
-            .sum();
+    // Tool operation metrics (from tool_operations table)
+    pub tool_call_count: usize,
+    pub tool_success_count: usize,
+    pub tool_error_count: usize,
+    pub tool_usage: HashMap<String, u32>,  // {"Read": 5, "Write": 3}
 
-        // Tool usage breakdown
-        let mut tool_usage: HashMap<String, u32> = HashMap::new();
-        for op in tool_ops {
-            *tool_usage.entry(op.tool_name.clone()).or_insert(0) += 1;
-        }
+    // File metrics
+    pub files_read: Vec<String>,
+    pub files_written: Vec<String>,
+    pub files_modified: Vec<String>,
+    pub total_lines_added: u32,
+    pub total_lines_removed: u32,
 
-        // File categorization
-        let files_read: Vec<String> = tool_ops.iter()
-            .filter(|op| op.tool_name == "Read")
-            .filter_map(|op| op.file_metadata.as_ref())
-            .map(|fm| fm.file_path.clone())
-            .collect();
+    // Bash metrics
+    pub bash_command_count: usize,
+    pub bash_success_count: usize,
+    pub bash_error_count: usize,
+    pub commands_executed: Vec<String>,
+}
 
-        let files_written: Vec<String> = tool_ops.iter()
-            .filter(|op| op.tool_name == "Write")
-            .filter_map(|op| op.file_metadata.as_ref())
-            .map(|fm| fm.file_path.clone())
-            .collect();
+impl TurnMetrics {
+    /// Compute metrics from messages within a turn's boundaries
+    pub async fn compute(
+        session_id: &Uuid,
+        start_sequence: u32,
+        end_sequence: u32,
+        message_repo: &MessageRepository,
+        tool_op_repo: &ToolOperationRepository,
+    ) -> Result<Self> {
+        // Query messages in this turn's range
+        let messages = message_repo
+            .get_by_sequence_range(session_id, start_sequence, end_sequence)
+            .await?;
 
-        let files_modified: Vec<String> = tool_ops.iter()
-            .filter(|op| op.tool_name == "Edit")
-            .filter_map(|op| op.file_metadata.as_ref())
-            .map(|fm| fm.file_path.clone())
-            .collect();
+        // Query tool operations for messages in this range
+        let message_ids: Vec<_> = messages.iter().map(|m| m.id).collect();
+        let tool_ops = tool_op_repo
+            .get_by_message_ids(&message_ids)
+            .await?;
 
-        // Line change aggregation
-        let total_lines_added: u32 = tool_ops.iter()
-            .filter_map(|op| op.file_metadata.as_ref())
-            .filter_map(|fm| fm.lines_added)
-            .sum();
+        // Compute all metrics from the data
+        Self::from_data(&messages, &tool_ops)
+    }
 
-        let total_lines_removed: u32 = tool_ops.iter()
-            .filter_map(|op| op.file_metadata.as_ref())
-            .filter_map(|fm| fm.lines_removed)
-            .sum();
-
-        // Bash metrics
-        let bash_success_count = bash_meta.iter()
-            .filter(|b| b.exit_code == Some(0))
-            .count();
-        let bash_error_count = bash_meta.iter()
-            .filter(|b| b.exit_code.map(|c| c != 0).unwrap_or(false))
-            .count();
-
-        let commands_executed: Vec<String> = bash_meta.iter()
-            .map(|b| b.command.clone())
-            .collect();
-
-        // Content previews
-        let user_message_preview = messages.iter()
-            .find(|m| m.role == MessageRole::User)
-            .map(|m| truncate(&m.content, 500));
-
-        let assistant_message_preview = messages.iter()
-            .rev()
-            .find(|m| m.role == MessageRole::Assistant && m.message_type == MessageType::SimpleMessage)
-            .map(|m| truncate(&m.content, 500));
-
-        TurnMetrics {
-            message_count: messages.len(),
-            user_message_count,
-            assistant_message_count,
-            system_message_count,
-            tool_request_count,
-            tool_result_count,
-            thinking_count,
-            total_token_count,
-            user_token_count,
-            tool_usage,
-            files_read,
-            files_written,
-            files_modified,
-            total_lines_added,
-            total_lines_removed,
-            bash_command_count: bash_meta.len(),
-            bash_success_count,
-            bash_error_count,
-            commands_executed,
-            user_message_preview,
-            assistant_message_preview,
-            // ... timestamps, duration
-        }
+    fn from_data(messages: &[Message], tool_ops: &[ToolOperation]) -> Self {
+        // ... compute all metrics
     }
 }
 ```
 
-### Comparison: detected_turns vs turn_summaries
+### SQL Queries for Metrics
 
-| Aspect | detected_turns | turn_summaries |
-|--------|---------------|----------------|
-| **Source** | Computed from existing tables | LLM-generated |
-| **When created** | During import (sync) | Background job (async) |
-| **Deterministic** | Yes | No |
-| **Cost** | Free (CPU only) | LLM API tokens |
-| **Can regenerate** | Yes (idempotent) | Yes (may differ) |
-| **Example fields** | `tool_call_count`, `files_modified`, `total_lines_added` | `user_intent`, `summary`, `turn_type` |
+```sql
+-- Get message counts for a turn
+SELECT
+    COUNT(*) as message_count,
+    SUM(CASE WHEN role = 'User' THEN 1 ELSE 0 END) as user_count,
+    SUM(CASE WHEN role = 'Assistant' THEN 1 ELSE 0 END) as assistant_count,
+    SUM(CASE WHEN role = 'System' THEN 1 ELSE 0 END) as system_count,
+    SUM(CASE WHEN message_type = 'tool_request' THEN 1 ELSE 0 END) as tool_request_count,
+    SUM(CASE WHEN message_type = 'tool_result' THEN 1 ELSE 0 END) as tool_result_count,
+    SUM(token_count) as total_tokens
+FROM messages
+WHERE session_id = ?
+  AND sequence_number BETWEEN ? AND ?;
+
+-- Get tool operation summary for messages in a turn
+SELECT
+    tool_name,
+    COUNT(*) as usage_count,
+    SUM(CASE WHEN is_error = 0 THEN 1 ELSE 0 END) as success_count,
+    SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END) as error_count
+FROM tool_operations
+WHERE message_id IN (
+    SELECT id FROM messages
+    WHERE session_id = ?
+      AND sequence_number BETWEEN ? AND ?
+)
+GROUP BY tool_name;
+
+-- Get file changes for messages in a turn
+SELECT
+    SUM(json_extract(file_metadata, '$.lines_added')) as lines_added,
+    SUM(json_extract(file_metadata, '$.lines_removed')) as lines_removed
+FROM tool_operations
+WHERE message_id IN (
+    SELECT id FROM messages
+    WHERE session_id = ?
+      AND sequence_number BETWEEN ? AND ?
+)
+AND file_metadata IS NOT NULL;
+```
 
 ---
 
@@ -574,10 +463,21 @@ impl SessionSummarizer {
         session_id: &Uuid,
         turn_summaries: &[TurnSummary],
     ) -> Result<SessionSummary> {
-        // Also fetch detected_turns for metrics
-        let detected_turns = self.detected_turn_repo
-            .get_by_session(session_id)
-            .await?;
+        // Compute metrics on-demand for session-level aggregation
+        let mut total_tool_calls = 0;
+        let mut total_lines_changed = 0;
+
+        for turn in turn_summaries {
+            let metrics = TurnMetrics::compute(
+                session_id,
+                turn.start_sequence,
+                turn.end_sequence,
+                &self.message_repo,
+                &self.tool_op_repo,
+            ).await?;
+            total_tool_calls += metrics.tool_call_count;
+            total_lines_changed += metrics.total_lines_added + metrics.total_lines_removed;
+        }
 
         // Build prompt from turn summaries
         let prompt = self.build_session_prompt_from_turns(turn_summaries);
@@ -585,7 +485,6 @@ impl SessionSummarizer {
         // Call LLM
         let llm_response = self.llm_client.generate(&prompt).await?;
 
-        // Combine LLM output with computed metrics from detected_turns
         Ok(SessionSummary {
             title: llm_response.title,
             summary: llm_response.summary,
@@ -593,13 +492,7 @@ impl SessionSummarizer {
             outcome: llm_response.outcome,
             key_decisions: llm_response.key_decisions,
             technologies_used: llm_response.technologies_used,
-            files_affected: self.aggregate_files(&detected_turns),
-            // Computed metrics (not from LLM)
-            total_turns: detected_turns.len(),
-            total_tool_calls: detected_turns.iter().map(|t| t.tool_call_count).sum(),
-            successful_tool_calls: detected_turns.iter().map(|t| t.tool_success_count).sum(),
-            failed_tool_calls: detected_turns.iter().map(|t| t.tool_error_count).sum(),
-            total_lines_changed: detected_turns.iter().map(|t| t.total_lines_changed).sum(),
+            files_affected: llm_response.files_affected,
             // ...
         })
     }
@@ -613,9 +506,6 @@ Summarize this coding session based on the turn summaries below.
 
 <session_metadata>
 Total turns: {total_turns}
-Total tool calls: {tool_call_count}
-Files touched: {unique_files_count}
-Duration: {duration_minutes} minutes
 </session_metadata>
 
 <turns>
@@ -632,7 +522,8 @@ Respond in JSON format:
   "primary_goal": "The main user objective (10-15 words)",
   "outcome": "completed|partial|abandoned|ongoing",
   "key_decisions": ["Important choice 1", "Important choice 2"],
-  "technologies_used": ["tech1", "tech2", "library1"]
+  "technologies_used": ["tech1", "tech2", "library1"],
+  "files_affected": ["file1.rs", "file2.rs"]
 }
 ```
 
@@ -640,9 +531,9 @@ Respond in JSON format:
 
 ## Implementation Phases
 
-### Phase 1: Schema + Turn Detection
+### Phase 1: Schema + Models
 
-**Goal**: Add new tables and implement rule-based turn detection with computed metrics
+**Goal**: Add new tables and create Rust models
 
 **Files to create/modify**:
 ```
@@ -652,22 +543,47 @@ crates/retrochat-core/
 ├── src/
 │   ├── models/
 │   │   ├── mod.rs                          # Export new models
-│   │   ├── detected_turn.rs                # New model with all metrics
 │   │   ├── turn_summary.rs                 # New model
 │   │   └── session_summary.rs              # New model
 │   ├── database/
 │   │   ├── mod.rs                          # Export new repos
-│   │   ├── detected_turn_repo.rs           # New repo
 │   │   ├── turn_summary_repo.rs            # New repo
 │   │   └── session_summary_repo.rs         # New repo
-│   └── services/
-│       ├── mod.rs                          # Export new services
-│       ├── turn_detection.rs               # Turn boundary detection
-│       └── turn_metrics.rs                 # Metrics extraction from messages/tool_ops
+```
+
+**Deliverables**:
+- [ ] Migration file added
+- [ ] TurnSummary model with message boundary references
+- [ ] SessionSummary model
+- [ ] TurnSummaryRepository with CRUD + FTS search
+- [ ] SessionSummaryRepository with CRUD + FTS search
+- [ ] `sqlx prepare` updated
+
+---
+
+### Phase 2: Turn Detection Service
+
+**Goal**: Implement rule-based turn boundary detection (without storing a separate table)
+
+**Create**:
+```
+crates/retrochat-core/src/services/
+├── turn_detection.rs               # Turn boundary detection
+└── turn_metrics.rs                 # On-demand metrics computation
 ```
 
 **Turn Detection Algorithm**:
 ```rust
+/// Represents detected turn boundaries (not persisted, used for summarization)
+pub struct DetectedTurnBoundary {
+    pub turn_number: u32,
+    pub start_sequence: u32,
+    pub end_sequence: u32,
+    pub user_message_id: Option<Uuid>,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+}
+
 pub struct TurnDetector;
 
 impl TurnDetector {
@@ -677,13 +593,9 @@ impl TurnDetector {
     /// - User message (SimpleMessage or SlashCommand) starts a new turn
     /// - All other messages belong to the current turn
     /// - If session starts with non-User message, create turn_number = 0
-    pub fn detect_turns(
-        messages: &[Message],
-        tool_ops: &[ToolOperation],
-        bash_meta: &[BashMetadata],
-    ) -> Vec<DetectedTurn> {
-        let mut turns = Vec::new();
-        let mut current_turn: Option<TurnBuilder> = None;
+    pub fn detect_boundaries(messages: &[Message]) -> Vec<DetectedTurnBoundary> {
+        let mut boundaries = Vec::new();
+        let mut current_start: Option<(u32, u32, Option<Uuid>, DateTime<Utc>)> = None;
 
         for msg in messages {
             let is_user_turn_start = msg.role == MessageRole::User
@@ -693,135 +605,73 @@ impl TurnDetector {
                 );
 
             if is_user_turn_start {
-                // Finalize previous turn with metrics
-                if let Some(builder) = current_turn.take() {
-                    let turn = builder.build_with_metrics(tool_ops, bash_meta);
-                    turns.push(turn);
+                // Finalize previous turn
+                if let Some((turn_num, start_seq, user_msg_id, started_at)) = current_start.take() {
+                    let prev_msg = &messages[messages.iter()
+                        .position(|m| m.sequence_number == msg.sequence_number)
+                        .unwrap() - 1];
+                    boundaries.push(DetectedTurnBoundary {
+                        turn_number: turn_num,
+                        start_sequence: start_seq,
+                        end_sequence: prev_msg.sequence_number,
+                        user_message_id: user_msg_id,
+                        started_at,
+                        ended_at: prev_msg.timestamp,
+                    });
                 }
                 // Start new turn
-                current_turn = Some(TurnBuilder::new_user_turn(turns.len() as u32, msg));
-            } else {
-                // Add to current turn or create turn 0
-                if current_turn.is_none() {
-                    current_turn = Some(TurnBuilder::new_system_turn());
-                }
-                current_turn.as_mut().unwrap().add_message(msg);
+                current_start = Some((
+                    boundaries.len() as u32,
+                    msg.sequence_number,
+                    Some(msg.id),
+                    msg.timestamp,
+                ));
+            } else if current_start.is_none() {
+                // Session starts with non-User message (turn 0)
+                current_start = Some((0, msg.sequence_number, None, msg.timestamp));
             }
         }
 
         // Finalize last turn
-        if let Some(builder) = current_turn {
-            let turn = builder.build_with_metrics(tool_ops, bash_meta);
-            turns.push(turn);
+        if let Some((turn_num, start_seq, user_msg_id, started_at)) = current_start {
+            if let Some(last_msg) = messages.last() {
+                boundaries.push(DetectedTurnBoundary {
+                    turn_number: turn_num,
+                    start_sequence: start_seq,
+                    end_sequence: last_msg.sequence_number,
+                    user_message_id: user_msg_id,
+                    started_at,
+                    ended_at: last_msg.timestamp,
+                });
+            }
         }
 
-        turns
+        boundaries
     }
 }
 ```
 
 **Deliverables**:
-- [ ] Migration file added
-- [ ] DetectedTurn model with all metric fields
-- [ ] TurnMetricsExtractor for computing metrics
-- [ ] TurnSummary model + repository
-- [ ] SessionSummary model + repository
-- [ ] TurnDetector service with unit tests
-- [ ] `sqlx prepare` updated
+- [ ] TurnDetector service with boundary detection
+- [ ] TurnMetrics for on-demand computation
+- [ ] Unit tests for turn detection logic
+- [ ] Unit tests for metrics computation
 
 ---
 
-### Phase 2: Integration with Import Pipeline
-
-**Goal**: Automatically detect turns and compute metrics when sessions are imported
-
-**Modify**:
-```
-crates/retrochat-core/src/services/
-├── import.rs                    # Hook turn detection after message import
-└── turn_detection.rs            # Add batch processing
-```
-
-**Integration Point**:
-```rust
-// In ImportService::import_session()
-impl ImportService {
-    pub async fn import_session(&self, ...) -> Result<ChatSession> {
-        // ... existing import logic ...
-
-        // After messages and tool_operations are saved
-        let messages = self.message_repo.get_by_session(&session.id).await?;
-        let tool_ops = self.tool_op_repo.get_by_session(&session.id).await?;
-        let bash_meta = self.bash_meta_repo.get_by_session(&session.id).await?;
-
-        // Detect turns with computed metrics
-        let turns = TurnDetector::detect_turns(&messages, &tool_ops, &bash_meta);
-        for turn in turns {
-            self.detected_turn_repo.create(&turn).await?;
-        }
-
-        // Note: Summaries are NOT generated here (async job)
-
-        Ok(session)
-    }
-}
-```
-
-**Deliverables**:
-- [ ] Import pipeline hooks turn detection
-- [ ] Metrics computed for all new imports
-- [ ] Integration tests
-
----
-
-### Phase 3: Backfill Existing Sessions
-
-**Goal**: Generate detected_turns with metrics for all existing sessions
-
-**Create**:
-```
-crates/retrochat-core/src/services/
-└── backfill.rs                  # One-time backfill logic
-```
-
-**CLI Command**:
-```bash
-# Backfill all sessions
-cargo run -p retrochat-cli -- backfill turns
-
-# Backfill specific session
-cargo run -p retrochat-cli -- backfill turns --session <SESSION_ID>
-
-# Check backfill status
-cargo run -p retrochat-cli -- backfill status
-```
-
-**Deliverables**:
-- [ ] BackfillService with progress tracking
-- [ ] CLI command for manual trigger
-- [ ] Idempotent (safe to run multiple times)
-
----
-
-### Phase 4: Turn Summarization Service
+### Phase 3: Turn Summarization Service
 
 **Goal**: LLM-based turn summarization
 
 **Create**:
 ```
 crates/retrochat-core/src/services/
-└── turn_summarizer.rs           # LLM summarization logic
+└── turn_summarizer.rs              # LLM summarization logic
 ```
 
 **Prompt Design**:
 ```
 Summarize this conversation turn between a user and an AI coding assistant.
-
-<turn_metadata>
-Tool calls: {tool_call_count} ({tool_success_count} succeeded, {tool_error_count} failed)
-Files touched: {files_list}
-Lines changed: +{lines_added} -{lines_removed}
-</turn_metadata>
 
 <turn_content>
 User: {user_message}
@@ -838,7 +688,10 @@ Respond in JSON format:
   "user_intent": "What the user wanted (10-20 words)",
   "assistant_action": "What the assistant did (10-20 words)",
   "summary": "One sentence combining both (20-30 words)",
-  "turn_type": "task|question|error_fix|clarification|discussion"
+  "turn_type": "task|question|error_fix|clarification|discussion",
+  "key_topics": ["topic1", "topic2"],
+  "decisions_made": ["decision1", "decision2"],
+  "code_concepts": ["concept1", "concept2"]
 }
 ```
 
@@ -846,64 +699,61 @@ Respond in JSON format:
 ```rust
 impl TurnSummarizer {
     /// Summarize multiple turns in one LLM call (max 5-10)
-    pub async fn summarize_batch(&self, turns: &[DetectedTurn]) -> Result<Vec<TurnSummary>> {
-        // Build prompt with multiple turns
+    pub async fn summarize_batch(
+        &self,
+        session_id: &Uuid,
+        boundaries: &[DetectedTurnBoundary],
+    ) -> Result<Vec<TurnSummary>> {
+        // Fetch messages for all turns in batch
+        // Build combined prompt
         // Parse multiple JSON responses
-        // Return summaries matched to turn IDs
+        // Return summaries with correct turn boundaries
     }
 }
 ```
 
 **Deliverables**:
 - [ ] TurnSummarizer service
-- [ ] Prompt templates (include metrics context)
+- [ ] Prompt templates
 - [ ] Batch processing (5-10 turns per call)
 - [ ] Rate limiting + retry logic
 - [ ] Unit tests with mock LLM
 
 ---
 
-### Phase 5: Session Summarization Service
+### Phase 4: Session Summarization Service
 
 **Goal**: Generate session-level summaries from turn summaries
 
 **Create**:
 ```
 crates/retrochat-core/src/services/
-└── session_summarizer.rs        # Session-level summarization
+└── session_summarizer.rs           # Session-level summarization
 ```
 
 **Implementation**:
 - Primary: Generate from turn_summaries (small input, cheap)
 - Fallback: Generate from raw messages if no turn summaries exist
-- Metrics: Aggregate from detected_turns (not LLM)
+- Metrics: Compute on-demand when needed
 
 **Deliverables**:
 - [ ] SessionSummarizer service
 - [ ] Primary path: from turn summaries
 - [ ] Fallback path: from raw messages
-- [ ] Metric aggregation from detected_turns
 - [ ] Unit tests
 
 ---
 
-### Phase 6: Background Job System
+### Phase 5: CLI Commands
 
-**Goal**: Async processing of summarization
-
-**Options**:
-1. **Simple**: Process on CLI command (`cargo cli summarize`)
-2. **Background**: Spawn tokio task during import
-3. **Queue**: Persist pending work, process incrementally
-
-**Recommended**: Option 1 (Simple) for MVP
+**Goal**: CLI commands for summarization
 
 **CLI Commands**:
 ```bash
-# Summarize pending turns
+# Summarize turns for a session
 cargo run -p retrochat-cli -- summarize turns [--session <ID>] [--all]
 
-# Summarize pending sessions
+# Summarize sessions (from turn summaries)
 cargo run -p retrochat-cli -- summarize sessions [--session <ID>] [--all]
 
 # Check summarization status
@@ -912,16 +762,18 @@ cargo run -p retrochat-cli -- summarize status
 
 **Status Query**:
 ```sql
--- Turns pending summarization
+-- Sessions without turn summaries
 SELECT
-    dt.session_id,
-    COUNT(*) as pending_turns
-FROM detected_turns dt
-LEFT JOIN turn_summaries ts ON dt.id = ts.turn_id
-WHERE ts.id IS NULL
-GROUP BY dt.session_id;
+    cs.id,
+    cs.project_name,
+    cs.message_count,
+    (SELECT COUNT(*) FROM turn_summaries ts WHERE ts.session_id = cs.id) as turn_count
+FROM chat_sessions cs
+WHERE NOT EXISTS (
+    SELECT 1 FROM turn_summaries ts WHERE ts.session_id = cs.id
+);
 
--- Sessions pending summarization
+-- Sessions without session summary
 SELECT
     cs.id,
     cs.project_name,
@@ -939,14 +791,14 @@ WHERE ss.id IS NULL;
 
 ---
 
-### Phase 7: Search Integration
+### Phase 6: Search Integration
 
 **Goal**: Use summaries for improved search
 
 **Modify**:
 ```
 crates/retrochat-core/src/services/
-└── search.rs                    # Add summary-based search
+└── search.rs                       # Add summary-based search
 ```
 
 **Search Layers**:
@@ -978,17 +830,17 @@ impl SearchService {
 
 ---
 
-### Phase 8: MCP Server Updates
+### Phase 7: MCP Server Updates
 
 **Goal**: Expose hierarchical data via MCP
 
 **New/Updated Tools**:
 ```
 list_sessions      → Include has_summary flag, turn_count
-get_session_detail → Include session_summary + turns with metrics
+get_session_detail → Include session_summary + turns
 search_messages    → Add scope parameter (sessions/turns/messages)
-NEW: list_turns    → List turns for a session with metrics
-NEW: get_turn      → Get turn with summary + metrics + raw messages
+NEW: list_turns    → List turns for a session
+NEW: get_turn      → Get turn with summary + messages
 ```
 
 **Deliverables**:
@@ -1000,61 +852,47 @@ NEW: get_turn      → Get turn with summary + metrics + raw messages
 
 ## Query Examples
 
-### Metrics-based Queries (No LLM Required)
+### Metrics Queries (Computed On-Demand)
 
 ```sql
--- Find turns with most file changes
+-- Get metrics for a specific turn
 SELECT
-    dt.id,
-    dt.session_id,
-    dt.total_lines_changed,
-    dt.files_modified,
-    dt.tool_call_count
-FROM detected_turns dt
-ORDER BY dt.total_lines_changed DESC
-LIMIT 10;
+    COUNT(*) as message_count,
+    SUM(CASE WHEN role = 'User' THEN 1 ELSE 0 END) as user_count,
+    SUM(CASE WHEN message_type = 'tool_request' THEN 1 ELSE 0 END) as tool_requests,
+    SUM(token_count) as total_tokens
+FROM messages
+WHERE session_id = ?
+  AND sequence_number BETWEEN ? AND ?;
 
--- Aggregate metrics per session
+-- Get all turn boundaries for a session (for display)
 SELECT
-    session_id,
-    COUNT(*) as turn_count,
-    SUM(tool_call_count) as total_tools,
-    SUM(bash_command_count) as total_bash,
-    SUM(total_lines_added) as lines_added,
-    SUM(total_lines_removed) as lines_removed
-FROM detected_turns
-GROUP BY session_id;
-
--- Find error-heavy turns
-SELECT dt.*, ts.summary
-FROM detected_turns dt
-LEFT JOIN turn_summaries ts ON dt.id = ts.turn_id
-WHERE dt.tool_error_count > 3
-   OR dt.bash_error_count > 2;
-
--- Most used tools across all turns
-SELECT
-    json_each.value as tool_name,
-    COUNT(*) as usage_count
-FROM detected_turns, json_each(detected_turns.tool_usage)
-GROUP BY json_each.value
-ORDER BY usage_count DESC;
+    ts.turn_number,
+    ts.start_sequence,
+    ts.end_sequence,
+    ts.summary,
+    ts.turn_type,
+    (SELECT COUNT(*) FROM messages m
+     WHERE m.session_id = ts.session_id
+       AND m.sequence_number BETWEEN ts.start_sequence AND ts.end_sequence) as message_count
+FROM turn_summaries ts
+WHERE ts.session_id = ?
+ORDER BY ts.turn_number;
 ```
 
-### Summary-based Queries (After LLM Processing)
+### Summary-based Queries
 
 ```sql
 -- Search turns by intent
-SELECT dt.*, ts.*
-FROM detected_turns dt
-JOIN turn_summaries ts ON dt.id = ts.turn_id
+SELECT ts.*, cs.project_name
+FROM turn_summaries ts
+JOIN chat_sessions cs ON ts.session_id = cs.id
 JOIN turn_summaries_fts fts ON ts.rowid = fts.rowid
 WHERE turn_summaries_fts MATCH 'authentication OR auth';
 
 -- Find all error_fix turns
-SELECT dt.*, ts.summary
-FROM detected_turns dt
-JOIN turn_summaries ts ON dt.id = ts.turn_id
+SELECT ts.summary, ts.session_id, ts.turn_number
+FROM turn_summaries ts
 WHERE ts.turn_type = 'error_fix';
 
 -- Session search
@@ -1063,6 +901,19 @@ FROM session_summaries ss
 JOIN chat_sessions cs ON ss.session_id = cs.id
 JOIN session_summaries_fts fts ON ss.rowid = fts.rowid
 WHERE session_summaries_fts MATCH 'JWT authentication';
+
+-- Sessions with most turns
+SELECT
+    cs.id,
+    cs.project_name,
+    ss.title,
+    COUNT(ts.id) as turn_count
+FROM chat_sessions cs
+LEFT JOIN session_summaries ss ON cs.id = ss.session_id
+LEFT JOIN turn_summaries ts ON cs.id = ts.session_id
+GROUP BY cs.id
+ORDER BY turn_count DESC
+LIMIT 10;
 ```
 
 ---
@@ -1078,7 +929,6 @@ If issues arise:
    DROP TABLE IF EXISTS session_summaries_fts;
    DROP TABLE IF EXISTS turn_summaries;
    DROP TABLE IF EXISTS session_summaries;
-   DROP TABLE IF EXISTS detected_turns;
    ```
 
 ---
@@ -1086,9 +936,9 @@ If issues arise:
 ## Success Criteria
 
 - [ ] All existing tests pass
-- [ ] New sessions automatically get turns detected with metrics
-- [ ] Existing sessions can be backfilled
-- [ ] Metrics queries work without LLM (tool counts, file changes, etc.)
+- [ ] Turn summaries can be generated for sessions
+- [ ] Session summaries can be generated from turn summaries
+- [ ] Metrics computed on-demand work correctly
 - [ ] Search on summaries returns relevant results
 - [ ] MCP tools work with hierarchical data
 - [ ] No degradation in import performance
