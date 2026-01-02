@@ -1,6 +1,7 @@
 use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use sqlx::{Pool, Row, Sqlite};
+use uuid::Uuid;
 
 use super::connection::DatabaseManager;
 use crate::models::{TurnSummary, TurnType};
@@ -103,7 +104,7 @@ impl TurnSummaryRepository {
     }
 
     /// Get all turn summaries for a session, ordered by turn number
-    pub async fn get_by_session(&self, session_id: &str) -> AnyhowResult<Vec<TurnSummary>> {
+    pub async fn get_by_session(&self, session_id: &Uuid) -> AnyhowResult<Vec<TurnSummary>> {
         let rows = sqlx::query(
             r#"
             SELECT
@@ -118,7 +119,7 @@ impl TurnSummaryRepository {
             ORDER BY turn_number ASC
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .fetch_all(&self.pool)
         .await
         .context("Failed to fetch turn summaries for session")?;
@@ -129,7 +130,7 @@ impl TurnSummaryRepository {
     /// Get a specific turn summary by session and turn number
     pub async fn get_by_session_and_turn(
         &self,
-        session_id: &str,
+        session_id: &Uuid,
         turn_number: i32,
     ) -> AnyhowResult<Option<TurnSummary>> {
         let row = sqlx::query(
@@ -145,7 +146,7 @@ impl TurnSummaryRepository {
             WHERE session_id = ? AND turn_number = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .bind(turn_number)
         .fetch_optional(&self.pool)
         .await
@@ -155,14 +156,14 @@ impl TurnSummaryRepository {
     }
 
     /// Count turn summaries for a session
-    pub async fn count_by_session(&self, session_id: &str) -> AnyhowResult<i64> {
+    pub async fn count_by_session(&self, session_id: &Uuid) -> AnyhowResult<i64> {
         let row = sqlx::query(
             r#"
             SELECT COUNT(*) as count FROM turn_summaries
             WHERE session_id = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .fetch_one(&self.pool)
         .await
         .context("Failed to count turn summaries")?;
@@ -171,14 +172,14 @@ impl TurnSummaryRepository {
     }
 
     /// Delete all turn summaries for a session
-    pub async fn delete_by_session(&self, session_id: &str) -> AnyhowResult<u64> {
+    pub async fn delete_by_session(&self, session_id: &Uuid) -> AnyhowResult<u64> {
         let result = sqlx::query(
             r#"
             DELETE FROM turn_summaries
             WHERE session_id = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .execute(&self.pool)
         .await
         .context("Failed to delete turn summaries")?;
@@ -224,11 +225,14 @@ impl TurnSummaryRepository {
         let generated_at = DateTime::parse_from_rfc3339(&generated_at_str)?.with_timezone(&Utc);
 
         let turn_type_str: Option<String> = row.get("turn_type");
-        let turn_type = turn_type_str
-            .map(|t| t.parse::<TurnType>())
-            .transpose()
-            .ok()
-            .flatten();
+        let turn_type = turn_type_str.and_then(|t| {
+            t.parse::<TurnType>()
+                .map_err(|e| {
+                    tracing::warn!("Failed to parse turn_type '{}': {}", t, e);
+                    e
+                })
+                .ok()
+        });
 
         let key_topics_json: Option<String> = row.get("key_topics");
         let key_topics: Option<Vec<String>> = key_topics_json
@@ -280,21 +284,23 @@ mod tests {
     async fn test_create_and_get_turn_summary() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = TurnSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session first
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-1', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test.jsonl', 'hash1', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test.jsonl', 'hash1', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let now = Utc::now();
         let summary = TurnSummary::new(
-            "session-1".to_string(),
+            session_id.to_string(),
             0,
             1,
             5,
@@ -311,7 +317,7 @@ mod tests {
         assert!(!id.is_empty());
 
         let fetched = repo.get_by_id(&id).await.unwrap().unwrap();
-        assert_eq!(fetched.session_id, "session-1");
+        assert_eq!(fetched.session_id, session_id.to_string());
         assert_eq!(fetched.turn_number, 0);
         assert_eq!(fetched.user_intent, "Add authentication");
         assert_eq!(fetched.turn_type, Some(TurnType::Task));
@@ -325,14 +331,16 @@ mod tests {
     async fn test_get_by_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = TurnSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-2', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 10, '/test2.jsonl', 'hash2', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 10, '/test2.jsonl', 'hash2', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
@@ -342,7 +350,7 @@ mod tests {
         // Create multiple turns
         for i in 0..3 {
             let summary = TurnSummary::new(
-                "session-2".to_string(),
+                session_id.to_string(),
                 i,
                 i * 3 + 1,
                 (i + 1) * 3,
@@ -355,7 +363,7 @@ mod tests {
             repo.create(&summary).await.unwrap();
         }
 
-        let turns = repo.get_by_session("session-2").await.unwrap();
+        let turns = repo.get_by_session(&session_id).await.unwrap();
         assert_eq!(turns.len(), 3);
         assert_eq!(turns[0].turn_number, 0);
         assert_eq!(turns[1].turn_number, 1);
@@ -366,21 +374,23 @@ mod tests {
     async fn test_count_by_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = TurnSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-3', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test3.jsonl', 'hash3', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test3.jsonl', 'hash3', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let now = Utc::now();
         let summary = TurnSummary::new(
-            "session-3".to_string(),
+            session_id.to_string(),
             0,
             1,
             5,
@@ -392,7 +402,7 @@ mod tests {
         );
         repo.create(&summary).await.unwrap();
 
-        let count = repo.count_by_session("session-3").await.unwrap();
+        let count = repo.count_by_session(&session_id).await.unwrap();
         assert_eq!(count, 1);
     }
 
@@ -400,21 +410,23 @@ mod tests {
     async fn test_delete_by_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = TurnSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-4', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test4.jsonl', 'hash4', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test4.jsonl', 'hash4', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let now = Utc::now();
         let summary = TurnSummary::new(
-            "session-4".to_string(),
+            session_id.to_string(),
             0,
             1,
             5,
@@ -426,10 +438,10 @@ mod tests {
         );
         repo.create(&summary).await.unwrap();
 
-        let deleted = repo.delete_by_session("session-4").await.unwrap();
+        let deleted = repo.delete_by_session(&session_id).await.unwrap();
         assert_eq!(deleted, 1);
 
-        let count = repo.count_by_session("session-4").await.unwrap();
+        let count = repo.count_by_session(&session_id).await.unwrap();
         assert_eq!(count, 0);
     }
 }

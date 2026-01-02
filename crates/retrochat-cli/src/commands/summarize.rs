@@ -100,13 +100,14 @@ pub async fn handle_summarize_sessions(session_id: Option<String>, all: bool) ->
     if all {
         summarize_all_sessions(&db_manager, &summarizer).await
     } else if let Some(session_id) = session_id {
-        summarize_single_session(&summarizer, &session_id).await
+        let uuid = Uuid::parse_str(&session_id).context("Invalid session ID format")?;
+        summarize_single_session(&summarizer, &uuid).await
     } else {
         anyhow::bail!("Either provide a session ID or use --all flag")
     }
 }
 
-async fn summarize_single_session(summarizer: &SessionSummarizer, session_id: &str) -> Result<()> {
+async fn summarize_single_session(summarizer: &SessionSummarizer, session_id: &Uuid) -> Result<()> {
     println!("Generating session summary for {}...", session_id);
 
     let summary = summarizer.summarize_session(session_id).await?;
@@ -146,8 +147,7 @@ async fn summarize_all_sessions(
     // Only summarize sessions that have turn summaries
     let mut sessions_with_turns = Vec::new();
     for session in &sessions {
-        let session_id_str = session.id.to_string();
-        let turn_count = turn_summary_repo.count_by_session(&session_id_str).await?;
+        let turn_count = turn_summary_repo.count_by_session(&session.id).await?;
         if turn_count > 0 {
             sessions_with_turns.push(session);
         }
@@ -167,10 +167,9 @@ async fn summarize_all_sessions(
     let mut error_count = 0;
 
     for session in &sessions_with_turns {
-        let session_id_str = session.id.to_string();
-        print!("Summarizing session {}... ", session_id_str);
+        print!("Summarizing session {}... ", session.id);
 
-        match summarizer.summarize_session(&session_id_str).await {
+        match summarizer.summarize_session(&session.id).await {
             Ok(summary) => {
                 println!("OK: {}", summary.title);
                 success_count += 1;
@@ -227,11 +226,10 @@ pub async fn handle_summarize_status() -> Result<()> {
     for session in &sessions {
         total_sessions += 1;
 
-        let session_id_str = session.id.to_string();
         let detected_turns = turn_detector.detect_turns(&session.id).await?;
-        let turn_summary_count = turn_summary_repo.count_by_session(&session_id_str).await?;
+        let turn_summary_count = turn_summary_repo.count_by_session(&session.id).await?;
         let has_session_summary = session_summary_repo
-            .exists_for_session(&session_id_str)
+            .exists_for_session(&session.id)
             .await?;
 
         if turn_summary_count > 0 {
@@ -243,12 +241,9 @@ pub async fn handle_summarize_status() -> Result<()> {
 
         let session_summary_status = if has_session_summary { "Yes" } else { "No" };
 
-        // Truncate UUID for display
-        let display_id: String = session_id_str.chars().take(36).collect();
-
         println!(
             "{:<36} {:>8} {:>10} {:>10} {:>10}",
-            display_id,
+            session.id,
             session.message_count,
             detected_turns.len(),
             turn_summary_count,

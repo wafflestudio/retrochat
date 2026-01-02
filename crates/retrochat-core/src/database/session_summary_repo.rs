@@ -1,6 +1,7 @@
 use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use sqlx::{Pool, Row, Sqlite};
+use uuid::Uuid;
 
 use super::connection::DatabaseManager;
 use crate::models::session_summary::{SessionOutcome, SessionSummary};
@@ -144,7 +145,7 @@ impl SessionSummaryRepository {
     }
 
     /// Get a session summary by session ID
-    pub async fn get_by_session(&self, session_id: &str) -> AnyhowResult<Option<SessionSummary>> {
+    pub async fn get_by_session(&self, session_id: &Uuid) -> AnyhowResult<Option<SessionSummary>> {
         let row = sqlx::query(
             r#"
             SELECT
@@ -156,7 +157,7 @@ impl SessionSummaryRepository {
             WHERE session_id = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .fetch_optional(&self.pool)
         .await
         .context("Failed to fetch session summary")?;
@@ -165,14 +166,14 @@ impl SessionSummaryRepository {
     }
 
     /// Check if a session has a summary
-    pub async fn exists_for_session(&self, session_id: &str) -> AnyhowResult<bool> {
+    pub async fn exists_for_session(&self, session_id: &Uuid) -> AnyhowResult<bool> {
         let row = sqlx::query(
             r#"
             SELECT COUNT(*) as count FROM session_summaries
             WHERE session_id = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .fetch_one(&self.pool)
         .await
         .context("Failed to check session summary existence")?;
@@ -182,14 +183,14 @@ impl SessionSummaryRepository {
     }
 
     /// Delete a session summary by session ID
-    pub async fn delete_by_session(&self, session_id: &str) -> AnyhowResult<u64> {
+    pub async fn delete_by_session(&self, session_id: &Uuid) -> AnyhowResult<u64> {
         let result = sqlx::query(
             r#"
             DELETE FROM session_summaries
             WHERE session_id = ?
             "#,
         )
-        .bind(session_id)
+        .bind(session_id.to_string())
         .execute(&self.pool)
         .await
         .context("Failed to delete session summary")?;
@@ -279,11 +280,14 @@ impl SessionSummaryRepository {
         let generated_at = DateTime::parse_from_rfc3339(&generated_at_str)?.with_timezone(&Utc);
 
         let outcome_str: Option<String> = row.get("outcome");
-        let outcome = outcome_str
-            .map(|o| o.parse::<SessionOutcome>())
-            .transpose()
-            .ok()
-            .flatten();
+        let outcome = outcome_str.and_then(|o| {
+            o.parse::<SessionOutcome>()
+                .map_err(|e| {
+                    tracing::warn!("Failed to parse session outcome '{}': {}", o, e);
+                    e
+                })
+                .ok()
+        });
 
         let key_decisions_json: Option<String> = row.get("key_decisions");
         let key_decisions: Option<Vec<String>> = key_decisions_json
@@ -329,20 +333,22 @@ mod tests {
     async fn test_create_and_get_session_summary() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = SessionSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session first
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-1', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test.jsonl', 'hash1', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test.jsonl', 'hash1', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let summary = SessionSummary::new(
-            "session-1".to_string(),
+            session_id.to_string(),
             "JWT Authentication Implementation".to_string(),
             "Implemented JWT auth for the API".to_string(),
         )
@@ -353,7 +359,7 @@ mod tests {
         assert!(!id.is_empty());
 
         let fetched = repo.get_by_id(&id).await.unwrap().unwrap();
-        assert_eq!(fetched.session_id, "session-1");
+        assert_eq!(fetched.session_id, session_id.to_string());
         assert_eq!(fetched.title, "JWT Authentication Implementation");
         assert_eq!(fetched.outcome, Some(SessionOutcome::Completed));
         assert_eq!(
@@ -366,27 +372,29 @@ mod tests {
     async fn test_get_by_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = SessionSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-2', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 10, '/test2.jsonl', 'hash2', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 10, '/test2.jsonl', 'hash2', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let summary = SessionSummary::new(
-            "session-2".to_string(),
+            session_id.to_string(),
             "Title".to_string(),
             "Summary".to_string(),
         );
         repo.create(&summary).await.unwrap();
 
-        let fetched = repo.get_by_session("session-2").await.unwrap().unwrap();
-        assert_eq!(fetched.session_id, "session-2");
+        let fetched = repo.get_by_session(&session_id).await.unwrap().unwrap();
+        assert_eq!(fetched.session_id, session_id.to_string());
         assert_eq!(fetched.title, "Title");
     }
 
@@ -394,77 +402,83 @@ mod tests {
     async fn test_exists_for_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = SessionSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-3', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test3.jsonl', 'hash3', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test3.jsonl', 'hash3', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
-        assert!(!repo.exists_for_session("session-3").await.unwrap());
+        assert!(!repo.exists_for_session(&session_id).await.unwrap());
 
         let summary = SessionSummary::new(
-            "session-3".to_string(),
+            session_id.to_string(),
             "Title".to_string(),
             "Summary".to_string(),
         );
         repo.create(&summary).await.unwrap();
 
-        assert!(repo.exists_for_session("session-3").await.unwrap());
+        assert!(repo.exists_for_session(&session_id).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_delete_by_session() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = SessionSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-4', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test4.jsonl', 'hash4', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test4.jsonl', 'hash4', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let summary = SessionSummary::new(
-            "session-4".to_string(),
+            session_id.to_string(),
             "Title".to_string(),
             "Summary".to_string(),
         );
         repo.create(&summary).await.unwrap();
 
-        let deleted = repo.delete_by_session("session-4").await.unwrap();
+        let deleted = repo.delete_by_session(&session_id).await.unwrap();
         assert_eq!(deleted, 1);
 
-        assert!(!repo.exists_for_session("session-4").await.unwrap());
+        assert!(!repo.exists_for_session(&session_id).await.unwrap());
     }
 
     #[tokio::test]
     async fn test_update_session_summary() {
         let db = DatabaseManager::open_in_memory().await.unwrap();
         let repo = SessionSummaryRepository::new(&db);
+        let session_id = Uuid::new_v4();
 
         // Create test session
         sqlx::query(
             r#"
             INSERT INTO chat_sessions (id, provider, project_name, start_time, end_time, message_count, file_path, file_hash, state)
-            VALUES ('session-5', 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test5.jsonl', 'hash5', 'Imported')
+            VALUES (?, 'ClaudeCode', NULL, '2024-01-01T00:00:00Z', '2024-01-01T01:00:00Z', 5, '/test5.jsonl', 'hash5', 'Imported')
             "#,
         )
+        .bind(session_id.to_string())
         .execute(db.pool())
         .await
         .unwrap();
 
         let mut summary = SessionSummary::new(
-            "session-5".to_string(),
+            session_id.to_string(),
             "Original Title".to_string(),
             "Original Summary".to_string(),
         );

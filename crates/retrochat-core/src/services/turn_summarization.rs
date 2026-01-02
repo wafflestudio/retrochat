@@ -50,7 +50,7 @@ impl TurnSummarizer {
 
         // Delete existing summaries for this session
         self.turn_summary_repo
-            .delete_by_session(&session_id.to_string())
+            .delete_by_session(session_id)
             .await
             .context("Failed to delete existing turn summaries")?;
 
@@ -198,13 +198,24 @@ KEY_TOPICS: JWT, authentication, middleware, API security"#,
         )
     }
 
-    /// Truncate content to a maximum length, preserving word boundaries
-    fn truncate_content(content: &str, max_len: usize) -> String {
-        if content.len() <= max_len {
+    /// Truncate content to a maximum number of characters, preserving word boundaries
+    /// Uses char_indices() to safely handle multi-byte UTF-8 characters
+    fn truncate_content(content: &str, max_chars: usize) -> String {
+        let char_count = content.chars().count();
+        if char_count <= max_chars {
             return content.to_string();
         }
 
-        let truncated = &content[..max_len];
+        // Find the byte index for the max_chars boundary
+        let end_idx = content
+            .char_indices()
+            .nth(max_chars)
+            .map(|(idx, _)| idx)
+            .unwrap_or(content.len());
+
+        let truncated = &content[..end_idx];
+
+        // Try to break at a word boundary
         if let Some(last_space) = truncated.rfind(char::is_whitespace) {
             format!("{}...", &truncated[..last_space])
         } else {
@@ -256,13 +267,13 @@ KEY_TOPICS: JWT, authentication, middleware, API security"#,
     }
 
     /// Check if a session has been summarized
-    pub async fn is_session_summarized(&self, session_id: &str) -> AnyhowResult<bool> {
+    pub async fn is_session_summarized(&self, session_id: &Uuid) -> AnyhowResult<bool> {
         let count = self.turn_summary_repo.count_by_session(session_id).await?;
         Ok(count > 0)
     }
 
     /// Get existing turn summaries for a session
-    pub async fn get_session_turns(&self, session_id: &str) -> AnyhowResult<Vec<TurnSummary>> {
+    pub async fn get_session_turns(&self, session_id: &Uuid) -> AnyhowResult<Vec<TurnSummary>> {
         self.turn_summary_repo.get_by_session(session_id).await
     }
 }
@@ -290,8 +301,39 @@ mod tests {
     fn test_truncate_content_long() {
         let content = "This is a very long piece of content that needs to be truncated";
         let truncated = TurnSummarizer::truncate_content(content, 20);
-        assert!(truncated.len() <= 23); // 20 + "..."
+        assert!(truncated.chars().count() <= 23); // 20 chars + "..."
         assert!(truncated.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_content_unicode_emoji() {
+        // Each emoji is one character but multiple bytes
+        let content = "Hello 🎉🎊🎁🎈🎂 World";
+        // Truncate at 10 chars: "Hello 🎉🎊🎁🎈" (10 chars)
+        let truncated = TurnSummarizer::truncate_content(content, 10);
+        assert!(truncated.ends_with("..."));
+        // Should not panic and should handle multi-byte chars correctly
+        assert!(truncated.chars().count() <= 13); // 10 + "..."
+    }
+
+    #[test]
+    fn test_truncate_content_unicode_cjk() {
+        // CJK characters are multi-byte
+        let content = "안녕하세요 세계입니다";
+        // Truncate at 5 chars
+        let truncated = TurnSummarizer::truncate_content(content, 5);
+        assert!(truncated.ends_with("..."));
+        // "안녕하세요" is 5 chars, but there's a space so it may break at "안녕하세요"
+        assert!(truncated.chars().count() <= 8); // 5 + "..."
+    }
+
+    #[test]
+    fn test_truncate_content_unicode_mixed() {
+        // Mix of ASCII, emoji, and CJK
+        let content = "Hello世界🌍Test";
+        let truncated = TurnSummarizer::truncate_content(content, 8);
+        assert!(truncated.ends_with("..."));
+        // Should handle mixed content without panic
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result as AnyhowResult};
 use regex::Regex;
+use uuid::Uuid;
 
 use crate::database::{DatabaseManager, SessionSummaryRepository, TurnSummaryRepository};
 use crate::models::session_summary::{SessionOutcome, SessionSummary};
@@ -26,7 +27,7 @@ impl SessionSummarizer {
     ///
     /// Primary path: Generate from turn summaries (efficient, small input)
     /// Fallback path: Not implemented yet (would use raw messages)
-    pub async fn summarize_session(&self, session_id: &str) -> AnyhowResult<SessionSummary> {
+    pub async fn summarize_session(&self, session_id: &Uuid) -> AnyhowResult<SessionSummary> {
         // Get turn summaries for the session
         let turn_summaries = self
             .turn_summary_repo
@@ -61,7 +62,7 @@ impl SessionSummarizer {
     /// Generate a session summary from turn summaries
     async fn generate_from_turns(
         &self,
-        session_id: &str,
+        session_id: &Uuid,
         turns: &[TurnSummary],
     ) -> AnyhowResult<SessionSummary> {
         let prompt = self.build_session_prompt(turns);
@@ -216,7 +217,7 @@ FILES_AFFECTED: src/auth/mod.rs, src/middleware/auth.rs, tests/auth_tests.rs"#,
     }
 
     /// Check if a session has been summarized
-    pub async fn is_session_summarized(&self, session_id: &str) -> AnyhowResult<bool> {
+    pub async fn is_session_summarized(&self, session_id: &Uuid) -> AnyhowResult<bool> {
         self.session_summary_repo
             .exists_for_session(session_id)
             .await
@@ -225,7 +226,7 @@ FILES_AFFECTED: src/auth/mod.rs, src/middleware/auth.rs, tests/auth_tests.rs"#,
     /// Get existing session summary
     pub async fn get_session_summary(
         &self,
-        session_id: &str,
+        session_id: &Uuid,
     ) -> AnyhowResult<Option<SessionSummary>> {
         self.session_summary_repo.get_by_session(session_id).await
     }
