@@ -133,14 +133,17 @@ impl ClaudeCodeClient {
 impl LlmClient for ClaudeCodeClient {
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse, LlmError> {
         // Build command arguments
-        // Usage: claude -p "prompt" --output-format json --tools ""
+        // Usage: claude -p "prompt" --output-format json --tools "" --no-session-persistence --setting-sources user
         let args = vec![
             "-p",
             &request.prompt,
             "--output-format",
             "json",
             "--allowedTools",
-            "", // Disable tools for text-only analysis
+            "",                         // Disable tools for text-only analysis
+            "--no-session-persistence", // Don't save to .claude/projects (avoid polluting retrochat imports)
+            "--setting-sources",
+            "user", // Only load user settings, skip project/local CLAUDE.md files
         ];
 
         let result = run_cli_command(&self.cli_path, &args, self.timeout_secs).await?;
@@ -183,6 +186,9 @@ impl LlmClient for ClaudeCodeClient {
                 "json",
                 "--allowedTools",
                 "",
+                "--no-session-persistence",
+                "--setting-sources",
+                "user",
             ],
             30,
         )

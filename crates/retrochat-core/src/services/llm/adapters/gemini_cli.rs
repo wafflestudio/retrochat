@@ -154,6 +154,9 @@ impl LlmClient for GeminiCliClient {
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse, LlmError> {
         // Build command arguments
         // Usage: gemini "prompt" --output-format json -e none
+        // TODO: Gemini CLI does not have --no-session-persistence flag.
+        // Sessions may be saved to ~/.gemini/tmp/ and could be imported by retrochat.
+        // Consider filtering these out during import or running from isolated directory.
         let args = vec![
             &request.prompt as &str,
             "--output-format",
