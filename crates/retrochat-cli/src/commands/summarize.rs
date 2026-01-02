@@ -228,9 +228,7 @@ pub async fn handle_summarize_status() -> Result<()> {
 
         let detected_turns = turn_detector.detect_turns(&session.id).await?;
         let turn_summary_count = turn_summary_repo.count_by_session(&session.id).await?;
-        let has_session_summary = session_summary_repo
-            .exists_for_session(&session.id)
-            .await?;
+        let has_session_summary = session_summary_repo.exists_for_session(&session.id).await?;
 
         if turn_summary_count > 0 {
             sessions_with_turn_summaries += 1;
