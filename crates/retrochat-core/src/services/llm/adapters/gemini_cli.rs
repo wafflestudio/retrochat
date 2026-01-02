@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::env::llm as env_llm;
 
 use super::super::errors::LlmError;
-use super::super::subprocess::{check_cli_available, run_cli_command};
+use super::super::subprocess::{check_cli_available, run_cli_command, run_cli_command_with_stdin};
 use super::super::traits::LlmClient;
 use super::super::types::{GenerateRequest, GenerateResponse, LlmConfig, TokenUsage};
 
@@ -153,19 +153,23 @@ impl GeminiCliClient {
 impl LlmClient for GeminiCliClient {
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse, LlmError> {
         // Build command arguments
-        // Usage: gemini "prompt" --output-format json -e none
+        // Usage: echo "prompt" | gemini --output-format json -e none
+        // Using stdin instead of command-line argument to:
+        // - Avoid OS argument length limits (typically 128KB-2MB)
+        // - Handle special characters without escaping issues
         // TODO: Gemini CLI does not have --no-session-persistence flag.
         // Sessions may be saved to ~/.gemini/tmp/ and could be imported by retrochat.
         // Consider filtering these out during import or running from isolated directory.
         let args = vec![
-            &request.prompt as &str,
             "--output-format",
             "json",
             "-e",
             "none", // Disable extensions
         ];
 
-        let result = run_cli_command(&self.cli_path, &args, self.timeout_secs).await?;
+        let result =
+            run_cli_command_with_stdin(&self.cli_path, &args, &request.prompt, self.timeout_secs)
+                .await?;
 
         if result.exit_code != 0 {
             return Err(LlmError::CliExecutionError {

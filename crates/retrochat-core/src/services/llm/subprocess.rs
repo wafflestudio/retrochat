@@ -71,6 +71,79 @@ pub async fn run_cli_command(
     })
 }
 
+/// Run a CLI command with stdin input, timeout, and capture output
+///
+/// This is preferred over passing prompts as command-line arguments to:
+/// - Avoid OS argument length limits (typically 128KB-2MB)
+/// - Handle special characters without escaping issues
+/// - Support arbitrarily large prompts
+///
+/// # Arguments
+/// * `command` - The command to execute (e.g., "claude", "gemini")
+/// * `args` - Command line arguments
+/// * `stdin_input` - Input to pass via stdin
+/// * `timeout_secs` - Timeout in seconds
+///
+/// # Returns
+/// * `Ok(SubprocessResult)` - Command output and exit code
+/// * `Err(LlmError)` - If command fails to execute or times out
+pub async fn run_cli_command_with_stdin(
+    command: &str,
+    args: &[&str],
+    stdin_input: &str,
+    timeout_secs: u64,
+) -> Result<SubprocessResult, LlmError> {
+    use tokio::io::AsyncWriteExt;
+
+    let mut cmd = Command::new(command);
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = cmd.spawn().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LlmError::CliBinaryNotFound {
+                path: command.to_string(),
+            }
+        } else {
+            LlmError::CliExecutionError {
+                message: format!("Failed to spawn process: {e}"),
+            }
+        }
+    })?;
+
+    // Write to stdin
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(stdin_input.as_bytes())
+            .await
+            .map_err(|e| LlmError::CliExecutionError {
+                message: format!("Failed to write to stdin: {e}"),
+            })?;
+        // Drop stdin to signal EOF
+    }
+
+    // Wait for completion with timeout
+    let output = timeout(Duration::from_secs(timeout_secs), child.wait_with_output())
+        .await
+        .map_err(|_| LlmError::Timeout { timeout_secs })?
+        .map_err(|e| LlmError::CliExecutionError {
+            message: format!("Process execution failed: {e}"),
+        })?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let exit_code = output.status.code().unwrap_or(-1);
+
+    Ok(SubprocessResult {
+        stdout,
+        stderr,
+        exit_code,
+    })
+}
+
 /// Check if a CLI binary exists and is executable
 ///
 /// # Arguments
@@ -162,6 +235,33 @@ mod tests {
             } else {
                 panic!("Expected Timeout error");
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_cli_command_with_stdin() {
+        #[cfg(unix)]
+        {
+            // cat reads from stdin and outputs it
+            let result = run_cli_command_with_stdin("cat", &[], "hello from stdin", 10).await;
+            assert!(result.is_ok());
+            let output = result.unwrap();
+            assert_eq!(output.exit_code, 0);
+            assert_eq!(output.stdout, "hello from stdin");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_cli_command_with_stdin_special_chars() {
+        #[cfg(unix)]
+        {
+            // Test with special characters that would be problematic as args
+            let input = "Hello\n\"quotes\" and 'apostrophes' and $variables and `backticks`";
+            let result = run_cli_command_with_stdin("cat", &[], input, 10).await;
+            assert!(result.is_ok());
+            let output = result.unwrap();
+            assert_eq!(output.exit_code, 0);
+            assert_eq!(output.stdout, input);
         }
     }
 }

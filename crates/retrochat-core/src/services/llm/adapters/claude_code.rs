@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::env::llm as env_llm;
 
 use super::super::errors::LlmError;
-use super::super::subprocess::{check_cli_available, run_cli_command};
+use super::super::subprocess::{check_cli_available, run_cli_command, run_cli_command_with_stdin};
 use super::super::traits::LlmClient;
 use super::super::types::{GenerateRequest, GenerateResponse, LlmConfig, TokenUsage};
 
@@ -133,10 +133,12 @@ impl ClaudeCodeClient {
 impl LlmClient for ClaudeCodeClient {
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse, LlmError> {
         // Build command arguments
-        // Usage: claude -p "prompt" --output-format json --tools "" --no-session-persistence --setting-sources user
+        // Usage: echo "prompt" | claude -p --output-format json --tools "" --no-session-persistence --setting-sources user
+        // Using stdin instead of command-line argument to:
+        // - Avoid OS argument length limits (typically 128KB-2MB)
+        // - Handle special characters without escaping issues
         let args = vec![
-            "-p",
-            &request.prompt,
+            "-p", // Print mode, reads prompt from stdin
             "--output-format",
             "json",
             "--allowedTools",
@@ -146,7 +148,9 @@ impl LlmClient for ClaudeCodeClient {
             "user", // Only load user settings, skip project/local CLAUDE.md files
         ];
 
-        let result = run_cli_command(&self.cli_path, &args, self.timeout_secs).await?;
+        let result =
+            run_cli_command_with_stdin(&self.cli_path, &args, &request.prompt, self.timeout_secs)
+                .await?;
 
         if result.exit_code != 0 {
             return Err(LlmError::CliExecutionError {
