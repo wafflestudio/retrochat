@@ -148,6 +148,53 @@ impl TurnSummary {
     pub fn message_count(&self) -> i32 {
         self.end_sequence - self.start_sequence + 1
     }
+
+    /// Convert turn summary to text for embedding generation.
+    ///
+    /// Combines relevant fields into a structured text format optimized
+    /// for semantic embedding. The format includes labeled sections for
+    /// better semantic understanding.
+    pub fn to_embedding_text(&self) -> String {
+        let mut parts = Vec::new();
+
+        // Core LLM-generated content (always present)
+        parts.push(format!("Intent: {}", self.user_intent));
+        parts.push(format!("Action: {}", self.assistant_action));
+        parts.push(format!("Summary: {}", self.summary));
+
+        // Classification (helps with semantic clustering)
+        if let Some(ref turn_type) = self.turn_type {
+            parts.push(format!("Type: {}", turn_type));
+        }
+
+        // Extracted entities (searchable keywords)
+        if let Some(ref topics) = self.key_topics {
+            if !topics.is_empty() {
+                parts.push(format!("Topics: {}", topics.join(", ")));
+            }
+        }
+        if let Some(ref decisions) = self.decisions_made {
+            if !decisions.is_empty() {
+                parts.push(format!("Decisions: {}", decisions.join(", ")));
+            }
+        }
+        if let Some(ref concepts) = self.code_concepts {
+            if !concepts.is_empty() {
+                parts.push(format!("Code concepts: {}", concepts.join(", ")));
+            }
+        }
+
+        parts.join("\n\n")
+    }
+
+    /// Compute SHA256 hash of the embedding text for change detection.
+    pub fn embedding_text_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let text = self.to_embedding_text();
+        let mut hasher = Sha256::new();
+        hasher.update(text.as_bytes());
+        hex::encode(hasher.finalize())
+    }
 }
 
 /// Detected turn boundaries before summarization
@@ -264,5 +311,77 @@ mod tests {
         assert_eq!(turn.start_sequence, 1);
         assert_eq!(turn.end_sequence, 5);
         assert_eq!(turn.message_count(), 5);
+    }
+
+    #[test]
+    fn test_to_embedding_text_minimal() {
+        let now = Utc::now();
+        let summary = TurnSummary::new(
+            "session-1".to_string(),
+            0,
+            1,
+            3,
+            "Implement JWT auth".to_string(),
+            "Created auth module".to_string(),
+            "User wanted auth, created JWT module".to_string(),
+            now,
+            now,
+        );
+
+        let text = summary.to_embedding_text();
+        assert!(text.contains("Intent: Implement JWT auth"));
+        assert!(text.contains("Action: Created auth module"));
+        assert!(text.contains("Summary: User wanted auth"));
+        // Should not contain optional fields
+        assert!(!text.contains("Type:"));
+        assert!(!text.contains("Topics:"));
+    }
+
+    #[test]
+    fn test_to_embedding_text_full() {
+        let now = Utc::now();
+        let summary = TurnSummary::new(
+            "session-1".to_string(),
+            0,
+            1,
+            3,
+            "Implement JWT auth".to_string(),
+            "Created auth module".to_string(),
+            "User wanted auth, created JWT module".to_string(),
+            now,
+            now,
+        )
+        .with_turn_type(TurnType::Task)
+        .with_key_topics(vec!["authentication".to_string(), "JWT".to_string()])
+        .with_decisions_made(vec!["Use RS256".to_string()])
+        .with_code_concepts(vec!["middleware".to_string()]);
+
+        let text = summary.to_embedding_text();
+        assert!(text.contains("Intent: Implement JWT auth"));
+        assert!(text.contains("Type: task"));
+        assert!(text.contains("Topics: authentication, JWT"));
+        assert!(text.contains("Decisions: Use RS256"));
+        assert!(text.contains("Code concepts: middleware"));
+    }
+
+    #[test]
+    fn test_embedding_text_hash_consistency() {
+        let now = Utc::now();
+        let summary = TurnSummary::new(
+            "session-1".to_string(),
+            0,
+            1,
+            3,
+            "intent".to_string(),
+            "action".to_string(),
+            "summary".to_string(),
+            now,
+            now,
+        );
+
+        let hash1 = summary.embedding_text_hash();
+        let hash2 = summary.embedding_text_hash();
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1.len(), 64); // SHA256 hex = 64 chars
     }
 }
