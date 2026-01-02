@@ -555,15 +555,86 @@ If user changes embedding model:
 - Search latency at various index sizes
 - Memory usage during batch operations
 
+## Deployment Model
+
+### Single Binary Considerations
+
+Both LanceDB and FastEmbed-rs support single-binary deployment with caveats:
+
+#### LanceDB ✓ Fully Embedded
+- In-process database, no external server
+- Links directly into the binary
+- Data stored in local files (`~/.retrochat/vectors/`)
+
+#### FastEmbed-rs - Configuration Required
+
+**ONNX Runtime Linking Options:**
+
+| Strategy | Binary Size | External Files | Notes |
+|----------|-------------|----------------|-------|
+| Static link | +50MB | None | Set `ORT_LIB_LOCATION`, compile ONNX RT |
+| Dynamic link (default) | Base | `.so`/`.dll` | Ship library with binary |
+| Download strategy | Base | Auto-fetched | Uses pre-built binaries |
+
+**Model File Options:**
+
+| Strategy | Binary Size | Network | Notes |
+|----------|-------------|---------|-------|
+| Runtime download (default) | Base | First-run | Cached in `~/.cache/fastembed/` |
+| Local files | Base | None | Ship `models/` folder |
+| `include_bytes!` | +17-50MB | None | Embedded at compile time |
+
+#### Recommended: Runtime Download (Default)
+
+For retrochat, we recommend the **default runtime download** approach:
+
+```rust
+// Models downloaded on first use, cached for subsequent runs
+let model = TextEmbedding::try_new(
+    InitOptions::new(EmbeddingModel::BGESmallENV15Q)
+        .with_show_download_progress(true)
+        .with_cache_dir(PathBuf::from("~/.retrochat/models")),
+)?;
+```
+
+**Rationale:**
+- Keeps binary size small (~10MB vs ~60MB+)
+- Models cached after first use
+- Easy model updates without recompiling
+- Users expect first-run setup for AI features
+- Progress bar provides feedback during download
+
+#### Alternative: Fully Offline Binary
+
+For air-gapped deployments, embed models at compile time:
+
+```rust
+macro_rules! embedded_model {
+    ($folder:literal) => {
+        UserDefinedEmbeddingModel {
+            onnx_file: include_bytes!(concat!($folder, "/model.onnx")).to_vec(),
+            tokenizer_files: TokenizerFiles {
+                tokenizer_file: include_bytes!(concat!($folder, "/tokenizer.json")).to_vec(),
+                config_file: include_bytes!(concat!($folder, "/config.json")).to_vec(),
+                // ... other tokenizer files
+            },
+        }
+    };
+}
+```
+
+This can be a Cargo feature: `--features embedded-models`
+
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|------------|
-| Large model download on first run | Show progress, cache in standard location |
-| Slow embedding on CPU | Use quantized models, batch processing |
+| Large model download on first run | Show progress bar, cache in `~/.retrochat/models/` |
+| Slow embedding on CPU | Use quantized models (BGESmallENV15Q), batch processing |
 | LanceDB version compatibility | Pin to stable version, test upgrades |
 | Memory pressure from large indexes | Configure vector store cache limits |
 | Model accuracy for code-heavy content | Test with representative queries, consider code-specific models |
+| ONNX Runtime linking issues | Use download strategy (default), document static linking for advanced users |
 
 ## Success Metrics
 
