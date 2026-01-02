@@ -3,25 +3,80 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use retrochat_core::database::DatabaseManager;
-use retrochat_core::env::apis as env_vars;
-use retrochat_core::services::{
-    google_ai::{GoogleAiClient, GoogleAiConfig},
-    SessionSummarizer, TurnDetector, TurnSummarizer,
-};
+use retrochat_core::env::{apis as env_apis, llm as env_llm};
+use retrochat_core::services::llm::{LlmClientFactory, LlmConfig, LlmProvider};
+use retrochat_core::services::{SessionSummarizer, TurnDetector, TurnSummarizer};
+
+/// Create an LLM client based on provider/model flags or environment variables
+fn create_llm_client(
+    provider: Option<String>,
+    model: Option<String>,
+) -> Result<Arc<dyn retrochat_core::services::llm::LlmClient>> {
+    // Determine provider from flag, env var, or default
+    let llm_provider: LlmProvider = if let Some(p) = provider.as_deref() {
+        p.parse::<LlmProvider>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+    } else if let Ok(p) = std::env::var(env_llm::RETROCHAT_LLM_PROVIDER) {
+        p.parse::<LlmProvider>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+    } else {
+        LlmProvider::GoogleAi
+    };
+
+    // Determine model from flag or env var
+    let model_name = model.or_else(|| std::env::var(env_llm::RETROCHAT_LLM_MODEL).ok());
+
+    // Build config based on provider
+    let mut config = match llm_provider {
+        LlmProvider::GoogleAi => {
+            let api_key = std::env::var(env_apis::GOOGLE_AI_API_KEY).context(
+                "GOOGLE_AI_API_KEY environment variable is required for google-ai provider",
+            )?;
+            LlmConfig::google_ai(api_key)
+        }
+        LlmProvider::ClaudeCode => {
+            let mut cfg = LlmConfig::claude_code();
+            if let Ok(path) = std::env::var(env_llm::CLAUDE_CODE_PATH) {
+                cfg = cfg.with_cli_path(path);
+            }
+            cfg
+        }
+        LlmProvider::GeminiCli => {
+            let mut cfg = LlmConfig::gemini_cli();
+            if let Ok(path) = std::env::var(env_llm::GEMINI_CLI_PATH) {
+                cfg = cfg.with_cli_path(path);
+            }
+            cfg
+        }
+    };
+
+    if let Some(m) = model_name {
+        config = config.with_model(m);
+    }
+
+    let client = LlmClientFactory::create(config)?;
+
+    println!(
+        "Using LLM provider: {} (model: {})",
+        client.provider_name(),
+        client.model_name()
+    );
+
+    Ok(client)
+}
 
 /// Handle the summarize turns command
-pub async fn handle_summarize_turns(session_id: Option<String>, all: bool) -> Result<()> {
+pub async fn handle_summarize_turns(
+    session_id: Option<String>,
+    all: bool,
+    provider: Option<String>,
+    model: Option<String>,
+) -> Result<()> {
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // Initialize Google AI client
-    let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY)
-        .context("GOOGLE_AI_API_KEY environment variable is required")?;
-
-    let config = GoogleAiConfig::new(api_key);
-    let ai_client = GoogleAiClient::new(config)?;
-
-    let summarizer = TurnSummarizer::new(&db_manager, ai_client);
+    let llm_client = create_llm_client(provider, model)?;
+    let summarizer = TurnSummarizer::new(&db_manager, llm_client);
 
     if all {
         summarize_all_sessions_turns(&db_manager, &summarizer).await
@@ -84,18 +139,17 @@ async fn summarize_all_sessions_turns(
 }
 
 /// Handle the summarize sessions command
-pub async fn handle_summarize_sessions(session_id: Option<String>, all: bool) -> Result<()> {
+pub async fn handle_summarize_sessions(
+    session_id: Option<String>,
+    all: bool,
+    provider: Option<String>,
+    model: Option<String>,
+) -> Result<()> {
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // Initialize Google AI client
-    let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY)
-        .context("GOOGLE_AI_API_KEY environment variable is required")?;
-
-    let config = GoogleAiConfig::new(api_key);
-    let ai_client = GoogleAiClient::new(config)?;
-
-    let summarizer = SessionSummarizer::new(&db_manager, ai_client);
+    let llm_client = create_llm_client(provider, model)?;
+    let summarizer = SessionSummarizer::new(&db_manager, llm_client);
 
     if all {
         summarize_all_sessions(&db_manager, &summarizer).await

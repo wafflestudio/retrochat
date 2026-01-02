@@ -167,6 +167,14 @@ pub enum AnalysisCommands {
     Run {
         /// Session ID to analyze (if not provided, will prompt for selection)
         session_id: Option<String>,
+        /// LLM provider to use for analysis (default: google-ai)
+        ///
+        /// Options: google-ai, claude-code, gemini-cli
+        #[arg(long, short = 'P')]
+        provider: Option<String>,
+        /// Model to use (provider-specific)
+        #[arg(long, short = 'm')]
+        model: Option<String>,
         /// Custom prompt for analysis
         #[arg(long)]
         custom_prompt: Option<String>,
@@ -219,6 +227,12 @@ pub enum SummarizeCommands {
         /// Summarize all sessions
         #[arg(long)]
         all: bool,
+        /// LLM provider: google-ai (default), claude-code, gemini-cli
+        #[arg(long, short = 'P')]
+        provider: Option<String>,
+        /// Model identifier (provider-specific)
+        #[arg(long, short = 'm')]
+        model: Option<String>,
     },
 
     /// Generate session-level summaries from turn summaries
@@ -228,6 +242,12 @@ pub enum SummarizeCommands {
         /// Summarize all sessions
         #[arg(long)]
         all: bool,
+        /// LLM provider: google-ai (default), claude-code, gemini-cli
+        #[arg(long, short = 'P')]
+        provider: Option<String>,
+        /// Model identifier (provider-specific)
+        #[arg(long, short = 'm')]
+        model: Option<String>,
     },
 
     /// Show summarization status for all sessions
@@ -310,12 +330,21 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
         Commands::Analysis { command } => match command {
             AnalysisCommands::Run {
                 session_id,
+                provider,
+                model,
                 custom_prompt,
                 all,
                 background,
             } => {
-                self::analytics::handle_execute_command(session_id, custom_prompt, all, background)
-                    .await
+                self::analytics::handle_execute_command(
+                    session_id,
+                    provider,
+                    model,
+                    custom_prompt,
+                    all,
+                    background,
+                )
+                .await
             }
 
             AnalysisCommands::Show { session_id, all } => {
@@ -337,12 +366,18 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
         // Hierarchical Summarization
         // ═══════════════════════════════════════════════════
         Commands::Summarize { command } => match command {
-            SummarizeCommands::Turns { session_id, all } => {
-                self::summarize::handle_summarize_turns(session_id, all).await
-            }
-            SummarizeCommands::Sessions { session_id, all } => {
-                self::summarize::handle_summarize_sessions(session_id, all).await
-            }
+            SummarizeCommands::Turns {
+                session_id,
+                all,
+                provider,
+                model,
+            } => self::summarize::handle_summarize_turns(session_id, all, provider, model).await,
+            SummarizeCommands::Sessions {
+                session_id,
+                all,
+                provider,
+                model,
+            } => self::summarize::handle_summarize_sessions(session_id, all, provider, model).await,
             SummarizeCommands::Status => self::summarize::handle_summarize_status().await,
         },
 

@@ -5,9 +5,8 @@ use super::models::{
 };
 use crate::models::message::MessageType;
 use crate::models::{Message, MessageRole};
-use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::{GenerateRequest, LlmClient};
 use anyhow::Result;
-use futures::future::join_all;
 use regex::Regex;
 
 // =============================================================================
@@ -16,7 +15,7 @@ use regex::Regex;
 
 pub async fn generate_qualitative_analysis_ai(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_client: &dyn LlmClient,
     entries: Option<&QualitativeEntryList>,
 ) -> Result<AIQualitativeOutput> {
     // Use provided entries or load defaults
@@ -25,21 +24,12 @@ pub async fn generate_qualitative_analysis_ai(
         None => QualitativeEntryList::default_entries(),
     };
 
-    // Process all entry types in parallel for better performance
-    let futures: Vec<_> = entry_list
-        .entries
-        .iter()
-        .map(|entry| {
-            let entry = entry.clone();
-            let qualitative_input = qualitative_input.clone();
-            async move {
-                let result = generate_single_entry(&qualitative_input, &entry, ai_client).await;
-                (entry, result)
-            }
-        })
-        .collect();
-
-    let results = join_all(futures).await;
+    // Process all entry types sequentially (can't easily pass trait object to spawned tasks)
+    let mut results = Vec::new();
+    for entry in &entry_list.entries {
+        let result = generate_single_entry(qualitative_input, entry, llm_client).await;
+        results.push((entry.clone(), result));
+    }
 
     // Collect results into Vec<QualitativeEntryOutput>
     let mut all_entries: Vec<QualitativeEntryOutput> = Vec::new();
@@ -72,17 +62,18 @@ pub async fn generate_qualitative_analysis_ai(
 async fn generate_single_entry(
     qualitative_input: &QualitativeInput,
     entry: &QualitativeEntry,
-    ai_client: &GoogleAiClient,
+    llm_client: &dyn LlmClient,
 ) -> Result<QualitativeEntryOutput> {
     let prompt = build_single_entry_prompt(qualitative_input, entry);
 
-    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-        prompt,
-        max_tokens: Some(1024),
-        temperature: Some(0.7),
-    };
+    let request = GenerateRequest::new(prompt)
+        .with_max_tokens(1024)
+        .with_temperature(0.7);
 
-    let response = ai_client.analytics(analysis_request).await?;
+    let response = llm_client
+        .generate(request)
+        .await
+        .map_err(|e| anyhow::anyhow!("LLM generation failed: {e}"))?;
     parse_entry_response(&response.text, entry)
 }
 
@@ -356,17 +347,15 @@ fn parse_rubric_score_response(response: &str) -> (Option<f64>, String) {
 async fn score_rubric(
     rubric: &Rubric,
     formatted_session: &str,
-    ai_client: &GoogleAiClient,
+    llm_client: &dyn LlmClient,
 ) -> Result<RubricScore> {
     let prompt = build_rubric_judge_prompt(rubric, formatted_session);
 
-    let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-        prompt: prompt.clone(),
-        max_tokens: Some(512),
-        temperature: Some(0.3), // Lower temperature for more consistent scoring
-    };
+    let request = GenerateRequest::new(prompt.clone())
+        .with_max_tokens(512)
+        .with_temperature(0.3); // Lower temperature for more consistent scoring
 
-    let (score, reasoning) = match ai_client.analytics(analysis_request).await {
+    let (score, reasoning) = match llm_client.generate(request).await {
         Ok(response) => {
             let (parsed_score, parsed_reasoning) = parse_rubric_score_response(&response.text);
 
@@ -381,13 +370,11 @@ async fn score_rubric(
                     prompt
                 );
 
-                let retry_request = crate::services::google_ai::models::AnalysisRequest {
-                    prompt: retry_prompt,
-                    max_tokens: Some(512),
-                    temperature: Some(0.3),
-                };
+                let retry_request = GenerateRequest::new(retry_prompt)
+                    .with_max_tokens(512)
+                    .with_temperature(0.3);
 
-                match ai_client.analytics(retry_request).await {
+                match llm_client.generate(retry_request).await {
                     Ok(retry_response) => parse_rubric_score_response(&retry_response.text),
                     Err(_) => (None, String::new()),
                 }
@@ -427,10 +414,10 @@ async fn score_rubric(
 
 pub async fn generate_quantitative_analysis_ai(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_client: &dyn LlmClient,
     rubrics: Option<&RubricList>,
 ) -> Result<AIQuantitativeOutput> {
-    return match score_all_rubrics(qualitative_input, ai_client, rubrics).await {
+    return match score_all_rubrics(qualitative_input, llm_client, rubrics).await {
         Ok((rubric_scores, rubric_summary)) => Ok(AIQuantitativeOutput {
             rubric_scores,
             rubric_summary: Some(rubric_summary),
@@ -445,7 +432,7 @@ pub async fn generate_quantitative_analysis_ai(
 /// Score a session against all rubrics
 async fn score_all_rubrics(
     qualitative_input: &QualitativeInput,
-    ai_client: &GoogleAiClient,
+    llm_client: &dyn LlmClient,
     rubrics: Option<&RubricList>,
 ) -> Result<(Vec<RubricScore>, RubricEvaluationSummary)> {
     // Use provided rubrics or load defaults
@@ -457,21 +444,12 @@ async fn score_all_rubrics(
     // Format messages once for all rubrics
     let formatted_session = qualitative_input.raw_session.clone();
 
-    // Score all rubrics in parallel for better performance
-    let futures: Vec<_> = rubric_list
-        .rubrics
-        .iter()
-        .map(|rubric| {
-            let rubric = rubric.clone();
-            let session = formatted_session.clone();
-            async move {
-                let result = score_rubric(&rubric, &session, ai_client).await;
-                (rubric, result)
-            }
-        })
-        .collect();
-
-    let results = join_all(futures).await;
+    // Score all rubrics sequentially (can't easily pass trait object to spawned tasks)
+    let mut results = Vec::new();
+    for rubric in &rubric_list.rubrics {
+        let result = score_rubric(rubric, &formatted_session, llm_client).await;
+        results.push((rubric.clone(), result));
+    }
 
     // Collect results into Vec
     let mut scores = Vec::new();

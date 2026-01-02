@@ -1,4 +1,5 @@
 use super::google_ai::GoogleAiClient;
+use super::llm::{adapters::GoogleAiAdapter, LlmClient};
 use crate::database::{
     ChatSessionRepository, DatabaseManager, MessageRepository, ToolOperationRepository,
 };
@@ -14,20 +15,27 @@ use crate::models::Analytics;
 
 pub struct AnalyticsService {
     db_manager: Arc<DatabaseManager>,
-    google_ai_client: Option<GoogleAiClient>,
+    llm_client: Option<Arc<dyn LlmClient>>,
 }
 
 impl AnalyticsService {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
-            google_ai_client: None,
+            llm_client: None,
         }
     }
 
-    pub fn with_google_ai(mut self, google_ai_client: GoogleAiClient) -> Self {
-        self.google_ai_client = Some(google_ai_client);
+    /// Set the LLM client (generic method for any provider)
+    pub fn with_llm_client(mut self, client: Arc<dyn LlmClient>) -> Self {
+        self.llm_client = Some(client);
         self
+    }
+
+    /// Backward compatibility: Accept GoogleAiClient and wrap it in adapter
+    pub fn with_google_ai(self, google_ai_client: GoogleAiClient) -> Self {
+        let adapter = GoogleAiAdapter::from_client(google_ai_client);
+        self.with_llm_client(Arc::new(adapter))
     }
 
     // =============================================================================
@@ -66,17 +74,17 @@ impl AnalyticsService {
         let qualitative_input =
             collect_qualitative_data(&tool_operations, &messages, &session).await?;
 
-        // Generate analysis (requires AI client)
-        let ai_client = self
-            .google_ai_client
+        // Generate analysis (requires LLM client)
+        let llm_client = self
+            .llm_client
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AI client is required for analysis"))?;
+            .ok_or_else(|| anyhow::anyhow!("LLM client is required for analysis"))?;
 
         // Run qualitative and quantitative analysis in parallel
         // try_join! cancels remaining futures immediately if one fails
         let (ai_qualitative_output, ai_quantitative_output) = tokio::try_join!(
-            generate_qualitative_analysis_ai(&qualitative_input, ai_client, None),
-            generate_quantitative_analysis_ai(&qualitative_input, ai_client, None)
+            generate_qualitative_analysis_ai(&qualitative_input, llm_client.as_ref(), None),
+            generate_quantitative_analysis_ai(&qualitative_input, llm_client.as_ref(), None)
         )?;
 
         // Create Analytics directly

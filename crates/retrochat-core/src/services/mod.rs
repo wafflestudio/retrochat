@@ -4,6 +4,7 @@ pub mod analytics_service;
 pub mod auto_detect;
 pub mod google_ai;
 pub mod import_service;
+pub mod llm;
 pub mod parser_service;
 pub mod query_service;
 pub mod session_summarization;

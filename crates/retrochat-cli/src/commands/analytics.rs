@@ -3,10 +3,11 @@ use clap::Subcommand;
 use std::sync::Arc;
 
 use retrochat_core::database::DatabaseManager;
-use retrochat_core::env::apis as env_vars;
+use retrochat_core::env::{apis as env_vars, llm as env_llm};
 use retrochat_core::models::OperationStatus;
 use retrochat_core::services::{
     google_ai::{GoogleAiClient, GoogleAiConfig},
+    llm::{LlmClientFactory, LlmConfig, LlmProvider},
     AnalyticsRequestService,
 };
 
@@ -67,6 +68,8 @@ pub enum AnalyticsCommands {
 
 pub async fn handle_execute_command(
     session_id: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
     custom_prompt: Option<String>,
     all: bool,
     background: bool,
@@ -74,14 +77,45 @@ pub async fn handle_execute_command(
     let db_path = retrochat_core::database::config::get_default_db_path()?;
     let db_manager = Arc::new(DatabaseManager::new(&db_path).await?);
 
-    // Initialize Google AI client
-    let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY)
-        .context("GOOGLE_AI_API_KEY environment variable is required")?;
+    // Determine LLM provider from --provider flag or environment variable
+    let llm_provider: LlmProvider = if let Some(p) = provider.as_deref() {
+        p.parse::<LlmProvider>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+    } else if let Ok(p) = std::env::var(env_llm::RETROCHAT_LLM_PROVIDER) {
+        p.parse::<LlmProvider>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+    } else {
+        LlmProvider::GoogleAi
+    };
 
-    let config = GoogleAiConfig::new(api_key);
-    let google_ai_client = GoogleAiClient::new(config)?;
+    // Build LLM config
+    let mut config = match llm_provider {
+        LlmProvider::GoogleAi => {
+            let api_key = std::env::var(env_vars::GOOGLE_AI_API_KEY).context(
+                "GOOGLE_AI_API_KEY environment variable is required for google-ai provider",
+            )?;
+            LlmConfig::google_ai(api_key)
+        }
+        LlmProvider::ClaudeCode => LlmConfig::claude_code(),
+        LlmProvider::GeminiCli => LlmConfig::gemini_cli(),
+    };
 
-    let service = AnalyticsRequestService::new(db_manager, google_ai_client);
+    // Apply model if specified
+    if let Some(m) = model {
+        config = config.with_model(m);
+    }
+
+    // Create LLM client
+    let llm_client = LlmClientFactory::create(config).context("Failed to create LLM client")?;
+
+    // Display provider info
+    println!(
+        "Using LLM provider: {} (model: {})",
+        llm_client.provider_name(),
+        llm_client.model_name()
+    );
+
+    let service = AnalyticsRequestService::new_with_llm(db_manager, llm_client);
 
     if all {
         execute_analysis_for_all_sessions(&service, custom_prompt, background).await

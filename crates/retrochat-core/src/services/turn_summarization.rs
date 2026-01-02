@@ -1,11 +1,12 @@
 use anyhow::{Context, Result as AnyhowResult};
 use regex::Regex;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::database::{DatabaseManager, MessageRepository, TurnSummaryRepository};
 use crate::models::message::MessageType;
 use crate::models::{DetectedTurn, Message, MessageRole, TurnSummary, TurnType};
-use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::{GenerateRequest, LlmClient};
 use crate::services::turn_detection::TurnDetector;
 
 /// Service for generating LLM-based turn summaries
@@ -13,16 +14,16 @@ pub struct TurnSummarizer {
     message_repo: MessageRepository,
     turn_summary_repo: TurnSummaryRepository,
     turn_detector: TurnDetector,
-    ai_client: GoogleAiClient,
+    llm_client: Arc<dyn LlmClient>,
 }
 
 impl TurnSummarizer {
-    pub fn new(db: &DatabaseManager, ai_client: GoogleAiClient) -> Self {
+    pub fn new(db: &DatabaseManager, llm_client: Arc<dyn LlmClient>) -> Self {
         Self {
             message_repo: MessageRepository::new(db),
             turn_summary_repo: TurnSummaryRepository::new(db),
             turn_detector: TurnDetector::new(db),
-            ai_client,
+            llm_client,
         }
     }
 
@@ -101,13 +102,11 @@ impl TurnSummarizer {
     ) -> AnyhowResult<TurnSummary> {
         let prompt = self.build_turn_prompt(messages);
 
-        let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-            prompt,
-            max_tokens: Some(1024),
-            temperature: Some(0.3), // Lower temperature for more consistent output
-        };
+        let request = GenerateRequest::new(prompt)
+            .with_max_tokens(1024)
+            .with_temperature(0.3); // Lower temperature for more consistent output
 
-        let response = self.ai_client.analytics(analysis_request).await?;
+        let response = self.llm_client.generate(request).await?;
         let parsed = Self::parse_turn_response(&response.text)?;
 
         let summary = TurnSummary::new(
@@ -123,7 +122,7 @@ impl TurnSummarizer {
         )
         .with_turn_type(parsed.turn_type)
         .with_key_topics(parsed.key_topics)
-        .with_model_used("gemini-1.5-flash".to_string());
+        .with_model_used(self.llm_client.model_name().to_string());
 
         Ok(summary)
     }
