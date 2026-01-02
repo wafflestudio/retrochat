@@ -1,25 +1,26 @@
 use anyhow::{Context, Result as AnyhowResult};
 use regex::Regex;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::database::{DatabaseManager, SessionSummaryRepository, TurnSummaryRepository};
 use crate::models::session_summary::{SessionOutcome, SessionSummary};
 use crate::models::TurnSummary;
-use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::{GenerateRequest, LlmClient};
 
 /// Service for generating LLM-based session summaries from turn summaries
 pub struct SessionSummarizer {
     turn_summary_repo: TurnSummaryRepository,
     session_summary_repo: SessionSummaryRepository,
-    ai_client: GoogleAiClient,
+    llm_client: Arc<dyn LlmClient>,
 }
 
 impl SessionSummarizer {
-    pub fn new(db: &DatabaseManager, ai_client: GoogleAiClient) -> Self {
+    pub fn new(db: &DatabaseManager, llm_client: Arc<dyn LlmClient>) -> Self {
         Self {
             turn_summary_repo: TurnSummaryRepository::new(db),
             session_summary_repo: SessionSummaryRepository::new(db),
-            ai_client,
+            llm_client,
         }
     }
 
@@ -67,13 +68,11 @@ impl SessionSummarizer {
     ) -> AnyhowResult<SessionSummary> {
         let prompt = self.build_session_prompt(turns);
 
-        let analysis_request = crate::services::google_ai::models::AnalysisRequest {
-            prompt,
-            max_tokens: Some(1024),
-            temperature: Some(0.3),
-        };
+        let request = GenerateRequest::new(prompt)
+            .with_max_tokens(1024)
+            .with_temperature(0.3);
 
-        let response = self.ai_client.analytics(analysis_request).await?;
+        let response = self.llm_client.generate(request).await?;
         let parsed = Self::parse_session_response(&response.text)?;
 
         let summary = SessionSummary::new(session_id.to_string(), parsed.title, parsed.summary)
@@ -82,7 +81,7 @@ impl SessionSummarizer {
             .with_key_decisions(parsed.key_decisions)
             .with_technologies_used(parsed.technologies_used)
             .with_files_affected(parsed.files_affected)
-            .with_model_used("gemini-1.5-flash".to_string());
+            .with_model_used(self.llm_client.model_name().to_string());
 
         Ok(summary)
     }

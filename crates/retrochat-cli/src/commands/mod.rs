@@ -227,6 +227,12 @@ pub enum SummarizeCommands {
         /// Summarize all sessions
         #[arg(long)]
         all: bool,
+        /// LLM provider: google-ai (default), claude-code, gemini-cli
+        #[arg(long, short = 'P')]
+        provider: Option<String>,
+        /// Model identifier (provider-specific)
+        #[arg(long, short = 'm')]
+        model: Option<String>,
     },
 
     /// Generate session-level summaries from turn summaries
@@ -236,6 +242,12 @@ pub enum SummarizeCommands {
         /// Summarize all sessions
         #[arg(long)]
         all: bool,
+        /// LLM provider: google-ai (default), claude-code, gemini-cli
+        #[arg(long, short = 'P')]
+        provider: Option<String>,
+        /// Model identifier (provider-specific)
+        #[arg(long, short = 'm')]
+        model: Option<String>,
     },
 
     /// Show summarization status for all sessions
@@ -354,12 +366,18 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
         // Hierarchical Summarization
         // ═══════════════════════════════════════════════════
         Commands::Summarize { command } => match command {
-            SummarizeCommands::Turns { session_id, all } => {
-                self::summarize::handle_summarize_turns(session_id, all).await
-            }
-            SummarizeCommands::Sessions { session_id, all } => {
-                self::summarize::handle_summarize_sessions(session_id, all).await
-            }
+            SummarizeCommands::Turns {
+                session_id,
+                all,
+                provider,
+                model,
+            } => self::summarize::handle_summarize_turns(session_id, all, provider, model).await,
+            SummarizeCommands::Sessions {
+                session_id,
+                all,
+                provider,
+                model,
+            } => self::summarize::handle_summarize_sessions(session_id, all, provider, model).await,
             SummarizeCommands::Status => self::summarize::handle_summarize_status().await,
         },
 
