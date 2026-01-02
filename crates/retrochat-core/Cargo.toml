@@ -44,9 +44,18 @@ notify = { workspace = true }
 similar = { workspace = true }
 crossterm = { workspace = true }
 
+# Semantic Search (optional)
+lancedb = { workspace = true, optional = true }
+arrow = { workspace = true, optional = true }
+arrow-array = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
+fastembed = { workspace = true, optional = true }
+sha2 = { workspace = true }
+
 [features]
 default = ["reqwest"]
 reqwest = ["dep:reqwest"]
+semantic-search = ["lancedb", "arrow", "arrow-array", "arrow-schema", "fastembed"]
 
 [dev-dependencies]
 tempfile = "3.8"
