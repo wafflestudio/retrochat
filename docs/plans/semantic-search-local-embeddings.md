@@ -181,29 +181,321 @@ table.vector_search(query_vec)
 
 ### Text to Embed
 
-For optimal semantic search, combine relevant fields:
+For optimal semantic search, combine relevant fields into a single text block.
 
-**Turn Summary Embedding Input:**
+#### Turn Summary → Embedding Text
+
+```rust
+impl TurnSummary {
+    /// Convert turn summary to text for embedding
+    pub fn to_embedding_text(&self) -> String {
+        let mut parts = Vec::new();
+
+        // Core LLM-generated content (always present)
+        parts.push(format!("Intent: {}", self.user_intent));
+        parts.push(format!("Action: {}", self.assistant_action));
+        parts.push(format!("Summary: {}", self.summary));
+
+        // Classification (helps with semantic clustering)
+        if let Some(ref turn_type) = self.turn_type {
+            parts.push(format!("Type: {}", turn_type));
+        }
+
+        // Extracted entities (searchable keywords)
+        if let Some(ref topics) = self.key_topics {
+            if !topics.is_empty() {
+                parts.push(format!("Topics: {}", topics.join(", ")));
+            }
+        }
+        if let Some(ref decisions) = self.decisions_made {
+            if !decisions.is_empty() {
+                parts.push(format!("Decisions: {}", decisions.join(", ")));
+            }
+        }
+        if let Some(ref concepts) = self.code_concepts {
+            if !concepts.is_empty() {
+                parts.push(format!("Code concepts: {}", concepts.join(", ")));
+            }
+        }
+
+        parts.join("\n\n")
+    }
+}
 ```
-{user_intent}
 
-{assistant_action}
+**Example output:**
+```
+Intent: Implement JWT authentication for the API
 
-{summary}
+Action: Created auth middleware with token validation and refresh logic
 
-Topics: {key_topics.join(", ")}
+Summary: User requested JWT auth. Created middleware that validates tokens on protected routes, handles token refresh, and returns proper 401 responses.
+
+Type: task
+
+Topics: authentication, JWT, middleware
+
+Decisions: Used RS256 signing, 15min access token expiry
+
+Code concepts: middleware pattern, token validation, error handling
 ```
 
-**Session Summary Embedding Input:**
+#### Session Summary → Embedding Text
+
+```rust
+impl SessionSummary {
+    /// Convert session summary to text for embedding
+    /// Requires ChatSession for provider/project context
+    pub fn to_embedding_text(&self, session: &ChatSession) -> String {
+        let mut parts = Vec::new();
+
+        // Title is most important for session identification
+        parts.push(format!("Title: {}", self.title));
+
+        // Core summary
+        parts.push(format!("Summary: {}", self.summary));
+
+        // Goal and outcome
+        if let Some(ref goal) = self.primary_goal {
+            parts.push(format!("Goal: {}", goal));
+        }
+        if let Some(ref outcome) = self.outcome {
+            parts.push(format!("Outcome: {}", outcome));
+        }
+
+        // Context from ChatSession
+        parts.push(format!("Provider: {}", session.provider));
+        if let Some(ref project) = session.project_name {
+            parts.push(format!("Project: {}", project));
+        }
+
+        // Extracted entities
+        if let Some(ref decisions) = self.key_decisions {
+            if !decisions.is_empty() {
+                parts.push(format!("Key decisions: {}", decisions.join(", ")));
+            }
+        }
+        if let Some(ref techs) = self.technologies_used {
+            if !techs.is_empty() {
+                parts.push(format!("Technologies: {}", techs.join(", ")));
+            }
+        }
+        if let Some(ref files) = self.files_affected {
+            if !files.is_empty() {
+                parts.push(format!("Files: {}", files.join(", ")));
+            }
+        }
+
+        parts.join("\n\n")
+    }
+}
 ```
-{title}
 
-{summary}
+**Example output:**
+```
+Title: JWT Authentication Implementation
 
-Goal: {primary_goal}
+Summary: Implemented complete JWT authentication system with login, token refresh, and protected route middleware.
 
-Decisions: {key_decisions.join(", ")}
-Technologies: {technologies_used.join(", ")}
+Goal: Add secure authentication to the REST API
+
+Outcome: completed
+
+Provider: Claude Code
+
+Project: my-api
+
+Key decisions: RS256 signing algorithm, 15min access tokens, 7day refresh tokens
+
+Technologies: JWT, bcrypt, axum middleware
+
+Files: src/auth/mod.rs, src/auth/middleware.rs, src/auth/handlers.rs
+```
+
+### Embedding Storage Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         INDEXING FLOW                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  1. Summary Created/Updated in SQLite                                    │
+│     ┌──────────────────┐                                                │
+│     │ turn_summaries   │ or │ session_summaries │                       │
+│     └────────┬─────────┘    └─────────┬─────────┘                       │
+│              │                        │                                  │
+│  2. Convert to Embedding Text         │                                  │
+│              │                        │                                  │
+│              ▼                        ▼                                  │
+│     ┌────────────────────────────────────────────┐                      │
+│     │ to_embedding_text() → "Intent: ... \n..." │                       │
+│     └────────────────────┬───────────────────────┘                      │
+│                          │                                               │
+│  3. Generate Embedding   │                                               │
+│                          ▼                                               │
+│     ┌────────────────────────────────────────────┐                      │
+│     │ EmbeddingService.embed_text(text)          │                      │
+│     │ → FastEmbed BGESmallENV15Q                 │                      │
+│     │ → Vec<f32> [384 dimensions]                │                      │
+│     └────────────────────┬───────────────────────┘                      │
+│                          │                                               │
+│  4. Compute Hash for Change Detection                                    │
+│                          │                                               │
+│              ┌───────────▼───────────┐                                  │
+│              │ SHA256(embedding_text) │                                  │
+│              └───────────┬───────────┘                                  │
+│                          │                                               │
+│  5. Store in LanceDB     │                                               │
+│                          ▼                                               │
+│     ┌────────────────────────────────────────────┐                      │
+│     │ VectorStore.upsert_turn_embedding(         │                      │
+│     │   TurnEmbedding {                          │                      │
+│     │     id: turn.id,                           │                      │
+│     │     session_id: turn.session_id,           │                      │
+│     │     turn_number: turn.turn_number,         │                      │
+│     │     turn_type: turn.turn_type.to_string(), │                      │
+│     │     started_at: turn.started_at,           │                      │
+│     │     ended_at: turn.ended_at,               │                      │
+│     │     embedding: vec![0.12, -0.34, ...],     │                      │
+│     │     text_hash: "a1b2c3...",                │                      │
+│     │     embedded_at: Utc::now(),               │                      │
+│     │     model_name: "BGESmallENV15Q",          │                      │
+│     │   }                                        │                      │
+│     │ )                                          │                      │
+│     └────────────────────────────────────────────┘                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Structures for Vector Storage
+
+```rust
+/// Embedding record for turn summaries
+#[derive(Debug, Clone)]
+pub struct TurnEmbedding {
+    pub id: String,              // From TurnSummary.id
+    pub session_id: String,      // From TurnSummary.session_id
+    pub turn_number: i32,        // From TurnSummary.turn_number
+    pub turn_type: Option<String>, // From TurnSummary.turn_type
+    pub started_at: DateTime<Utc>, // From TurnSummary.started_at
+    pub ended_at: DateTime<Utc>,   // From TurnSummary.ended_at
+    pub embedding: Vec<f32>,     // 384-dim vector
+    pub text_hash: String,       // SHA256 of embedding text
+    pub embedded_at: DateTime<Utc>,
+    pub model_name: String,
+}
+
+/// Embedding record for session summaries
+#[derive(Debug, Clone)]
+pub struct SessionEmbedding {
+    pub id: String,              // From SessionSummary.id
+    pub session_id: String,      // From SessionSummary.session_id
+    pub outcome: Option<String>, // From SessionSummary.outcome
+    pub created_at: DateTime<Utc>, // From ChatSession.start_time
+    pub updated_at: DateTime<Utc>, // From ChatSession.end_time or updated_at
+    pub provider: String,        // From ChatSession.provider
+    pub project: Option<String>, // From ChatSession.project_name
+    pub embedding: Vec<f32>,     // 384-dim vector
+    pub text_hash: String,       // SHA256 of embedding text
+    pub embedded_at: DateTime<Utc>,
+    pub model_name: String,
+}
+```
+
+### Indexing Service Implementation
+
+```rust
+impl SemanticSearchService {
+    /// Index a turn summary after creation/update
+    pub async fn index_turn(&self, turn: &TurnSummary) -> Result<()> {
+        // 1. Generate embedding text
+        let text = turn.to_embedding_text();
+
+        // 2. Compute hash for change detection
+        let text_hash = self.compute_hash(&text);
+
+        // 3. Check if already indexed with same hash
+        if let Some(existing) = self.vector_store.get_turn_embedding(&turn.id).await? {
+            if existing.text_hash == text_hash {
+                tracing::debug!("Turn {} unchanged, skipping re-embedding", turn.id);
+                return Ok(());
+            }
+        }
+
+        // 4. Generate embedding vector
+        let embedding = self.embedding_service.embed_text(&text)?;
+
+        // 5. Create embedding record
+        let turn_embedding = TurnEmbedding {
+            id: turn.id.clone(),
+            session_id: turn.session_id.clone(),
+            turn_number: turn.turn_number,
+            turn_type: turn.turn_type.as_ref().map(|t| t.to_string()),
+            started_at: turn.started_at,
+            ended_at: turn.ended_at,
+            embedding,
+            text_hash,
+            embedded_at: Utc::now(),
+            model_name: self.embedding_service.model_info().name.clone(),
+        };
+
+        // 6. Upsert to vector store
+        self.vector_store.upsert_turn_embedding(turn_embedding).await?;
+
+        Ok(())
+    }
+
+    /// Index a session summary after creation/update
+    pub async fn index_session(
+        &self,
+        summary: &SessionSummary,
+        session: &ChatSession,
+    ) -> Result<()> {
+        // 1. Generate embedding text (includes session context)
+        let text = summary.to_embedding_text(session);
+
+        // 2. Compute hash for change detection
+        let text_hash = self.compute_hash(&text);
+
+        // 3. Check if already indexed with same hash
+        if let Some(existing) = self.vector_store.get_session_embedding(&summary.id).await? {
+            if existing.text_hash == text_hash {
+                tracing::debug!("Session {} unchanged, skipping re-embedding", summary.id);
+                return Ok(());
+            }
+        }
+
+        // 4. Generate embedding vector
+        let embedding = self.embedding_service.embed_text(&text)?;
+
+        // 5. Create embedding record with session metadata
+        let session_embedding = SessionEmbedding {
+            id: summary.id.clone(),
+            session_id: summary.session_id.clone(),
+            outcome: summary.outcome.as_ref().map(|o| o.to_string()),
+            created_at: session.start_time,
+            updated_at: session.end_time.unwrap_or(session.updated_at),
+            provider: session.provider.to_string(),
+            project: session.project_name.clone(),
+            embedding,
+            text_hash,
+            embedded_at: Utc::now(),
+            model_name: self.embedding_service.model_info().name.clone(),
+        };
+
+        // 6. Upsert to vector store
+        self.vector_store.upsert_session_embedding(session_embedding).await?;
+
+        Ok(())
+    }
+
+    fn compute_hash(&self, text: &str) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(text.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+}
 ```
 
 ## Module Structure
