@@ -5,6 +5,7 @@ pub mod import;
 pub mod init;
 pub mod query;
 pub mod setup;
+pub mod summarize;
 pub mod watch;
 
 use clap::{Parser, Subcommand};
@@ -102,6 +103,12 @@ pub enum Commands {
     Analysis {
         #[command(subcommand)]
         command: AnalysisCommands,
+    },
+
+    /// Generate hierarchical summaries for sessions
+    Summarize {
+        #[command(subcommand)]
+        command: SummarizeCommands,
     },
 
     /// Export chat history
@@ -204,6 +211,30 @@ pub enum AnalysisCommands {
 }
 
 #[derive(Subcommand)]
+pub enum SummarizeCommands {
+    /// Summarize turns for sessions
+    Turns {
+        /// Session ID to summarize (if not provided, use --all)
+        session_id: Option<String>,
+        /// Summarize all sessions
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Generate session-level summaries from turn summaries
+    Sessions {
+        /// Session ID to summarize (if not provided, use --all)
+        session_id: Option<String>,
+        /// Summarize all sessions
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Show summarization status for all sessions
+    Status,
+}
+
+#[derive(Subcommand)]
 pub enum ConfigCommands {
     /// Get a configuration value
     Get {
@@ -300,6 +331,19 @@ pub async fn run_command(command: Commands) -> anyhow::Result<()> {
             AnalysisCommands::Cancel { request_id, all } => {
                 self::analytics::handle_cancel_command(request_id, all).await
             }
+        },
+
+        // ═══════════════════════════════════════════════════
+        // Hierarchical Summarization
+        // ═══════════════════════════════════════════════════
+        Commands::Summarize { command } => match command {
+            SummarizeCommands::Turns { session_id, all } => {
+                self::summarize::handle_summarize_turns(session_id, all).await
+            }
+            SummarizeCommands::Sessions { session_id, all } => {
+                self::summarize::handle_summarize_sessions(session_id, all).await
+            }
+            SummarizeCommands::Status => self::summarize::handle_summarize_status().await,
         },
 
         // ═══════════════════════════════════════════════════
