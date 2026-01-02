@@ -5,7 +5,9 @@ pub mod chat_session;
 pub mod message;
 pub mod project;
 pub mod provider;
+pub mod session_summary;
 pub mod tool_operation;
+pub mod turn_summary;
 
 pub use analytics::Analytics;
 pub use analytics_request::{AnalyticsRequest, OperationStatus};
@@ -14,4 +16,6 @@ pub use chat_session::{ChatSession, SessionState};
 pub use message::{Message, MessageRole, ToolCall, ToolResult, ToolUse};
 pub use project::Project;
 pub use provider::{ParserType, Provider, ProviderConfig, ProviderRegistry};
+pub use session_summary::{SessionOutcome, SessionSummary as GeneratedSessionSummary};
 pub use tool_operation::ToolOperation;
+pub use turn_summary::{DetectedTurn, TurnSummary, TurnType};

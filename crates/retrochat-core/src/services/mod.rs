@@ -7,6 +7,9 @@ pub mod import_service;
 pub mod llm;
 pub mod parser_service;
 pub mod query_service;
+pub mod session_summarization;
+pub mod turn_detection;
+pub mod turn_summarization;
 pub mod watch_service;
 
 pub use analytics::{
@@ -30,4 +33,7 @@ pub use query_service::{
     SessionAnalytics, SessionDetailRequest, SessionDetailResponse, SessionFilters, SessionSummary,
     SessionsQueryRequest, SessionsQueryResponse,
 };
+pub use session_summarization::SessionSummarizer;
+pub use turn_detection::{TurnDetector, TurnMetrics};
+pub use turn_summarization::TurnSummarizer;
 pub use watch_service::{collect_provider_paths, detect_provider, watch_paths_for_changes};
