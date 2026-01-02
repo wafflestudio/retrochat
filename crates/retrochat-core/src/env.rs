@@ -44,3 +44,19 @@ pub mod database {
     /// Database file path (overrides default ~/.retrochat/retrochat.db)
     pub const RETROCHAT_DB: &str = "RETROCHAT_DB";
 }
+
+/// LLM provider configuration
+pub mod llm {
+    /// LLM provider to use for analysis
+    /// Options: "google-ai", "claude-code", "gemini-cli"
+    pub const RETROCHAT_LLM_PROVIDER: &str = "RETROCHAT_LLM_PROVIDER";
+
+    /// Model identifier for the selected provider
+    pub const RETROCHAT_LLM_MODEL: &str = "RETROCHAT_LLM_MODEL";
+
+    /// Custom path to Claude Code CLI binary (defaults to "claude" in PATH)
+    pub const CLAUDE_CODE_PATH: &str = "CLAUDE_CODE_PATH";
+
+    /// Custom path to Gemini CLI binary (defaults to "gemini" in PATH)
+    pub const GEMINI_CLI_PATH: &str = "GEMINI_CLI_PATH";
+}

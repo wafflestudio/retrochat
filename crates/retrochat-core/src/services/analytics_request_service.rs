@@ -6,6 +6,7 @@ use crate::database::{
 use crate::models::{Analytics, AnalyticsRequest, OperationStatus};
 use crate::services::analytics_service::AnalyticsService;
 use crate::services::google_ai::GoogleAiClient;
+use crate::services::llm::LlmClient;
 
 pub struct AnalyticsRequestService {
     analytics_service: AnalyticsService,
@@ -14,10 +15,24 @@ pub struct AnalyticsRequestService {
 }
 
 impl AnalyticsRequestService {
+    /// Backward compatibility: Create service with GoogleAiClient
     pub fn new(db_manager: Arc<DatabaseManager>, google_ai_client: GoogleAiClient) -> Self {
         let request_repo = AnalyticsRequestRepository::new(db_manager.clone());
         let analytics_service =
             AnalyticsService::new(db_manager.clone()).with_google_ai(google_ai_client);
+
+        Self {
+            analytics_service,
+            request_repo,
+            db_manager,
+        }
+    }
+
+    /// Create service with generic LLM client
+    pub fn new_with_llm(db_manager: Arc<DatabaseManager>, llm_client: Arc<dyn LlmClient>) -> Self {
+        let request_repo = AnalyticsRequestRepository::new(db_manager.clone());
+        let analytics_service =
+            AnalyticsService::new(db_manager.clone()).with_llm_client(llm_client);
 
         Self {
             analytics_service,
