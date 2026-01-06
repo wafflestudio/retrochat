@@ -37,6 +37,7 @@ impl ProviderRegistry {
                 Provider::ClaudeCode => ClaudeCodeConfig::create(),
                 Provider::GeminiCLI => GeminiCliConfig::create(),
                 Provider::Codex => CodexConfig::create(),
+                Provider::CursorClient => continue, // Skip for now - uses directory-based detection
                 Provider::All => continue,      // Skip aggregate
                 Provider::Other(_) => continue, // Skip unknown providers
             };

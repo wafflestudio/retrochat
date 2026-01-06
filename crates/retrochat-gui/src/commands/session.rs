@@ -249,5 +249,6 @@ pub async fn get_providers(_state: State<'_, Arc<Mutex<AppState>>>) -> Result<Ve
         "Claude Code".to_string(),
         "Gemini CLI".to_string(),
         "Codex".to_string(),
+        "Cursor Client".to_string(),
     ])
 }

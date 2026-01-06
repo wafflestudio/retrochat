@@ -8,13 +8,15 @@ pub enum Provider {
     ClaudeCode,
     GeminiCLI,
     Codex,
+    /// Cursor App (VSCode-based IDE)
+    CursorClient,
     Other(String),
 }
 
 // Implement ValueEnum manually because we need to exclude Other variant
 impl ValueEnum for Provider {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Self::All, Self::ClaudeCode, Self::GeminiCLI, Self::Codex]
+        &[Self::All, Self::ClaudeCode, Self::GeminiCLI, Self::Codex, Self::CursorClient]
     }
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
@@ -23,6 +25,7 @@ impl ValueEnum for Provider {
             Self::ClaudeCode => Some(clap::builder::PossibleValue::new("claude")),
             Self::GeminiCLI => Some(clap::builder::PossibleValue::new("gemini")),
             Self::Codex => Some(clap::builder::PossibleValue::new("codex")),
+            Self::CursorClient => Some(clap::builder::PossibleValue::new("cursor-client")),
             Self::Other(_) => None,
         }
     }
@@ -35,6 +38,7 @@ impl std::fmt::Display for Provider {
             Provider::ClaudeCode => write!(f, "Claude Code"),
             Provider::GeminiCLI => write!(f, "Gemini CLI"),
             Provider::Codex => write!(f, "Codex"),
+            Provider::CursorClient => write!(f, "Cursor Client"),
             Provider::Other(name) => write!(f, "{name}"),
         }
     }
@@ -49,6 +53,7 @@ impl std::str::FromStr for Provider {
             "Claude Code" | "claude" => Ok(Provider::ClaudeCode),
             "Gemini CLI" | "gemini" => Ok(Provider::GeminiCLI),
             "Codex" | "codex" => Ok(Provider::Codex),
+            "Cursor Client" | "cursor-client" => Ok(Provider::CursorClient),
             _ => Ok(Provider::Other(s.to_string())),
         }
     }
@@ -57,7 +62,7 @@ impl std::str::FromStr for Provider {
 impl Provider {
     /// Get all concrete provider variants (excluding All and Other)
     pub fn all_concrete() -> Vec<Self> {
-        vec![Self::ClaudeCode, Self::GeminiCLI, Self::Codex]
+        vec![Self::ClaudeCode, Self::GeminiCLI, Self::Codex, Self::CursorClient]
     }
 
     /// Check if this is a concrete provider (not All or Other)

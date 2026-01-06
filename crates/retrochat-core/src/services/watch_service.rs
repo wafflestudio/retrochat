@@ -37,6 +37,20 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
                     paths.extend(dirs);
                 }
             }
+            Provider::CursorClient => {
+                // CursorClient uses a different directory structure
+                if let Some(workspace_path) = crate::parsers::CursorClientParser::get_default_workspace_path() {
+                    if let Some(global_storage) = workspace_path.parent() {
+                        let global_db = global_storage.join("globalStorage");
+                        if global_db.exists() {
+                            paths.push(global_db.to_string_lossy().to_string());
+                        }
+                    }
+                    if workspace_path.exists() {
+                        paths.push(workspace_path.to_string_lossy().to_string());
+                    }
+                }
+            }
             Provider::Other(name) => {
                 eprintln!("Unknown provider: {name}");
             }
