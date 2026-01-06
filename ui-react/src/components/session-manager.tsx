@@ -443,7 +443,7 @@ export function SessionManager() {
                 </div>
               </button>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <button
                   type="button"
                   onClick={() => handleProviderImport('claude')}
@@ -489,6 +489,22 @@ export function SessionManager() {
                   <div className="text-center">
                     <h3 className="font-medium text-sm text-foreground">Codex</h3>
                     <p className="text-xs text-muted-foreground">Custom</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleProviderImport('cursor-client')}
+                  disabled={isImporting}
+                  aria-label="Import chat sessions from Cursor IDE"
+                  className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-border hover:border-primary hover:bg-accent transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="p-3 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-medium text-sm text-foreground">Cursor</h3>
+                    <p className="text-xs text-muted-foreground">IDE</p>
                   </div>
                 </button>
               </div>

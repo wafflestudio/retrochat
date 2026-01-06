@@ -1,5 +1,6 @@
 pub mod claude_code;
 pub mod codex;
+pub mod cursor_client;
 pub mod gemini_cli;
 pub mod project_inference;
 
@@ -11,11 +12,13 @@ use crate::models::{ChatSession, Message};
 
 pub use claude_code::ClaudeCodeParser;
 pub use codex::CodexParser;
+pub use cursor_client::CursorClientParser;
 pub use gemini_cli::GeminiCLIParser;
 
 pub enum ChatParser {
     ClaudeCode(ClaudeCodeParser),
     Codex(CodexParser),
+    CursorClient(CursorClientParser),
     GeminiCLI(GeminiCLIParser),
 }
 
@@ -30,6 +33,7 @@ impl ChatParser {
                 let (session, messages) = parser.parse().await?;
                 Ok(vec![(session, messages)])
             }
+            ChatParser::CursorClient(parser) => parser.parse().await,
             ChatParser::GeminiCLI(parser) => parser.parse().await,
         }
     }
@@ -41,6 +45,7 @@ impl ChatParser {
         match self {
             ChatParser::ClaudeCode(parser) => parser.parse_streaming(callback).await,
             ChatParser::Codex(parser) => parser.parse_streaming(callback).await,
+            ChatParser::CursorClient(parser) => parser.parse_streaming(callback).await,
             ChatParser::GeminiCLI(parser) => parser.parse_streaming(callback).await,
         }
     }
@@ -49,6 +54,7 @@ impl ChatParser {
         match self {
             ChatParser::ClaudeCode(_) => Provider::ClaudeCode,
             ChatParser::Codex(_) => Provider::Codex,
+            ChatParser::CursorClient(_) => Provider::CursorClient,
             ChatParser::GeminiCLI(_) => Provider::GeminiCLI,
         }
     }
@@ -68,6 +74,10 @@ impl ParserRegistry {
 
         if CodexParser::is_valid_file(path) {
             return Some(Provider::Codex);
+        }
+
+        if CursorClientParser::is_valid_file(path) {
+            return Some(Provider::CursorClient);
         }
 
         if GeminiCLIParser::is_valid_file(path) {
@@ -136,6 +146,9 @@ impl ParserRegistry {
         match provider {
             Provider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
             Provider::Codex => Ok(ChatParser::Codex(CodexParser::new(file_path))),
+            Provider::CursorClient => {
+                Ok(ChatParser::CursorClient(CursorClientParser::new(file_path)))
+            }
             Provider::GeminiCLI => Ok(ChatParser::GeminiCLI(GeminiCLIParser::new(file_path))),
             Provider::All => Err(anyhow!(
                 "'All' is a CLI-only provider and cannot be used for parsing"
@@ -145,11 +158,16 @@ impl ParserRegistry {
     }
 
     pub fn get_supported_extensions() -> Vec<&'static str> {
-        vec!["jsonl", "json", "db"]
+        vec!["jsonl", "json", "db", "vscdb"]
     }
 
     pub fn get_supported_providers() -> Vec<Provider> {
-        vec![Provider::ClaudeCode, Provider::Codex, Provider::GeminiCLI]
+        vec![
+            Provider::ClaudeCode,
+            Provider::Codex,
+            Provider::CursorClient,
+            Provider::GeminiCLI,
+        ]
     }
 
     pub async fn parse_file(

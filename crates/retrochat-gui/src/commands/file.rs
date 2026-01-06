@@ -194,6 +194,7 @@ pub async fn import_from_provider(
         "claude" => vec![Provider::ClaudeCode],
         "gemini" => vec![Provider::GeminiCLI],
         "codex" => vec![Provider::Codex],
+        "cursor-client" | "cursor client" => vec![Provider::CursorClient],
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
@@ -243,6 +244,35 @@ pub async fn import_from_provider(
                 .await
                 {
                     log::error!("Error importing Codex directories: {}", e);
+                }
+            }
+            Provider::CursorClient => {
+                log::info!("Importing from Cursor Client...");
+                if let Some(workspace_path) =
+                    retrochat_core::parsers::CursorClientParser::get_default_workspace_path()
+                {
+                    if let Some(parent) = workspace_path.parent() {
+                        let global_db = parent.join("globalStorage/state.vscdb");
+                        if global_db.exists() {
+                            let request = retrochat_core::services::ImportFileRequest {
+                                file_path: global_db.to_string_lossy().to_string(),
+                                provider: Some("CursorClient".to_string()),
+                                project_name: None,
+                                overwrite_existing: Some(overwrite),
+                            };
+                            match import_service.import_file(request).await {
+                                Ok(_) => {
+                                    stats.successful_imports += 1;
+                                }
+                                Err(e) => {
+                                    log::error!("Error importing Cursor data: {}", e);
+                                    stats.failed_imports += 1;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    log::error!("Could not find Cursor workspace storage path");
                 }
             }
             Provider::Other(name) => {

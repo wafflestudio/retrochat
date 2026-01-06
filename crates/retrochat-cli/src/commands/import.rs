@@ -97,6 +97,29 @@ async fn import_providers(providers: Vec<Provider>, overwrite: bool) -> Result<(
                 }
                 println!();
             }
+            Provider::CursorClient => {
+                println!("Importing from Cursor Client...");
+                if let Some(workspace_path) =
+                    retrochat_core::parsers::CursorClientParser::get_default_workspace_path()
+                {
+                    if let Some(parent) = workspace_path.parent() {
+                        let global_db = parent.join("globalStorage/state.vscdb");
+                        if global_db.exists() {
+                            if let Err(e) =
+                                import_file(global_db.to_string_lossy().to_string(), overwrite)
+                                    .await
+                            {
+                                eprintln!("Error importing Cursor global storage: {e}");
+                            } else {
+                                imported_any = true;
+                            }
+                        }
+                    }
+                } else {
+                    eprintln!("Could not find Cursor workspace storage path");
+                }
+                println!();
+            }
             Provider::Other(name) => {
                 eprintln!("Unknown provider: {name}");
             }
