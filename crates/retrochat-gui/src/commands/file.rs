@@ -248,7 +248,9 @@ pub async fn import_from_provider(
             }
             Provider::CursorClient => {
                 log::info!("Importing from Cursor Client...");
-                if let Some(workspace_path) = retrochat_core::parsers::CursorClientParser::get_default_workspace_path() {
+                if let Some(workspace_path) =
+                    retrochat_core::parsers::CursorClientParser::get_default_workspace_path()
+                {
                     if let Some(parent) = workspace_path.parent() {
                         let global_db = parent.join("globalStorage/state.vscdb");
                         if global_db.exists() {

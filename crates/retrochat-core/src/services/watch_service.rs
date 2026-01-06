@@ -39,7 +39,9 @@ pub fn collect_provider_paths(providers: &[Provider]) -> Result<Vec<String>> {
             }
             Provider::CursorClient => {
                 // CursorClient uses a different directory structure
-                if let Some(workspace_path) = crate::parsers::CursorClientParser::get_default_workspace_path() {
+                if let Some(workspace_path) =
+                    crate::parsers::CursorClientParser::get_default_workspace_path()
+                {
                     if let Some(global_storage) = workspace_path.parent() {
                         let global_db = global_storage.join("globalStorage");
                         if global_db.exists() {

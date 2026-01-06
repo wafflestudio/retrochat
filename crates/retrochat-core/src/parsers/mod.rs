@@ -146,7 +146,9 @@ impl ParserRegistry {
         match provider {
             Provider::ClaudeCode => Ok(ChatParser::ClaudeCode(ClaudeCodeParser::new(file_path))),
             Provider::Codex => Ok(ChatParser::Codex(CodexParser::new(file_path))),
-            Provider::CursorClient => Ok(ChatParser::CursorClient(CursorClientParser::new(file_path))),
+            Provider::CursorClient => {
+                Ok(ChatParser::CursorClient(CursorClientParser::new(file_path)))
+            }
             Provider::GeminiCLI => Ok(ChatParser::GeminiCLI(GeminiCLIParser::new(file_path))),
             Provider::All => Err(anyhow!(
                 "'All' is a CLI-only provider and cannot be used for parsing"
@@ -160,7 +162,12 @@ impl ParserRegistry {
     }
 
     pub fn get_supported_providers() -> Vec<Provider> {
-        vec![Provider::ClaudeCode, Provider::Codex, Provider::CursorClient, Provider::GeminiCLI]
+        vec![
+            Provider::ClaudeCode,
+            Provider::Codex,
+            Provider::CursorClient,
+            Provider::GeminiCLI,
+        ]
     }
 
     pub async fn parse_file(

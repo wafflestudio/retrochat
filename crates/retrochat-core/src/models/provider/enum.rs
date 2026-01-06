@@ -16,7 +16,13 @@ pub enum Provider {
 // Implement ValueEnum manually because we need to exclude Other variant
 impl ValueEnum for Provider {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Self::All, Self::ClaudeCode, Self::GeminiCLI, Self::Codex, Self::CursorClient]
+        &[
+            Self::All,
+            Self::ClaudeCode,
+            Self::GeminiCLI,
+            Self::Codex,
+            Self::CursorClient,
+        ]
     }
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
@@ -62,7 +68,12 @@ impl std::str::FromStr for Provider {
 impl Provider {
     /// Get all concrete provider variants (excluding All and Other)
     pub fn all_concrete() -> Vec<Self> {
-        vec![Self::ClaudeCode, Self::GeminiCLI, Self::Codex, Self::CursorClient]
+        vec![
+            Self::ClaudeCode,
+            Self::GeminiCLI,
+            Self::Codex,
+            Self::CursorClient,
+        ]
     }
 
     /// Check if this is a concrete provider (not All or Other)

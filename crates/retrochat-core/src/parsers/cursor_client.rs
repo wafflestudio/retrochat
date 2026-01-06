@@ -145,17 +145,12 @@ pub struct WorkspaceInfo {
 }
 
 /// Storage mode for reading data
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum StorageMode {
     Global,
     Workspace,
+    #[default]
     Both,
-}
-
-impl Default for StorageMode {
-    fn default() -> Self {
-        StorageMode::Both
-    }
 }
 
 pub struct CursorClientParser {
@@ -300,7 +295,9 @@ impl CursorClientParser {
         }
 
         // Try workspace storage format
-        if let Ok(sessions) = self.parse_workspace_storage(db_path, db_path.parent().unwrap()).await
+        if let Ok(sessions) = self
+            .parse_workspace_storage(db_path, db_path.parent().unwrap())
+            .await
         {
             results.extend(sessions);
         }
@@ -313,8 +310,12 @@ impl CursorClientParser {
         &self,
         db_path: &Path,
     ) -> Result<Vec<(ChatSession, Vec<Message>)>> {
-        let conn = rusqlite::Connection::open(db_path)
-            .with_context(|| format!("Failed to open global storage database: {}", db_path.display()))?;
+        let conn = rusqlite::Connection::open(db_path).with_context(|| {
+            format!(
+                "Failed to open global storage database: {}",
+                db_path.display()
+            )
+        })?;
 
         let mut results = Vec::new();
 
@@ -369,7 +370,8 @@ impl CursorClientParser {
         conn: &rusqlite::Connection,
         db_path: &Path,
     ) -> Result<Vec<(ChatSession, Vec<Message>)>> {
-        let mut stmt = conn.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%'")?;
+        let mut stmt =
+            conn.prepare("SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%'")?;
 
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -546,8 +548,8 @@ impl CursorClientParser {
                     let folder_path = folder.replace("file://", "");
                     return folder_path
                         .split('/')
-                        .last()
-                        .or_else(|| folder_path.split('\\').last())
+                        .next_back()
+                        .or_else(|| folder_path.split('\\').next_back())
                         .map(|s| s.to_string());
                 }
             }
@@ -562,8 +564,7 @@ impl CursorClientParser {
         conn: &rusqlite::Connection,
         db_path: &Path,
     ) -> Result<(ChatSession, Vec<Message>)> {
-        let session_id = Uuid::parse_str(&composer.composer_id)
-            .unwrap_or_else(|_| Uuid::new_v4());
+        let session_id = Uuid::parse_str(&composer.composer_id).unwrap_or_else(|_| Uuid::new_v4());
 
         let start_time = composer
             .created_at
@@ -652,7 +653,8 @@ impl CursorClientParser {
                             .and_then(|v| self.parse_timestamp_value(v))
                             .unwrap_or(start_time);
 
-                        let message = Message::new(session_id, role, content, timestamp, (idx + 1) as u32);
+                        let message =
+                            Message::new(session_id, role, content, timestamp, (idx + 1) as u32);
                         messages.push(message);
 
                         // Set project name from first user message if not set
@@ -682,7 +684,7 @@ impl CursorClientParser {
     fn extract_text_from_rich_text(&self, rich_text: &str) -> Option<String> {
         let parsed: serde_json::Value = serde_json::from_str(rich_text).ok()?;
         let mut texts = Vec::new();
-        self.extract_text_recursive(&parsed, &mut texts);
+        Self::extract_text_recursive(&parsed, &mut texts);
         let result = texts.join("");
         if result.is_empty() {
             None
@@ -692,7 +694,7 @@ impl CursorClientParser {
     }
 
     /// Recursively extract text from Lexical JSON structure
-    fn extract_text_recursive(&self, value: &serde_json::Value, texts: &mut Vec<String>) {
+    fn extract_text_recursive(value: &serde_json::Value, texts: &mut Vec<String>) {
         match value {
             serde_json::Value::Object(obj) => {
                 // If this is a text node, extract the text
@@ -702,26 +704,27 @@ impl CursorClientParser {
                     }
                 }
                 // If this is a paragraph or linebreak, add newline
-                if obj.get("type").and_then(|t| t.as_str()) == Some("paragraph") {
-                    if !texts.is_empty() && !texts.last().map(|s| s.ends_with('\n')).unwrap_or(false) {
-                        texts.push("\n".to_string());
-                    }
+                if obj.get("type").and_then(|t| t.as_str()) == Some("paragraph")
+                    && !texts.is_empty()
+                    && !texts.last().map(|s| s.ends_with('\n')).unwrap_or(false)
+                {
+                    texts.push("\n".to_string());
                 }
                 if obj.get("type").and_then(|t| t.as_str()) == Some("linebreak") {
                     texts.push("\n".to_string());
                 }
                 // Recurse into children
                 if let Some(children) = obj.get("children") {
-                    self.extract_text_recursive(children, texts);
+                    Self::extract_text_recursive(children, texts);
                 }
                 // Also check root
                 if let Some(root) = obj.get("root") {
-                    self.extract_text_recursive(root, texts);
+                    Self::extract_text_recursive(root, texts);
                 }
             }
             serde_json::Value::Array(arr) => {
                 for item in arr {
-                    self.extract_text_recursive(item, texts);
+                    Self::extract_text_recursive(item, texts);
                 }
             }
             _ => {}
@@ -734,8 +737,7 @@ impl CursorClientParser {
         composer: &ComposerChat,
         db_path: &Path,
     ) -> Result<(ChatSession, Vec<Message>)> {
-        let session_id = Uuid::parse_str(&composer.composer_id)
-            .unwrap_or_else(|_| Uuid::new_v4());
+        let session_id = Uuid::parse_str(&composer.composer_id).unwrap_or_else(|_| Uuid::new_v4());
 
         let start_time = composer
             .created_at
@@ -880,7 +882,9 @@ impl CursorClientParser {
     fn timestamp_to_datetime(&self, timestamp_ms: i64) -> DateTime<Utc> {
         let secs = timestamp_ms / 1000;
         let nsecs = ((timestamp_ms % 1000) * 1_000_000) as u32;
-        Utc.timestamp_opt(secs, nsecs).single().unwrap_or_else(Utc::now)
+        Utc.timestamp_opt(secs, nsecs)
+            .single()
+            .unwrap_or_else(Utc::now)
     }
 
     /// Parse timestamp from serde_json::Value (can be string or integer)
@@ -1194,5 +1198,3 @@ mod tests {
         assert_eq!(messages[1].role, MessageRole::Assistant);
     }
 }
-
-
